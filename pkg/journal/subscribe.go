@@ -9,7 +9,7 @@ import (
 // the given options. It returns channels for entries and errors. The entry
 // channel is closed when the subscription ends.
 func (j *Journal) Subscribe(ctx context.Context, opts ListOptions) (<-chan *Entry, <-chan error, error) {
-	labelMap := mergeLabels(opts.Labels)
+	labelMap := j.ownerLabels(opts.Labels)
 
 	expr := opts.Expression
 	if expr == "" {

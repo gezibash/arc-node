@@ -11,7 +11,7 @@ import (
 
 // List queries journal entries matching the given options.
 func (j *Journal) List(ctx context.Context, opts ListOptions) (*ListResult, error) {
-	labelMap := mergeLabels(opts.Labels)
+	labelMap := j.ownerLabels(opts.Labels)
 
 	expr := opts.Expression
 	if expr == "" {

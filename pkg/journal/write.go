@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"encoding/hex"
+
 	"github.com/gezibash/arc/pkg/identity"
 	"github.com/gezibash/arc/pkg/message"
 )
@@ -28,7 +30,7 @@ func (j *Journal) Write(ctx context.Context, plaintext []byte, labels map[string
 		return nil, fmt.Errorf("sign message: %w", err)
 	}
 
-	labelMap := mergeLabels(labels)
+	labelMap := j.ownerLabels(labels)
 
 	ref, err := j.client.SendMessage(ctx, msg, labelMap)
 	if err != nil {
@@ -52,5 +54,12 @@ func mergeLabels(extra map[string]string) map[string]string {
 	}
 	m["app"] = "journal"
 	m["type"] = "entry"
+	return m
+}
+
+func (j *Journal) ownerLabels(extra map[string]string) map[string]string {
+	m := mergeLabels(extra)
+	pub := j.kp.PublicKey()
+	m["owner"] = hex.EncodeToString(pub[:])
 	return m
 }
