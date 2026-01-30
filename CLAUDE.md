@@ -139,6 +139,36 @@ buf generate        # regenerate proto (api/arc/node/v1/)
 go test ./...       # run tests
 ```
 
+## App Philosophy
+
+Arc apps share three presentation tiers built on one SDK:
+
+1. **SDK** (`pkg/<app>/`) — pure Go library. No UI, no CLI. This is what any client (web, mobile, CLI) would use.
+2. **TUI** — interactive bubbletea UI when stdin is a TTY. Browse, read, write.
+3. **Non-TTY CLI** — explicit subcommands with markdown or JSON output for scripting and LLM consumption.
+
+`arc <app>` with no subcommand auto-detects: TTY → TUI, pipe → markdown list.
+
+### Realtime by Default
+
+Every long-lived Arc app (TUIs, daemons, watchers) **must** maintain a persistent node connection and subscribe to real-time updates via `client.SubscribeMessages()`. There is no polling. New entries, messages, or events appear instantly through the node's streaming gRPC subscription. This is a core architectural principle — if an app is running, it is live.
+
+Implementation pattern:
+- On launch, issue an initial `List()` / `Query()` to populate state
+- Immediately open a `SubscribeMessages()` stream with the same label filter
+- Feed subscription events into the TUI/app via channels or `tea.Cmd`
+- The UI reflects new data the moment the node indexes it
+
+### Dependency Direction
+
+```
+pkg/<app>/         →  pkg/client, github.com/gezibash/arc, x/crypto
+cmd/arc/<app>/     →  pkg/<app>, internal/keyring, internal/config,
+                      cobra, viper, bubbletea, lipgloss, go-isatty
+```
+
+SDKs never import internal packages. CLI/TUI layers never contain business logic.
+
 ## Future Direction
 
 - **Federation:** Nodes subscribe to each other, forward with Origin preserved, HopCount incremented
