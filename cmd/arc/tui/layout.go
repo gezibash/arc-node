@@ -2,6 +2,7 @@ package tui
 
 import (
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 )
@@ -21,6 +22,7 @@ type Layout struct {
 	AppName   string
 	NodeKey   string // short hex, e.g. "9ef03dbf"
 	Connected bool
+	Latency   time.Duration // last measured RTT
 	Width     int
 	Height    int
 	Frame     int // incremented on each spinner tick for pulse animation
@@ -65,7 +67,11 @@ func (l Layout) Render(body string, helpText string) string {
 			c := pulseColors[l.Frame%len(pulseColors)]
 			dot = lipgloss.NewStyle().Foreground(c).Bold(true).Render("●")
 		}
-		right = lipgloss.NewStyle().Foreground(DimColor).Render("arc://"+l.NodeKey) + " " + dot
+		latencyStr := ""
+		if l.Latency > 0 {
+			latencyStr = " " + lipgloss.NewStyle().Foreground(DimColor).Render(l.Latency.Round(time.Millisecond).String())
+		}
+		right = lipgloss.NewStyle().Foreground(DimColor).Render("arc://"+l.NodeKey) + latencyStr + " " + dot
 	}
 
 	gap := contentWidth - lipgloss.Width(left) - lipgloss.Width(right) - 1

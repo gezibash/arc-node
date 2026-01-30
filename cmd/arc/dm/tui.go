@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/gezibash/arc/pkg/identity"
 	"github.com/gezibash/arc-node/cmd/arc/tui"
+	"github.com/gezibash/arc-node/pkg/client"
 	"github.com/gezibash/arc-node/pkg/dm"
 )
 
@@ -23,6 +25,7 @@ const (
 
 type tuiModel struct {
 	ctx     context.Context
+	client  *client.Client
 	threads *dm.Threads
 	self    identity.PublicKey
 	view    tuiView
@@ -38,7 +41,7 @@ type tuiModel struct {
 	nodePub *identity.PublicKey
 }
 
-func runTUI(ctx context.Context, threads *dm.Threads, kp *identity.Keypair, nodePub *identity.PublicKey) error {
+func runTUI(ctx context.Context, c *client.Client, threads *dm.Threads, kp *identity.Keypair, nodePub *identity.PublicKey) error {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(tui.AccentColor)
@@ -52,6 +55,7 @@ func runTUI(ctx context.Context, threads *dm.Threads, kp *identity.Keypair, node
 
 	m := tuiModel{
 		ctx:     ctx,
+		client:  c,
 		threads: threads,
 		self:    self,
 		view:    viewThreads,
@@ -73,7 +77,26 @@ func (m tuiModel) Init() tea.Cmd {
 		m.thList.Init(),
 		m.spinner.Tick,
 		m.startGlobalSubscription(),
+		m.pingNode(),
 	)
+}
+
+func (m tuiModel) pingNode() tea.Cmd {
+	c := m.client
+	ctx := m.ctx
+	return func() tea.Msg {
+		latency, err := c.Ping(ctx)
+		if err != nil {
+			return pingResultMsg{err: err}
+		}
+		return pingResultMsg{latency: latency}
+	}
+}
+
+func schedulePing() tea.Cmd {
+	return tea.Tick(5*time.Second, func(_ time.Time) tea.Msg {
+		return pingTickMsg{}
+	})
 }
 
 func (m tuiModel) startGlobalSubscription() tea.Cmd {
@@ -105,13 +128,12 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.sub = msg.msgs
 		m.subErr = msg.errs
 		m.ready = true
-		m.layout.Connected = true
-		m.thList.connected = true
 		return m, tea.Batch(
 			waitForMessage(m.sub),
 			waitForSubError(m.subErr),
 		)
 	case subscriptionErrorMsg:
+		m.err = msg.err
 		return m, nil
 	case newMessageMsg:
 		// Update thread list regardless of current view.
@@ -131,6 +153,7 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Batch(cmds...)
 	case subErrorMsg:
+		m.err = msg.err
 		return m, nil
 	case openThreadMsg:
 		sdk, err := m.threads.OpenConversation(msg.thread.PeerPub)
@@ -156,6 +179,15 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case errMsg:
 		m.err = msg.err
 		return m, nil
+	case pingResultMsg:
+		if msg.err == nil {
+			m.layout.Latency = msg.latency
+			m.layout.Connected = true
+			m.thList.connected = true
+		}
+		return m, schedulePing()
+	case pingTickMsg:
+		return m, m.pingNode()
 	case spinner.TickMsg:
 		m.layout.Frame++
 		var cmd tea.Cmd
@@ -214,6 +246,11 @@ type subscriptionStartedMsg struct {
 type subscriptionErrorMsg struct{ err error }
 type newMessageMsg struct{ msg dm.Message }
 type subErrorMsg struct{ err error }
+type pingTickMsg struct{}
+type pingResultMsg struct {
+	latency time.Duration
+	err     error
+}
 
 func waitForMessage(ch <-chan *dm.Message) tea.Cmd {
 	return func() tea.Msg {

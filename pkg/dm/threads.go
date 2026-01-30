@@ -42,7 +42,7 @@ func NewThreads(c *client.Client, kp *identity.Keypair, opts ...Option) *Threads
 func (t *Threads) ListThreads(ctx context.Context) ([]Thread, error) {
 	self := t.kp.PublicKey()
 	selfHex := hex.EncodeToString(self[:])
-	expr := fmt.Sprintf(`labels["dm_from"] == "%s" || labels["dm_to"] == "%s"`, selfHex, selfHex)
+	expr := `labels["dm_from"] == "` + selfHex + `" || labels["dm_to"] == "` + selfHex + `" || labels["from"] == "` + selfHex + `"`
 
 	result, err := t.client.QueryMessages(ctx, &client.QueryOptions{
 		Expression: expr,
@@ -111,7 +111,7 @@ func (t *Threads) ListThreads(ctx context.Context) ([]Thread, error) {
 func (t *Threads) SubscribeAll(ctx context.Context) (<-chan *Message, <-chan error, error) {
 	self := t.kp.PublicKey()
 	selfHex := hex.EncodeToString(self[:])
-	expr := fmt.Sprintf(`labels["dm_from"] == "%s" || labels["dm_to"] == "%s"`, selfHex, selfHex)
+	expr := `labels["dm_from"] == "` + selfHex + `" || labels["dm_to"] == "` + selfHex + `" || labels["from"] == "` + selfHex + `"`
 
 	labels := map[string]string{
 		"app":  "dm",

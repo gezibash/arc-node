@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"time"
 
 	nodev1 "github.com/gezibash/arc-node/api/arc/node/v1"
 	"github.com/gezibash/arc-node/internal/envelope"
@@ -135,6 +136,16 @@ func clientStreamInterceptor(kp *identity.Keypair, nodeKey identity.PublicKey) g
 
 func (c *Client) Close() error {
 	return c.conn.Close()
+}
+
+// Ping measures round-trip latency to the node.
+func (c *Client) Ping(ctx context.Context) (time.Duration, error) {
+	start := time.Now()
+	_, err := c.QueryMessages(ctx, &QueryOptions{
+		Expression: "false",
+		Limit:      1,
+	})
+	return time.Since(start), err
 }
 
 // GetKind indicates whether a ResolveGet result is a blob or message.

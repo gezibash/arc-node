@@ -40,7 +40,7 @@ func Entrypoint(v *viper.Viper) *cobra.Command {
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if isatty.IsTerminal(os.Stdin.Fd()) || isatty.IsCygwinTerminal(os.Stdin.Fd()) {
-				return runTUI(cmd.Context(), d.threads, d.kp, d.nodePub)
+				return runTUI(cmd.Context(), d.client, d.threads, d.kp, d.nodePub)
 			}
 			return runThreadsMarkdown(cmd.Context(), d.threads, d.kp, os.Stdout)
 		},

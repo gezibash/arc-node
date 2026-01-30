@@ -94,7 +94,6 @@ func newChatModel(ctx context.Context, sdk *dm.DM, layout *tui.Layout) chatModel
 func (m chatModel) Init() tea.Cmd {
 	return tea.Batch(
 		m.fetchMessages(),
-		m.startSubscription(),
 		m.spinner.Tick,
 		textarea.Blink,
 	)
