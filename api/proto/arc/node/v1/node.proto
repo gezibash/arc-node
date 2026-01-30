@@ -1,0 +1,104 @@
+syntax = "proto3";
+
+package arc.node.v1;
+
+option go_package = "github.com/gezibash/arc-node/api/arc/node/v1;nodev1";
+
+service NodeService {
+  // Content storage
+  rpc PutContent(PutContentRequest) returns (PutContentResponse);
+  rpc GetContent(GetContentRequest) returns (GetContentResponse);
+
+  // Messaging
+  rpc SendMessage(SendMessageRequest) returns (SendMessageResponse);
+  rpc QueryMessages(QueryMessagesRequest) returns (QueryMessagesResponse);
+  rpc SubscribeMessages(SubscribeMessagesRequest) returns (stream SubscribeMessagesResponse);
+
+  // Unified get: resolve prefix against blobs and messages
+  rpc ResolveGet(ResolveGetRequest) returns (ResolveGetResponse);
+}
+
+// Enums
+
+enum Order {
+  ORDER_ASCENDING = 0;
+  ORDER_DESCENDING = 1;
+}
+
+// Content
+
+message PutContentRequest {
+  bytes data = 1;
+  string content_type = 2;
+}
+
+message PutContentResponse {
+  bytes reference = 1; // 32-byte SHA-256 hash
+}
+
+message GetContentRequest {
+  bytes reference = 1; // 32-byte SHA-256 hash
+}
+
+message GetContentResponse {
+  bytes data = 1;
+  string content_type = 2;
+}
+
+// Messaging
+
+message IndexEntry {
+  bytes reference = 1;
+  map<string, string> labels = 2;
+  int64 timestamp = 3;
+}
+
+message SendMessageRequest {
+  bytes message = 1; // canonical message bytes (from message.CanonicalBytes)
+  map<string, string> labels = 2; // indexing hints
+}
+
+message SendMessageResponse {
+  bytes reference = 1; // message reference
+}
+
+message QueryMessagesRequest {
+  map<string, string> labels = 1;
+  int32 limit = 2;
+  string expression = 4; // CEL filter
+  string cursor = 5;
+  Order order = 6;
+}
+
+message QueryMessagesResponse {
+  repeated IndexEntry entries = 1;
+  string next_cursor = 2;
+  bool has_more = 3;
+}
+
+message SubscribeMessagesRequest {
+  map<string, string> labels = 1;
+  string expression = 2; // CEL filter
+}
+
+message SubscribeMessagesResponse {
+  IndexEntry entry = 1;
+}
+
+// Unified get
+
+message ResolveGetRequest {
+  string prefix = 1; // hex prefix (minimum 4 characters)
+}
+
+message ResolveGetResponse {
+  enum Kind {
+    KIND_BLOB = 0;
+    KIND_MESSAGE = 1;
+  }
+  Kind kind = 1;
+  bytes reference = 2;               // full 32-byte SHA-256 reference
+  bytes data = 3;                    // blob content (KIND_BLOB only)
+  map<string, string> labels = 4;   // message labels (KIND_MESSAGE only)
+  int64 timestamp = 5;              // message timestamp (KIND_MESSAGE only)
+}

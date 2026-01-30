@@ -1,0 +1,12 @@
+bin/
+.task/
+.envrc
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+*.exe
+*.test
+*.out
+.claude/settings.local.json
