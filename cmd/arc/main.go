@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 
+	"github.com/gezibash/arc-node/cmd/arc/dm"
 	"github.com/gezibash/arc-node/cmd/arc/journal"
 	"github.com/gezibash/arc-node/cmd/arc/keys"
 	"github.com/gezibash/arc-node/cmd/arc/node"
@@ -27,6 +28,7 @@ func main() {
 	rootCmd.AddCommand(node.Entrypoint(v))
 	rootCmd.AddCommand(keys.Entrypoint(v))
 	rootCmd.AddCommand(journal.Entrypoint(v))
+	rootCmd.AddCommand(dm.Entrypoint(v))
 	rootCmd.AddCommand(newVersionCmd())
 	rootCmd.AddCommand(newWhoamiCmd(v))
 	rootCmd.AddCommand(newCompletionCmd())

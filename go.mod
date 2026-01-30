@@ -33,6 +33,7 @@ require (
 
 require (
 	cel.dev/expr v0.24.0 // indirect
+	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/alecthomas/chroma/v2 v2.14.0 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect

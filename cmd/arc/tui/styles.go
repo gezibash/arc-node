@@ -39,4 +39,8 @@ var (
 	CursorStyle = lipgloss.NewStyle().
 			Foreground(AccentColor).
 			Bold(true)
+
+	PeerStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.AdaptiveColor{Light: "#D4A017", Dark: "#FFD866"}).
+			Bold(true)
 )
