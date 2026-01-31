@@ -19,10 +19,10 @@ func newVersionCmd() *cobra.Command {
 		Short: "Print version information",
 		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("arc %s\n", version)
-			fmt.Printf("  commit:  %s\n", commit)
-			fmt.Printf("  built:   %s\n", buildDate)
-			fmt.Printf("  go:      %s\n", runtime.Version())
+			fmt.Printf("version: %s\n", version)
+			fmt.Printf("commit:  %s\n", commit)
+			fmt.Printf("built:   %s\n", buildDate)
+			fmt.Printf("go:      %s\n", runtime.Version())
 		},
 	}
 }
