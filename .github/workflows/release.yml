@@ -93,6 +93,7 @@ jobs:
             out="${out}.exe"
           fi
           go build -ldflags "-X main.version=${version} -X main.commit=${commit} -X main.buildDate=${build_date}" -o "${out}" ./cmd/arc
+          sha256sum "${out}" > "${out}.sha256"
 
       - name: Upload release asset
         env:
@@ -102,7 +103,7 @@ jobs:
           if [ "${{ matrix.goos }}" = "windows" ]; then
             asset="${asset}.exe"
           fi
-          gh release upload "${{ needs.release.outputs.tag }}" "${asset}" --clobber
+          gh release upload "${{ needs.release.outputs.tag }}" "${asset}" "${asset}.sha256" --clobber
 
   docker:
     runs-on: ubuntu-latest
