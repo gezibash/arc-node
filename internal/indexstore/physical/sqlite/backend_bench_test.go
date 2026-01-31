@@ -21,5 +21,7 @@ func newBenchBackend(b *testing.B) physical.Backend {
 }
 
 func BenchmarkAll(b *testing.B) {
-	benchhelper.RunAll(b, newBenchBackend)
+	benchhelper.RunAll(b, newBenchBackend, &benchhelper.Config{
+		Sizes: []int{100, 1_000, 10_000},
+	})
 }

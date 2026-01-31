@@ -15,6 +15,9 @@ var (
 
 	// ErrClosed indicates the backend has been closed.
 	ErrClosed = errors.New("backend closed")
+
+	// ErrUnsupported indicates the backend does not support the requested operation.
+	ErrUnsupported = errors.New("backend does not support operation")
 )
 
 // Entry represents an indexed entry in storage.
@@ -89,6 +92,14 @@ type CompositeIndexer interface {
 
 	// CompositeIndexes returns all registered composite index definitions.
 	CompositeIndexes() []CompositeIndexDef
+}
+
+// Backfiller is an optional interface for backends that support backfilling
+// composite indexes for existing entries.
+type Backfiller interface {
+	// BackfillCompositeIndex iterates all entries and writes composite index
+	// keys for the given definition. Returns the number of entries backfilled.
+	BackfillCompositeIndex(ctx context.Context, def CompositeIndexDef) (int64, error)
 }
 
 // Backend is the physical storage interface for index storage.

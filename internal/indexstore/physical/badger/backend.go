@@ -341,6 +341,126 @@ func (b *Backend) deleteCompositeKeys(txn *badger.Txn, labels map[string]string,
 	}
 }
 
+// BackfillCompositeIndex iterates all meta entries and writes composite index
+// keys for the given definition. Processes in batches of 1000.
+func (b *Backend) BackfillCompositeIndex(ctx context.Context, def physical.CompositeIndexDef) (int64, error) {
+	if b.closed.Load() {
+		return 0, physical.ErrClosed
+	}
+
+	const batchSize = 1000
+	var total int64
+
+	// Collect all suffixes + labels in a read transaction, then write in batches.
+	type backfillEntry struct {
+		suffix string
+		labels map[string]string
+		ttl    time.Duration
+	}
+
+	var entries []backfillEntry
+
+	err := b.db.View(func(txn *badger.Txn) error {
+		prefix := []byte(prefixMeta)
+		iterOpts := badger.DefaultIteratorOptions
+		iterOpts.PrefetchValues = true
+		iterOpts.PrefetchSize = 100
+		iterOpts.Prefix = prefix
+
+		it := txn.NewIterator(iterOpts)
+		defer it.Close()
+
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+
+			item := it.Item()
+			key := item.Key()
+			suffix := string(key[len(prefixMeta):])
+			if len(suffix) < 81 {
+				continue
+			}
+
+			if err := item.Value(func(val []byte) error {
+				_, labels, decErr := decodeMeta(val)
+				if decErr != nil {
+					return nil // skip corrupt entries
+				}
+				// Check if this entry has all required keys.
+				hasAll := true
+				for _, k := range def.Keys {
+					if _, ok := labels[k]; !ok {
+						hasAll = false
+						break
+					}
+				}
+				if !hasAll {
+					return nil
+				}
+				var ttl time.Duration
+				if item.ExpiresAt() > 0 {
+					ttl = time.Until(time.Unix(int64(item.ExpiresAt()), 0))
+					if ttl <= 0 {
+						return nil // already expired
+					}
+				}
+				entries = append(entries, backfillEntry{
+					suffix: suffix,
+					labels: labels,
+					ttl:    ttl,
+				})
+				return nil
+			}); err != nil {
+				continue
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, fmt.Errorf("backfill scan: %w", err)
+	}
+
+	// Write composite keys in batches.
+	for i := 0; i < len(entries); i += batchSize {
+		if ctx.Err() != nil {
+			return total, ctx.Err()
+		}
+		end := i + batchSize
+		if end > len(entries) {
+			end = len(entries)
+		}
+		batch := entries[i:end]
+
+		err := b.db.Update(func(txn *badger.Txn) error {
+			for _, e := range batch {
+				tsHex := e.suffix[:16]
+				refHex := e.suffix[17:]
+				ck, ok := buildCompositeKey(def, e.labels, tsHex, refHex)
+				if !ok {
+					continue
+				}
+				if e.ttl > 0 {
+					if err := txn.SetEntry(badger.NewEntry(ck, nil).WithTTL(e.ttl)); err != nil {
+						return err
+					}
+				} else {
+					if err := txn.Set(ck, nil); err != nil {
+						return err
+					}
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return total, fmt.Errorf("backfill write batch: %w", err)
+		}
+		total += int64(len(batch))
+	}
+
+	return total, nil
+}
+
 // Get retrieves an entry by reference.
 func (b *Backend) Get(_ context.Context, r reference.Reference) (*physical.Entry, error) {
 	if b.closed.Load() {

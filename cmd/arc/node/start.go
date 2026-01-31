@@ -72,6 +72,7 @@ func runStart(cmd *cobra.Command, v *viper.Viper) error {
 	})
 
 	indexStore.StartCleanup(ctx, 5*time.Minute)
+	indexStore.StartAutoIndex(ctx, 10*time.Minute)
 
 	slog.Info("storage initialized",
 		"blob_backend", cfg.Storage.Blob.Backend,

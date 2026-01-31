@@ -60,6 +60,7 @@ func formatEntryText(w io.Writer, e *client.Entry, preview bool, ctx context.Con
 		}
 	}
 
+	fmt.Fprintln(w)
 	return nil
 }
 

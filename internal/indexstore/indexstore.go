@@ -27,6 +27,7 @@ type IndexStore struct {
 	metrics *observability.Metrics
 	eval    *celeval.Evaluator
 	subs    *subscriptionManager
+	autoIdx queryTracker
 }
 
 // New creates a new IndexStore with the given backend.
@@ -41,12 +42,14 @@ func New(backend physical.Backend, metrics *observability.Metrics, opts ...*Opti
 		cfg = opts[0].SubscriptionConfig
 	}
 
-	return &IndexStore{
+	s := &IndexStore{
 		backend: backend,
 		metrics: metrics,
 		eval:    eval,
 		subs:    newSubscriptionManager(eval, cfg),
-	}, nil
+	}
+	s.autoIdx = newQueryTracker(s, metrics)
+	return s, nil
 }
 
 // Index stores an entry with the given labels.
@@ -164,6 +167,10 @@ func (s *IndexStore) Query(ctx context.Context, opts *QueryOptions) (result *Que
 		}
 	}
 
+	if len(physOpts.Labels) > 1 {
+		s.autoIdx.Track(physOpts.Labels)
+	}
+
 	physResult, err := s.backend.Query(ctx, physOpts)
 	if err != nil {
 		return nil, fmt.Errorf("query entries: %w", err)
@@ -219,6 +226,10 @@ func (s *IndexStore) Count(ctx context.Context, opts *QueryOptions) (count int64
 		IncludeExpired: opts.IncludeExpired,
 	}
 
+	if len(physOpts.Labels) > 1 {
+		s.autoIdx.Track(physOpts.Labels)
+	}
+
 	count, err = s.backend.Count(ctx, physOpts)
 	if err != nil {
 		return 0, fmt.Errorf("count entries: %w", err)
@@ -254,7 +265,7 @@ func (s *IndexStore) Subscribe(ctx context.Context, expression string, opts ...*
 func (s *IndexStore) RegisterCompositeIndex(def physical.CompositeIndexDef) error {
 	ci, ok := s.backend.(physical.CompositeIndexer)
 	if !ok {
-		return fmt.Errorf("backend %T does not support composite indexes", s.backend)
+		return fmt.Errorf("%w: backend %T does not support composite indexes", physical.ErrUnsupported, s.backend)
 	}
 	return ci.RegisterCompositeIndex(def)
 }
@@ -351,6 +362,29 @@ func (s *IndexStore) StartCleanup(ctx context.Context, interval time.Duration) {
 				}
 				if count > 0 {
 					slog.InfoContext(ctx, "periodic cleanup completed", "deleted", count)
+				}
+			}
+		}
+	}()
+}
+
+// StartAutoIndex launches a background goroutine that periodically evaluates
+// tracked query patterns and registers composite indexes for hot patterns.
+// It stops when ctx is cancelled.
+func (s *IndexStore) StartAutoIndex(ctx context.Context, interval time.Duration) {
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				slog.Info("auto-index goroutine stopped")
+				return
+			case <-ticker.C:
+				created := s.autoIdx.evaluate(ctx)
+				if created > 0 {
+					slog.InfoContext(ctx, "auto-index tick", "new_indexes", created)
 				}
 			}
 		}

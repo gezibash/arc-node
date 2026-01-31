@@ -10,7 +10,9 @@ type Metrics struct {
 	OperationDuration *prometheus.HistogramVec
 	OperationTotal    *prometheus.CounterVec
 	BytesProcessed    *prometheus.CounterVec
-	ErrorsTotal       *prometheus.CounterVec
+	ErrorsTotal          *prometheus.CounterVec
+	AutoIndexPatterns    *prometheus.CounterVec
+	AutoIndexReindexTotal *prometheus.CounterVec
 }
 
 // NewMetrics creates a custom Prometheus registry with standard arc metrics.
@@ -38,13 +40,25 @@ func NewMetrics() *Metrics {
 		Help: "Total number of errors.",
 	}, []string{"operation", "type"})
 
-	reg.MustRegister(opDuration, opTotal, bytesProcessed, errorsTotal)
+	autoIndexPatterns := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "arc_query_label_patterns_total",
+		Help: "Total multi-label query pattern observations.",
+	}, []string{"pattern"})
+
+	autoIndexReindex := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "arc_auto_index_reindex_total",
+		Help: "Total automatic composite index reindex operations.",
+	}, []string{"index_name", "status"})
+
+	reg.MustRegister(opDuration, opTotal, bytesProcessed, errorsTotal, autoIndexPatterns, autoIndexReindex)
 
 	return &Metrics{
-		Registry:          reg,
-		OperationDuration: opDuration,
-		OperationTotal:    opTotal,
-		BytesProcessed:    bytesProcessed,
-		ErrorsTotal:       errorsTotal,
+		Registry:              reg,
+		OperationDuration:     opDuration,
+		OperationTotal:        opTotal,
+		BytesProcessed:        bytesProcessed,
+		ErrorsTotal:           errorsTotal,
+		AutoIndexPatterns:     autoIndexPatterns,
+		AutoIndexReindexTotal: autoIndexReindex,
 	}
 }
