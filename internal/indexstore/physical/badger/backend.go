@@ -1055,6 +1055,14 @@ func (b *Backend) Count(_ context.Context, opts *physical.QueryOptions) (int64, 
 	}
 
 	var count int64
+
+	// Use composite index when available for multi-label counts.
+	if len(opts.Labels) > 1 {
+		if def, vals, ok := b.findCompositeIndex(opts.Labels); ok {
+			return b.countByComposite(def, vals, opts, afterHex, beforeHex)
+		}
+	}
+
 	err := b.db.View(func(txn *badger.Txn) error {
 		if len(opts.Labels) > 0 {
 			return b.countByLabel(txn, opts, now, afterHex, beforeHex, &count)
@@ -1172,6 +1180,93 @@ func (b *Backend) DeleteExpired(_ context.Context, _ time.Time) (int, error) {
 		return 0, physical.ErrClosed
 	}
 	return 0, nil
+}
+
+func (b *Backend) countByComposite(def physical.CompositeIndexDef, vals []string, opts *physical.QueryOptions, afterHex, beforeHex string) (int64, error) {
+	var prefixBuf strings.Builder
+	prefixBuf.WriteString(prefixComposite)
+	prefixBuf.WriteString(def.Name)
+	prefixBuf.WriteByte('/')
+	for _, v := range vals {
+		prefixBuf.WriteString(v)
+		prefixBuf.WriteByte('/')
+	}
+	compositePrefix := []byte(prefixBuf.String())
+
+	var count int64
+	err := b.db.View(func(txn *badger.Txn) error {
+		iterOpts := badger.DefaultIteratorOptions
+		iterOpts.PrefetchValues = false
+		iterOpts.Prefix = compositePrefix
+
+		it := txn.NewIterator(iterOpts)
+		defer it.Close()
+
+		var seekKey []byte
+		if afterHex != "" {
+			seekKey = append(compositePrefix, []byte(afterHex)...)
+		} else {
+			seekKey = compositePrefix
+		}
+
+		// Extra labels beyond the composite index keys need validation.
+		extraLabels := make(map[string]string)
+		defKeySet := make(map[string]struct{}, len(def.Keys))
+		for _, k := range def.Keys {
+			defKeySet[k] = struct{}{}
+		}
+		for k, v := range opts.Labels {
+			if _, ok := defKeySet[k]; !ok {
+				extraLabels[k] = v
+			}
+		}
+		needValidate := len(extraLabels) > 0
+
+		for it.Seek(seekKey); it.ValidForPrefix(compositePrefix); it.Next() {
+			key := it.Item().Key()
+			rest := string(key[len(compositePrefix):])
+			if len(rest) < 17 {
+				continue
+			}
+			tsHex := rest[:16]
+
+			if beforeHex != "" && tsHex >= beforeHex {
+				break
+			}
+
+			if needValidate {
+				suffix := rest
+				metaKey := []byte(prefixMeta + suffix)
+				metaItem, err := txn.Get(metaKey)
+				if err != nil {
+					continue
+				}
+				var skip bool
+				if err := metaItem.Value(func(val []byte) error {
+					_, labels, decErr := decodeMeta(val)
+					if decErr != nil {
+						return decErr
+					}
+					for k, v := range extraLabels {
+						if labels[k] != v {
+							skip = true
+							return nil
+						}
+					}
+					return nil
+				}); err != nil || skip {
+					continue
+				}
+			}
+
+			count++
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, fmt.Errorf("badger composite count: %w", err)
+	}
+	return count, nil
 }
 
 // Stats returns storage statistics.
