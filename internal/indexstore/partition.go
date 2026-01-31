@@ -60,12 +60,18 @@ func (pb *PartitionedBackend) getOrCreatePartition(ctx context.Context, tsMillis
 	id := pb.partitionID(tsMillis)
 
 	pb.mu.RLock()
-	if p, ok := pb.partitions[id]; ok {
-		p.lastUsed = time.Now()
-		pb.mu.RUnlock()
-		return p.backend, nil
-	}
+	_, ok := pb.partitions[id]
 	pb.mu.RUnlock()
+	if ok {
+		pb.mu.Lock()
+		if p, ok := pb.partitions[id]; ok {
+			p.lastUsed = time.Now()
+			be := p.backend
+			pb.mu.Unlock()
+			return be, nil
+		}
+		pb.mu.Unlock()
+	}
 
 	pb.mu.Lock()
 	defer pb.mu.Unlock()
