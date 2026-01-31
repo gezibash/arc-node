@@ -37,65 +37,98 @@ func NewThreads(c *client.Client, kp *identity.Keypair, opts ...Option) *Threads
 	return t
 }
 
-// ListThreads queries all DM messages and groups them by conversation, returning
-// one Thread per peer sorted by most recent activity (descending).
+// ListThreads queries all DM messages involving self and groups them by
+// conversation, returning one Thread per peer sorted by most recent activity.
+//
+// Instead of using a CEL expression (which is applied post-query and causes
+// full index scans), we issue two label-indexed queries — one for messages
+// sent by self (dm_from=self) and one for messages received (dm_to=self) —
+// then merge the results client-side.
 func (t *Threads) ListThreads(ctx context.Context) ([]Thread, error) {
 	self := t.kp.PublicKey()
 	selfHex := hex.EncodeToString(self[:])
-	expr := `labels["dm_from"] == "` + selfHex + `" || labels["dm_to"] == "` + selfHex + `" || labels["from"] == "` + selfHex + `"`
 
-	result, err := t.client.QueryMessages(ctx, &client.QueryOptions{
-		Expression: expr,
-		Labels: map[string]string{
-			"app":  "dm",
-			"type": "message",
-		},
+	baseLabels := map[string]string{
+		"app":  "dm",
+		"type": "message",
+	}
+
+	// Query sent messages (dm_from=self).
+	sentLabels := make(map[string]string, len(baseLabels)+1)
+	for k, v := range baseLabels {
+		sentLabels[k] = v
+	}
+	sentLabels["dm_from"] = selfHex
+
+	// Query received messages (dm_to=self).
+	rcvdLabels := make(map[string]string, len(baseLabels)+1)
+	for k, v := range baseLabels {
+		rcvdLabels[k] = v
+	}
+	rcvdLabels["dm_to"] = selfHex
+
+	sentResult, err := t.client.QueryMessages(ctx, &client.QueryOptions{
+		Labels:     sentLabels,
 		Limit:      200,
 		Descending: true,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("query threads: %w", err)
+		return nil, fmt.Errorf("query sent threads: %w", err)
 	}
 
+	rcvdResult, err := t.client.QueryMessages(ctx, &client.QueryOptions{
+		Labels:     rcvdLabels,
+		Limit:      200,
+		Descending: true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("query received threads: %w", err)
+	}
+
+	// Merge and deduplicate by conversation, keeping the newest message per conversation.
 	convMap := make(map[string]*Thread)
 
-	for _, e := range result.Entries {
-		convID := e.Labels["conversation"]
-		if convID == "" {
-			continue
-		}
+	addEntries := func(entries []*client.Entry) {
+		for _, e := range entries {
+			convID := e.Labels["conversation"]
+			if convID == "" {
+				continue
+			}
 
-		// Already have a newer message for this conversation.
-		if _, exists := convMap[convID]; exists {
-			continue
-		}
+			// Keep only the newest message per conversation.
+			if existing, ok := convMap[convID]; ok && existing.LastMsg.Timestamp >= e.Timestamp {
+				continue
+			}
 
-		var from, to [32]byte
-		if f, err := hex.DecodeString(e.Labels["dm_from"]); err == nil {
-			copy(from[:], f)
-		}
-		if tt, err := hex.DecodeString(e.Labels["dm_to"]); err == nil {
-			copy(to[:], tt)
-		}
+			var from, to [32]byte
+			if f, err := hex.DecodeString(e.Labels["dm_from"]); err == nil {
+				copy(from[:], f)
+			}
+			if tt, err := hex.DecodeString(e.Labels["dm_to"]); err == nil {
+				copy(to[:], tt)
+			}
 
-		// Determine peer: whichever of from/to is not self.
-		peer := from
-		if from == self {
-			peer = to
-		}
+			peer := from
+			if from == self {
+				peer = to
+			}
 
-		convMap[convID] = &Thread{
-			ConvID:  convID,
-			PeerPub: peer,
-			LastMsg: Message{
-				Ref:       e.Ref,
-				Labels:    e.Labels,
-				Timestamp: e.Timestamp,
-				From:      from,
-				To:        to,
-			},
+			convMap[convID] = &Thread{
+				ConvID:  convID,
+				PeerPub: peer,
+				LastMsg: Message{
+					Ref:       e.Ref,
+					Labels:    e.Labels,
+					Timestamp: e.Timestamp,
+					From:      from,
+					To:        to,
+				},
+			}
 		}
 	}
+
+	addEntries(sentResult.Entries)
+	addEntries(rcvdResult.Entries)
 
 	threads := make([]Thread, 0, len(convMap))
 	for _, th := range convMap {

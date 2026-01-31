@@ -599,6 +599,73 @@ func (b *Backend) queryLabels(ctx context.Context, opts *physical.QueryOptions, 
 	return refs
 }
 
+// Count returns the number of entries matching the given options.
+// For no-label queries it uses ZCOUNT on entries_by_time. For single-label
+// it uses ZCOUNT on the label sorted set. For multi-label it falls back
+// to ZInterStore + ZCARD.
+func (b *Backend) Count(ctx context.Context, opts *physical.QueryOptions) (int64, error) {
+	if b.closed.Load() {
+		return 0, physical.ErrClosed
+	}
+	if opts == nil {
+		opts = &physical.QueryOptions{}
+	}
+
+	minScore := "-inf"
+	maxScore := "+inf"
+	if opts.After > 0 {
+		minScore = "(" + strconv.FormatInt(opts.After, 10)
+	}
+	if opts.Before > 0 {
+		maxScore = "(" + strconv.FormatInt(opts.Before, 10)
+	}
+
+	if len(opts.Labels) == 0 {
+		n, err := b.client.ZCount(ctx, b.entriesByTimeKey(), minScore, maxScore).Result()
+		if err != nil {
+			return 0, fmt.Errorf("redis count: %w", err)
+		}
+		return n, nil
+	}
+
+	if len(opts.Labels) == 1 {
+		var key string
+		for k, v := range opts.Labels {
+			key = b.labelTsKey(k, v)
+		}
+		n, err := b.client.ZCount(ctx, key, minScore, maxScore).Result()
+		if err != nil {
+			return 0, fmt.Errorf("redis count: %w", err)
+		}
+		return n, nil
+	}
+
+	// Multi-label: intersect into temp key, count, delete.
+	labelTsKeys := make([]string, 0, len(opts.Labels))
+	for k, v := range opts.Labels {
+		labelTsKeys = append(labelTsKeys, b.labelTsKey(k, v))
+	}
+
+	tmpKey := b.prefix + "tmp:" + uniqueID()
+
+	pipe := b.client.Pipeline()
+	pipe.ZInterStore(ctx, tmpKey, &redis.ZStore{
+		Keys:      labelTsKeys,
+		Aggregate: "MIN",
+	})
+	countCmd := pipe.ZCount(ctx, tmpKey, minScore, maxScore)
+	pipe.Del(ctx, tmpKey)
+	if _, err := pipe.Exec(ctx); err != nil {
+		return 0, fmt.Errorf("redis count: %w", err)
+	}
+
+	n, err := countCmd.Result()
+	if err != nil {
+		return 0, fmt.Errorf("redis count: %w", err)
+	}
+	return n, nil
+}
+
 func (b *Backend) DeleteExpired(ctx context.Context, now time.Time) (int, error) {
 	if b.closed.Load() {
 		return 0, physical.ErrClosed

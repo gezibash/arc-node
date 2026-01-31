@@ -460,6 +460,58 @@ func (b *Backend) fetchLabels(ctx context.Context, entries []*physical.Entry) er
 	return rows.Err()
 }
 
+// Count returns the number of entries matching the given options using SQL COUNT(*).
+func (b *Backend) Count(ctx context.Context, opts *physical.QueryOptions) (int64, error) {
+	if b.closed.Load() {
+		return 0, physical.ErrClosed
+	}
+	if opts == nil {
+		opts = &physical.QueryOptions{}
+	}
+
+	now := time.Now().UnixNano()
+
+	var qb strings.Builder
+	var args []any
+
+	hasLabels := len(opts.Labels) > 0
+
+	qb.WriteString("SELECT COUNT(*) FROM entries e")
+
+	if hasLabels {
+		i := 0
+		for k, v := range opts.Labels {
+			alias := fmt.Sprintf("l%d", i)
+			qb.WriteString(fmt.Sprintf(" JOIN labels %s ON %s.ref_hex = e.ref_hex AND %s.key = ? AND %s.value = ?",
+				alias, alias, alias, alias))
+			args = append(args, k, v)
+			i++
+		}
+	}
+
+	qb.WriteString(" WHERE 1=1")
+
+	if opts.After > 0 {
+		qb.WriteString(" AND e.timestamp > ?")
+		args = append(args, opts.After)
+	}
+	if opts.Before > 0 {
+		qb.WriteString(" AND e.timestamp < ?")
+		args = append(args, opts.Before)
+	}
+	if !opts.IncludeExpired {
+		qb.WriteString(" AND (e.expires_at = 0 OR e.expires_at > ?)")
+		args = append(args, now)
+	}
+
+	var count int64
+	err := b.db.QueryRowContext(ctx, qb.String(), args...).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("sqlite count: %w", err)
+	}
+	return count, nil
+}
+
 // DeleteExpired removes all expired entries.
 func (b *Backend) DeleteExpired(ctx context.Context, now time.Time) (int, error) {
 	if b.closed.Load() {

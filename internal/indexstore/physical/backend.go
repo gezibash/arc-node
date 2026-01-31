@@ -63,6 +63,7 @@ type Backend interface {
 	Get(ctx context.Context, r reference.Reference) (*Entry, error)
 	Delete(ctx context.Context, r reference.Reference) error
 	Query(ctx context.Context, opts *QueryOptions) (*QueryResult, error)
+	Count(ctx context.Context, opts *QueryOptions) (int64, error)
 	DeleteExpired(ctx context.Context, now time.Time) (int, error)
 	Stats(ctx context.Context) (*Stats, error)
 	Close() error
