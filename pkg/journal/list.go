@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/gezibash/arc/pkg/reference"
 	"github.com/gezibash/arc-node/pkg/client"
+	"github.com/gezibash/arc/pkg/reference"
 )
 
 // List queries journal entries matching the given options.

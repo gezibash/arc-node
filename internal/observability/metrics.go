@@ -6,12 +6,12 @@ import (
 
 // Metrics holds the Prometheus metrics registry and standard meters.
 type Metrics struct {
-	Registry          *prometheus.Registry
-	OperationDuration *prometheus.HistogramVec
-	OperationTotal    *prometheus.CounterVec
-	BytesProcessed    *prometheus.CounterVec
-	ErrorsTotal          *prometheus.CounterVec
-	AutoIndexPatterns    *prometheus.CounterVec
+	Registry              *prometheus.Registry
+	OperationDuration     *prometheus.HistogramVec
+	OperationTotal        *prometheus.CounterVec
+	BytesProcessed        *prometheus.CounterVec
+	ErrorsTotal           *prometheus.CounterVec
+	AutoIndexPatterns     *prometheus.CounterVec
 	AutoIndexReindexTotal *prometheus.CounterVec
 }
 

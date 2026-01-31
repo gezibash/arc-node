@@ -27,7 +27,7 @@ func Seal(kp *identity.Keypair, to identity.PublicKey, payload []byte, contentTy
 		To:          to,
 		Content:     contentRef,
 		ContentType: contentType,
-		Timestamp:   time.Now().UnixNano(),
+		Timestamp:   time.Now().UnixMilli(),
 	}
 
 	if err := message.Sign(&msg, kp); err != nil {

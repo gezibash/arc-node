@@ -6,8 +6,8 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/gezibash/arc/pkg/reference"
 	"github.com/gezibash/arc-node/pkg/journal"
+	"github.com/gezibash/arc/pkg/reference"
 	"github.com/spf13/cobra"
 )
 

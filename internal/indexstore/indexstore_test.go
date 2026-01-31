@@ -3,6 +3,7 @@ package indexstore
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -43,7 +44,7 @@ func TestIndexAndGet(t *testing.T) {
 	entry := &physical.Entry{
 		Ref:       ref,
 		Labels:    map[string]string{"type": "text"},
-		Timestamp: time.Now().UnixNano(),
+		Timestamp: time.Now().UnixMilli(),
 	}
 
 	if err := store.Index(ctx, entry); err != nil {
@@ -80,7 +81,7 @@ func TestDelete(t *testing.T) {
 	entry := &physical.Entry{
 		Ref:       ref,
 		Labels:    map[string]string{"key": "val"},
-		Timestamp: time.Now().UnixNano(),
+		Timestamp: time.Now().UnixMilli(),
 	}
 	store.Index(ctx, entry)
 
@@ -103,7 +104,7 @@ func TestQuery(t *testing.T) {
 		store.Index(ctx, &physical.Entry{
 			Ref:       ref,
 			Labels:    map[string]string{"index": "true"},
-			Timestamp: time.Now().UnixNano() + int64(i),
+			Timestamp: time.Now().UnixMilli() + int64(i),
 		})
 	}
 
@@ -137,7 +138,7 @@ func TestSubscribe(t *testing.T) {
 	store.Index(ctx, &physical.Entry{
 		Ref:       ref,
 		Labels:    map[string]string{"type": "test"},
-		Timestamp: time.Now().UnixNano(),
+		Timestamp: time.Now().UnixMilli(),
 	})
 
 	select {
@@ -147,5 +148,63 @@ func TestSubscribe(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Error("subscription did not receive entry within timeout")
+	}
+}
+
+func TestQueryFiltersExpiredEntriesMillis(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+
+	now := time.Now().UnixMilli()
+	entry := &physical.Entry{
+		Ref:       reference.Compute([]byte("expired")),
+		Labels:    map[string]string{"type": "a"},
+		Timestamp: now,
+		ExpiresAt: now - int64(time.Second/time.Millisecond),
+	}
+
+	if err := store.Index(ctx, entry); err != nil {
+		t.Fatalf("Index: %v", err)
+	}
+
+	res, err := store.Query(ctx, &QueryOptions{IncludeExpired: false})
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(res.Entries) != 0 {
+		t.Fatalf("expected 0 entries, got %d", len(res.Entries))
+	}
+}
+
+func TestQueryResidualPaginationHasMore(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+
+	for i := 0; i < 3; i++ {
+		entry := &physical.Entry{
+			Ref:       reference.Compute([]byte(fmt.Sprintf("entry-%d", i))),
+			Labels:    map[string]string{"type": "a", "user": "keep"},
+			Timestamp: int64(1000 + i),
+		}
+		if err := store.Index(ctx, entry); err != nil {
+			t.Fatalf("Index entry %d: %v", i, err)
+		}
+	}
+
+	res, err := store.Query(ctx, &QueryOptions{
+		Expression: `labels["type"] == "a" && labels["user"] != "skip"`,
+		Limit:      2,
+	})
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(res.Entries) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(res.Entries))
+	}
+	if !res.HasMore {
+		t.Fatalf("expected HasMore=true for residual pagination")
+	}
+	if res.NextCursor == "" {
+		t.Fatalf("expected NextCursor to be set for residual pagination")
 	}
 }

@@ -23,13 +23,13 @@ import (
 )
 
 const (
-	KeyBucket         = "bucket"
-	KeyRegion         = "region"
-	KeyEndpoint       = "endpoint"
-	KeyPrefix         = "prefix"
-	KeyAccessKeyID    = "access_key_id"
+	KeyBucket          = "bucket"
+	KeyRegion          = "region"
+	KeyEndpoint        = "endpoint"
+	KeyPrefix          = "prefix"
+	KeyAccessKeyID     = "access_key_id"
 	KeySecretAccessKey = "secret_access_key"
-	KeyForcePathStyle = "force_path_style"
+	KeyForcePathStyle  = "force_path_style"
 )
 
 func init() {
@@ -39,12 +39,12 @@ func init() {
 // Defaults returns the default configuration for the S3 backend.
 func Defaults() map[string]string {
 	return map[string]string{
-		KeyRegion:         "us-east-1",
-		KeyEndpoint:       "",
-		KeyPrefix:         "",
-		KeyAccessKeyID:    "",
+		KeyRegion:          "us-east-1",
+		KeyEndpoint:        "",
+		KeyPrefix:          "",
+		KeyAccessKeyID:     "",
 		KeySecretAccessKey: "",
-		KeyForcePathStyle: "false",
+		KeyForcePathStyle:  "false",
 	}
 }
 

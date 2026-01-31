@@ -10,8 +10,8 @@ import (
 )
 
 type Config struct {
-	DataDir       string             `mapstructure:"data_dir"`
-	GRPC          GRPCConfig         `mapstructure:"grpc"`
+	DataDir       string              `mapstructure:"data_dir"`
+	GRPC          GRPCConfig          `mapstructure:"grpc"`
 	Observability ObservabilityConfig `mapstructure:"observability"`
 	Storage       StorageConfig       `mapstructure:"storage"`
 }

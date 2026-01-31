@@ -112,6 +112,8 @@ github.com/fsnotify/fsnotify v1.9.0 h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S
 github.com/fsnotify/fsnotify v1.9.0/go.mod h1:8jBTzvmWwFyi3Pb8djgCCO5IBqzKJ/Jwo8TRcHyHii0=
 github.com/gezibash/arc v0.0.0-20260128173118-5195f06efffa h1:OMIqeJJ8Pu9HWXOLcBWhY6iVaSo9RbMjrXJ7JkH0Vew=
 github.com/gezibash/arc v0.0.0-20260128173118-5195f06efffa/go.mod h1:04hduRK7BXxrDC3yfZCWbW02YSxC8D4VDSGv9zfrDew=
+github.com/gezibash/arc v0.0.0-20260131185523-1921b63292a1 h1:C/FjMlcaqFATxb40JsdBUUoHJpCcZja7344b3iMduyE=
+github.com/gezibash/arc v0.0.0-20260131185523-1921b63292a1/go.mod h1:04hduRK7BXxrDC3yfZCWbW02YSxC8D4VDSGv9zfrDew=
 github.com/go-logr/logr v1.2.2/go.mod h1:jdQByPbusPIv2/zmleS9BjJVeZ6kBagPoEUsqbVz/1A=
 github.com/go-logr/logr v1.4.3 h1:CjnDlHq8ikf6E492q6eKboGOC0T8CDaOvkHCIg8idEI=
 github.com/go-logr/logr v1.4.3/go.mod h1:9T104GzyrTigFIr8wt5mBrctHMim0Nb2HLGrmQ40KvY=

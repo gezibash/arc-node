@@ -203,7 +203,7 @@ func (b *Backend) PutBatch(ctx context.Context, entries []*physical.Entry) error
 
 		var ttl time.Duration
 		if entry.ExpiresAt > 0 {
-			ttl = time.Duration(entry.ExpiresAt - time.Now().UnixNano())
+			ttl = time.Until(time.UnixMilli(entry.ExpiresAt))
 			if ttl <= 0 {
 				ttl = time.Millisecond
 			}
@@ -258,7 +258,7 @@ func (b *Backend) putInPipe(ctx context.Context, pipe redis.Pipeliner, entry *ph
 
 	var ttl time.Duration
 	if entry.ExpiresAt > 0 {
-		ttl = time.Duration(entry.ExpiresAt - time.Now().UnixNano())
+		ttl = time.Until(time.UnixMilli(entry.ExpiresAt))
 		if ttl <= 0 {
 			ttl = time.Millisecond
 		}
@@ -377,7 +377,7 @@ func (b *Backend) Query(ctx context.Context, opts *physical.QueryOptions) (*phys
 		limit = 1000
 	}
 
-	now := time.Now().UnixNano()
+	now := time.Now().UnixMilli()
 
 	// Parse cursor upfront so we can use it for server-side filtering.
 	var cursorTs int64
@@ -610,7 +610,7 @@ func (b *Backend) queryByLabelFilter(ctx context.Context, opts *physical.QueryOp
 
 	seen := make(map[string]bool)
 	var allCandidates []entryWithRef
-	now := time.Now().UnixNano()
+	now := time.Now().UnixMilli()
 
 	for _, group := range opts.LabelFilter.OR {
 		groupLabels := make(map[string]string, len(group.Predicates))
@@ -735,11 +735,11 @@ func (b *Backend) DeleteExpired(ctx context.Context, now time.Time) (int, error)
 		return 0, physical.ErrClosed
 	}
 
-	nowNano := now.UnixNano()
+	nowMillis := now.UnixMilli()
 
 	expired, err := b.client.ZRangeByScore(ctx, b.expiresKey(), &redis.ZRangeBy{
 		Min: "0",
-		Max: strconv.FormatInt(nowNano, 10),
+		Max: strconv.FormatInt(nowMillis, 10),
 	}).Result()
 	if err != nil {
 		return 0, fmt.Errorf("redis zrangebyscore: %w", err)
@@ -823,7 +823,7 @@ type entryWithRef struct {
 	refHex string
 }
 
-func (b *Backend) entryKey(refHex string) string    { return b.prefix + "entry:" + refHex }
+func (b *Backend) entryKey(refHex string) string     { return b.prefix + "entry:" + refHex }
 func (b *Backend) entriesByTimeKey() string          { return b.prefix + "entries_by_time" }
 func (b *Backend) labelKey(key, value string) string { return b.prefix + "label:" + key + ":" + value }
 func (b *Backend) labelTsKey(key, value string) string {

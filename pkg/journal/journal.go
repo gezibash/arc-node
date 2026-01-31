@@ -1,8 +1,8 @@
 package journal
 
 import (
-	"github.com/gezibash/arc/pkg/identity"
 	"github.com/gezibash/arc-node/pkg/client"
+	"github.com/gezibash/arc/pkg/identity"
 )
 
 const contentType = "application/x-arc-journal+encrypted"

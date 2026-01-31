@@ -1,6 +1,15 @@
 version: "3"
 
 tasks:
+  lint:
+    desc: Run formatting and vet checks
+    cmds:
+      - test -z "$(gofmt -l .)"
+      - go vet ./...
+  fmt:
+    desc: Format Go files in-place
+    cmds:
+      - git ls-files "*.go" | xargs gofmt -w
   build:
     desc: Build the arc binary
     vars:

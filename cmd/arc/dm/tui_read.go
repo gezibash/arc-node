@@ -9,11 +9,10 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/gezibash/arc/pkg/reference"
 	"github.com/gezibash/arc-node/cmd/arc/tui"
 	"github.com/gezibash/arc-node/pkg/dm"
+	"github.com/gezibash/arc/pkg/reference"
 )
-
 
 // readView owns only UI-local state. Content loading is handled by dmApp.
 type readView struct {
@@ -118,4 +117,3 @@ func (v readView) viewContent() (string, string) {
 
 	return b.String(), helpText
 }
-

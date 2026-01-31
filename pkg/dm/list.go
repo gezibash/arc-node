@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/gezibash/arc/pkg/reference"
 	"github.com/gezibash/arc-node/pkg/client"
+	"github.com/gezibash/arc/pkg/reference"
 )
 
 // List queries DMs in the conversation matching the given options.

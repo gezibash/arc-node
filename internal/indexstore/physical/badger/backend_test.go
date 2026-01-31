@@ -41,7 +41,7 @@ func TestPutAndGet(t *testing.T) {
 		Ref:       ref,
 		Labels:    map[string]string{"type": "text"},
 		Timestamp: time.Now().UnixMilli(),
-		ExpiresAt: time.Now().Add(time.Hour).UnixNano(),
+		ExpiresAt: time.Now().Add(time.Hour).UnixMilli(),
 	}
 
 	if err := be.Put(ctx, entry); err != nil {

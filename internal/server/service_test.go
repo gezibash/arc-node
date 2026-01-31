@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -25,6 +26,8 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 )
+
+var msgCounter int64
 
 func newTestServer(t *testing.T) (*Server, *identity.Keypair, string) {
 	t.Helper()
@@ -91,7 +94,7 @@ func newTestClient(t *testing.T, addr string, nodeKP *identity.Keypair) (*client
 func makeMessage(t *testing.T, kp *identity.Keypair, contentType string) message.Message {
 	t.Helper()
 	pub := kp.PublicKey()
-	content := reference.Compute([]byte("test-content"))
+	content := reference.Compute([]byte(fmt.Sprintf("test-content-%d", atomic.AddInt64(&msgCounter, 1))))
 	msg := message.New(pub, pub, content, contentType)
 	if err := message.Sign(&msg, kp); err != nil {
 		t.Fatalf("sign message: %v", err)
@@ -271,8 +274,8 @@ func TestSendMessageLabels(t *testing.T) {
 	labels := result.Entries[0].Labels
 	pub := callerKP.PublicKey()
 	expectedLabels := map[string]string{
-		"env":          "test",
-		"app":          "arc",
+		"env":         "test",
+		"app":         "arc",
 		"from":        fmt.Sprintf("%x", pub[:]),
 		"to":          fmt.Sprintf("%x", pub[:]),
 		"content":     fmt.Sprintf("%x", msg.Content),
@@ -383,7 +386,7 @@ func TestQueryMessagesDescending(t *testing.T) {
 			To:          pub,
 			Content:     content,
 			ContentType: "text/plain",
-			Timestamp:   int64((i + 1) * 1000000000), // 1s, 2s, 3s
+			Timestamp:   int64((i + 1) * 1000), // 1s, 2s, 3s (ms)
 		}
 		if err := message.Sign(&msg, callerKP); err != nil {
 			t.Fatalf("sign: %v", err)

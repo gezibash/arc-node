@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/gezibash/arc/pkg/reference"
 	"github.com/gezibash/arc-node/pkg/dm"
+	"github.com/gezibash/arc/pkg/reference"
 	"github.com/spf13/cobra"
 )
 

@@ -254,7 +254,7 @@ func (b *Backend) Query(ctx context.Context, opts *physical.QueryOptions) (*phys
 		limit = 1000
 	}
 
-	now := time.Now().UnixNano()
+	now := time.Now().UnixMilli()
 
 	// Parse cursor: "{timestamp}/{refHex}"
 	var cursorTS int64
@@ -540,7 +540,7 @@ func (b *Backend) Count(ctx context.Context, opts *physical.QueryOptions) (int64
 		opts = &physical.QueryOptions{}
 	}
 
-	now := time.Now().UnixNano()
+	now := time.Now().UnixMilli()
 
 	var qb strings.Builder
 	var args []any
@@ -590,7 +590,7 @@ func (b *Backend) DeleteExpired(ctx context.Context, now time.Time) (int, error)
 	}
 
 	result, err := b.db.ExecContext(ctx,
-		`DELETE FROM entries WHERE expires_at > 0 AND expires_at <= ?`, now.UnixNano())
+		`DELETE FROM entries WHERE expires_at > 0 AND expires_at <= ?`, now.UnixMilli())
 	if err != nil {
 		return 0, fmt.Errorf("sqlite delete expired: %w", err)
 	}

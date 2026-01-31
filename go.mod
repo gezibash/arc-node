@@ -13,7 +13,7 @@ require (
 	github.com/charmbracelet/glamour v0.10.0
 	github.com/charmbracelet/lipgloss v1.1.1-0.20250404203927-76690c660834
 	github.com/dgraph-io/badger/v4 v4.9.0
-	github.com/gezibash/arc v0.0.0-20260128173118-5195f06efffa
+	github.com/gezibash/arc v0.0.0-20260131185523-1921b63292a1
 	github.com/google/cel-go v0.26.1
 	github.com/google/uuid v1.6.0
 	github.com/mattn/go-isatty v0.0.20

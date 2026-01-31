@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gezibash/arc/pkg/reference"
 	"github.com/gezibash/arc-node/pkg/journal"
+	"github.com/gezibash/arc/pkg/reference"
 )
 
 // --- Text ---

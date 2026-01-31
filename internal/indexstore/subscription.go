@@ -114,9 +114,9 @@ func newSubscription(ctx context.Context, expression string, opts SubscriptionOp
 	return s
 }
 
-func (s *subscription) ID() string                     { return s.id }
+func (s *subscription) ID() string                      { return s.id }
 func (s *subscription) Entries() <-chan *physical.Entry { return s.entries }
-func (s *subscription) Cancel()                        { s.cancel() }
+func (s *subscription) Cancel()                         { s.cancel() }
 
 func (s *subscription) Err() error {
 	s.errMu.RLock()

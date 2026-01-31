@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 	"mime"
-	"os"
 	"net/http"
+	"os"
 	"path/filepath"
 
 	"github.com/gezibash/arc/pkg/identity"

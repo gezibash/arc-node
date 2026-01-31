@@ -24,8 +24,8 @@ var (
 type Entry struct {
 	Ref       reference.Reference
 	Labels    map[string]string
-	Timestamp int64
-	ExpiresAt int64
+	Timestamp int64 // unix milliseconds
+	ExpiresAt int64 // unix milliseconds
 }
 
 // LabelPredicate is a single label match condition (exact key=value).
@@ -50,8 +50,8 @@ type LabelFilter struct {
 type QueryOptions struct {
 	Labels         map[string]string // Simple AND labels (existing, kept for compatibility)
 	LabelFilter    *LabelFilter      // Structured filter with OR support (takes precedence over Labels when set)
-	After          int64
-	Before         int64
+	After          int64             // unix milliseconds
+	Before         int64             // unix milliseconds
 	Limit          int
 	Cursor         string
 	Descending     bool

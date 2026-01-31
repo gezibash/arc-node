@@ -91,8 +91,8 @@ func (s *IndexStore) Get(ctx context.Context, r reference.Reference) (entry *phy
 type QueryOptions struct {
 	Expression     string
 	Labels         map[string]string
-	After          int64
-	Before         int64
+	After          int64 // unix milliseconds
+	Before         int64 // unix milliseconds
 	Limit          int
 	Cursor         string
 	Descending     bool
@@ -178,12 +178,14 @@ func (s *IndexStore) Query(ctx context.Context, opts *QueryOptions) (result *Que
 
 	// Apply residual CEL filter if provided
 	var entries []*physical.Entry
+	residualHasMore := false
 	if residualPrg != nil {
 		matches, evalErr := s.eval.EvalBatch(ctx, residualPrg, physResult.Entries)
 		if evalErr != nil {
 			return nil, fmt.Errorf("evaluate CEL: %w", evalErr)
 		}
 		if opts.Limit > 0 && len(matches) > opts.Limit {
+			residualHasMore = true
 			entries = matches[:opts.Limit]
 		} else {
 			entries = matches
@@ -192,11 +194,15 @@ func (s *IndexStore) Query(ctx context.Context, opts *QueryOptions) (result *Que
 		entries = physResult.Entries
 	}
 
-	hasMore := physResult.HasMore
+	hasMore := physResult.HasMore || residualHasMore
 	nextCursor := physResult.NextCursor
-
-	if residualPrg != nil && opts.Limit > 0 && len(entries) < opts.Limit && physResult.HasMore {
-		hasMore = true
+	if residualPrg != nil {
+		if len(entries) > 0 {
+			last := entries[len(entries)-1]
+			nextCursor = fmt.Sprintf("%016x/%s", last.Timestamp, reference.Hex(last.Ref))
+		} else if !hasMore {
+			nextCursor = ""
+		}
 	}
 
 	slog.DebugContext(ctx, "query completed", "result_count", len(entries), "has_more", hasMore)

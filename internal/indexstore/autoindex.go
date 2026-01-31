@@ -25,7 +25,7 @@ type queryTracker interface {
 // noopTracker is used when the backend doesn't support composite indexes.
 type noopTracker struct{}
 
-func (noopTracker) Track(map[string]string) {}
+func (noopTracker) Track(map[string]string)      {}
 func (noopTracker) evaluate(context.Context) int { return 0 }
 
 // autoIndexer tracks multi-label query patterns and automatically registers

@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gezibash/arc/pkg/reference"
 	"github.com/gezibash/arc-node/internal/indexstore/physical"
+	"github.com/gezibash/arc/pkg/reference"
 )
 
 // PartitionConfig configures time-based partitioning.
@@ -37,8 +37,8 @@ type PartitionedBackend struct {
 
 type partitionEntry struct {
 	backend  physical.Backend
-	start    int64 // partition start timestamp (nanos)
-	end      int64 // partition end timestamp (nanos)
+	start    int64 // partition start timestamp (ms)
+	end      int64 // partition end timestamp (ms)
 	lastUsed time.Time
 }
 
@@ -50,14 +50,14 @@ func NewPartitionedBackend(config PartitionConfig) *PartitionedBackend {
 	}
 }
 
-func (pb *PartitionedBackend) partitionID(tsNanos int64) string {
-	t := time.Unix(0, tsNanos)
+func (pb *PartitionedBackend) partitionID(tsMillis int64) string {
+	t := time.UnixMilli(tsMillis)
 	truncated := t.Truncate(pb.config.Window)
 	return truncated.Format("20060102T150405")
 }
 
-func (pb *PartitionedBackend) getOrCreatePartition(ctx context.Context, tsNanos int64) (physical.Backend, error) {
-	id := pb.partitionID(tsNanos)
+func (pb *PartitionedBackend) getOrCreatePartition(ctx context.Context, tsMillis int64) (physical.Backend, error) {
+	id := pb.partitionID(tsMillis)
 
 	pb.mu.RLock()
 	if p, ok := pb.partitions[id]; ok {
@@ -81,11 +81,11 @@ func (pb *PartitionedBackend) getOrCreatePartition(ctx context.Context, tsNanos 
 		return nil, fmt.Errorf("create partition %s: %w", id, err)
 	}
 
-	t := time.Unix(0, tsNanos).Truncate(pb.config.Window)
+	t := time.UnixMilli(tsMillis).Truncate(pb.config.Window)
 	pb.partitions[id] = &partitionEntry{
 		backend:  backend,
-		start:    t.UnixNano(),
-		end:      t.Add(pb.config.Window).UnixNano(),
+		start:    t.UnixMilli(),
+		end:      t.Add(pb.config.Window).UnixMilli(),
 		lastUsed: time.Now(),
 	}
 

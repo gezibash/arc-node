@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gezibash/arc-node/pkg/dm"
 	"github.com/gezibash/arc/pkg/identity"
 	"github.com/gezibash/arc/pkg/reference"
-	"github.com/gezibash/arc-node/pkg/dm"
 )
 
 // --- Text ---
