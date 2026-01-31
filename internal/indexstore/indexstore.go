@@ -164,6 +164,33 @@ func (s *IndexStore) Query(ctx context.Context, opts *QueryOptions) (result *Que
 	}, nil
 }
 
+// Count returns the number of entries matching the given options without
+// fetching full entries. CEL expressions are not supported for counting —
+// only label and time-range filters are applied at the backend level.
+func (s *IndexStore) Count(ctx context.Context, opts *QueryOptions) (count int64, err error) {
+	op, ctx := observability.StartOperation(ctx, s.metrics, "indexstore.count")
+	defer op.End(err)
+
+	if opts == nil {
+		opts = &QueryOptions{}
+	}
+
+	physOpts := &physical.QueryOptions{
+		Labels:         opts.Labels,
+		After:          opts.After,
+		Before:         opts.Before,
+		IncludeExpired: opts.IncludeExpired,
+	}
+
+	count, err = s.backend.Count(ctx, physOpts)
+	if err != nil {
+		return 0, fmt.Errorf("count entries: %w", err)
+	}
+
+	slog.DebugContext(ctx, "count completed", "count", count)
+	return count, nil
+}
+
 // Subscribe creates a subscription for entries matching the CEL expression.
 func (s *IndexStore) Subscribe(ctx context.Context, expression string) (sub Subscription, err error) {
 	op, ctx := observability.StartOperation(ctx, s.metrics, "indexstore.subscribe")

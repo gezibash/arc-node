@@ -529,6 +529,53 @@ func (b *Backend) queryByEntry(opts *physical.QueryOptions) (*physical.QueryResu
 	}, nil
 }
 
+// pickDrivingLabel selects the label with the fewest index entries (most selective)
+// by sampling up to a small number of keys per label prefix. For single-label queries
+// this is a no-op. For multi-label, we peek at each label/{k}/{v}/ prefix and pick
+// the one with the smallest estimated cardinality.
+func pickDrivingLabel(db *badger.DB, labels map[string]string) (string, string) {
+	if len(labels) <= 1 {
+		for k, v := range labels {
+			return k, v
+		}
+		return "", ""
+	}
+
+	// Sample up to sampleLimit keys per prefix to estimate cardinality.
+	const sampleLimit = 101
+	bestKey, bestVal := "", ""
+	bestCount := int(^uint(0) >> 1) // max int
+
+	_ = db.View(func(txn *badger.Txn) error {
+		for k, v := range labels {
+			prefix := []byte(prefixLabel + k + "/" + v + "/")
+			opts := badger.DefaultIteratorOptions
+			opts.PrefetchValues = false
+			opts.Prefix = prefix
+
+			it := txn.NewIterator(opts)
+			count := 0
+			for it.Seek(prefix); it.ValidForPrefix(prefix) && count < sampleLimit; it.Next() {
+				count++
+			}
+			it.Close()
+
+			if count < bestCount {
+				bestCount = count
+				bestKey = k
+				bestVal = v
+			}
+			// If we find one with 0 entries, no need to check others.
+			if bestCount == 0 {
+				break
+			}
+		}
+		return nil
+	})
+
+	return bestKey, bestVal
+}
+
 func (b *Backend) queryByLabel(opts *physical.QueryOptions) (*physical.QueryResult, error) {
 	now := time.Now().UnixNano()
 	limit := opts.Limit
@@ -536,12 +583,10 @@ func (b *Backend) queryByLabel(opts *physical.QueryOptions) (*physical.QueryResu
 		limit = 1000
 	}
 
-	// Pick one label as the driving index key.
-	var dk, dv string
-	for k, v := range opts.Labels {
-		dk, dv = k, v
-		break
-	}
+	// Pick the most selective label as the driving index key.
+	// We estimate selectivity by peeking at how many entries each label prefix
+	// contains (fewer = more selective = better driver).
+	dk, dv := pickDrivingLabel(b.db, opts.Labels)
 
 	var results []*physical.Entry
 	var nextCursor string
@@ -670,6 +715,150 @@ func (b *Backend) queryByLabel(opts *physical.QueryOptions) (*physical.QueryResu
 		NextCursor: nextCursor,
 		HasMore:    hasMore,
 	}, nil
+}
+
+// Count returns the number of entries matching the given options without
+// deserializing full entries. For label queries it iterates the label index;
+// for unfiltered queries it iterates the meta prefix. Only expiry is checked.
+func (b *Backend) Count(_ context.Context, opts *physical.QueryOptions) (int64, error) {
+	if b.closed.Load() {
+		return 0, physical.ErrClosed
+	}
+	if opts == nil {
+		opts = &physical.QueryOptions{}
+	}
+
+	now := time.Now().UnixNano()
+	var afterHex, beforeHex string
+	if opts.After > 0 {
+		afterHex = timestampToHex(opts.After)
+	}
+	if opts.Before > 0 {
+		beforeHex = timestampToHex(opts.Before)
+	}
+
+	var count int64
+	err := b.db.View(func(txn *badger.Txn) error {
+		if len(opts.Labels) > 0 {
+			return b.countByLabel(txn, opts, now, afterHex, beforeHex, &count)
+		}
+		return b.countByEntry(txn, opts, now, afterHex, beforeHex, &count)
+	})
+	if err != nil {
+		return 0, fmt.Errorf("badger count: %w", err)
+	}
+	return count, nil
+}
+
+func (b *Backend) countByEntry(txn *badger.Txn, opts *physical.QueryOptions, now int64, afterHex, beforeHex string, count *int64) error {
+	prefix := []byte(prefixMeta)
+	iterOpts := badger.DefaultIteratorOptions
+	iterOpts.PrefetchValues = !opts.IncludeExpired // only need values to check expiry
+	iterOpts.PrefetchSize = 100
+	iterOpts.Prefix = prefix
+
+	it := txn.NewIterator(iterOpts)
+	defer it.Close()
+
+	var seekKey []byte
+	if afterHex != "" {
+		seekKey = []byte(prefixMeta + afterHex)
+	} else {
+		seekKey = prefix
+	}
+
+	for it.Seek(seekKey); it.ValidForPrefix(prefix); it.Next() {
+		key := it.Item().Key()
+		suffix := string(key[len(prefixMeta):])
+		if len(suffix) < 17 {
+			continue
+		}
+		tsHex := suffix[:16]
+
+		if beforeHex != "" && tsHex >= beforeHex {
+			break
+		}
+
+		if !opts.IncludeExpired {
+			var skip bool
+			if err := it.Item().Value(func(val []byte) error {
+				ea, err := decodeMetaExpiresAt(val)
+				if err != nil {
+					return err
+				}
+				if ea > 0 && ea <= now {
+					skip = true
+				}
+				return nil
+			}); err != nil {
+				continue
+			}
+			if skip {
+				continue
+			}
+		}
+
+		*count++
+	}
+	return nil
+}
+
+func (b *Backend) countByLabel(txn *badger.Txn, opts *physical.QueryOptions, now int64, afterHex, beforeHex string, count *int64) error {
+	dk, dv := pickDrivingLabel(b.db, opts.Labels)
+	labelPrefix := []byte(prefixLabel + dk + "/" + dv + "/")
+
+	iterOpts := badger.DefaultIteratorOptions
+	iterOpts.PrefetchValues = false
+	iterOpts.Prefix = labelPrefix
+
+	it := txn.NewIterator(iterOpts)
+	defer it.Close()
+
+	var seekKey []byte
+	if afterHex != "" {
+		seekKey = []byte(prefixLabel + dk + "/" + dv + "/" + afterHex)
+	} else {
+		seekKey = labelPrefix
+	}
+
+	needValidate := len(opts.Labels) > 1 || !opts.IncludeExpired
+
+	for it.Seek(seekKey); it.ValidForPrefix(labelPrefix); it.Next() {
+		key := it.Item().Key()
+		suffix := string(key[len(labelPrefix):])
+		if len(suffix) < 17 {
+			continue
+		}
+		tsHex := suffix[:16]
+
+		if beforeHex != "" && tsHex >= beforeHex {
+			break
+		}
+
+		if needValidate {
+			metaKey := []byte(prefixMeta + suffix)
+			metaItem, err := txn.Get(metaKey)
+			if err != nil {
+				continue
+			}
+			var skip bool
+			if err := metaItem.Value(func(val []byte) error {
+				expiresAt, labels, decErr := decodeMeta(val)
+				if decErr != nil {
+					return decErr
+				}
+				if !matchesMetaFilter(expiresAt, labels, opts, now) {
+					skip = true
+				}
+				return nil
+			}); err != nil || skip {
+				continue
+			}
+		}
+
+		*count++
+	}
+	return nil
 }
 
 // DeleteExpired is a no-op for badger. Expired keys are handled natively
