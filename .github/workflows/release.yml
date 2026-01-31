@@ -138,8 +138,8 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            ghcr.io/gezibash/arc-node
-            gezibash/arc-node
+            ghcr.io/gezibash/arc
+            gezibash/arc
           tags: |
             type=raw,value=${{ needs.release.outputs.tag }}
             type=semver,pattern={{version}},value=${{ needs.release.outputs.version }}
