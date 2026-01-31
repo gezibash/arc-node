@@ -9,7 +9,10 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"sort"
 	"strconv"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -22,9 +25,10 @@ import (
 )
 
 const (
-	prefixLabel = "label/"
-	prefixRef   = "ref/"
-	prefixMeta  = "meta/"
+	prefixLabel     = "label/"
+	prefixRef       = "ref/"
+	prefixMeta      = "meta/"
+	prefixComposite = "cidx/"
 )
 
 const (
@@ -121,13 +125,41 @@ func newInMemory() (*Backend, error) {
 
 // Backend is a BadgerDB implementation of physical.Backend.
 type Backend struct {
-	db     *badger.DB
-	closed atomic.Bool
+	db              *badger.DB
+	closed          atomic.Bool
+	compositesMu    sync.RWMutex
+	composites      []physical.CompositeIndexDef
+	compositesByKey map[string]physical.CompositeIndexDef
 }
 
 // NewWithDB creates a new backend with an existing BadgerDB instance.
 func NewWithDB(db *badger.DB) *Backend {
-	return &Backend{db: db}
+	return &Backend{
+		db:              db,
+		compositesByKey: make(map[string]physical.CompositeIndexDef),
+	}
+}
+
+// RegisterCompositeIndex registers a composite index definition.
+func (b *Backend) RegisterCompositeIndex(def physical.CompositeIndexDef) error {
+	b.compositesMu.Lock()
+	defer b.compositesMu.Unlock()
+	fingerprint := strings.Join(def.Keys, "\x00")
+	if _, exists := b.compositesByKey[fingerprint]; exists {
+		return fmt.Errorf("composite index already registered for keys: %v", def.Keys)
+	}
+	b.composites = append(b.composites, def)
+	b.compositesByKey[fingerprint] = def
+	return nil
+}
+
+// CompositeIndexes returns all registered composite index definitions.
+func (b *Backend) CompositeIndexes() []physical.CompositeIndexDef {
+	b.compositesMu.RLock()
+	defer b.compositesMu.RUnlock()
+	out := make([]physical.CompositeIndexDef, len(b.composites))
+	copy(out, b.composites)
+	return out
 }
 
 // Put stores an entry.
@@ -177,7 +209,6 @@ func (b *Backend) putInTxn(txn *badger.Txn, entry *physical.Entry) error {
 		oldSuffix := oldTsHex + "/" + refHex
 		oldMetaKey := []byte(prefixMeta + oldSuffix)
 
-		// Read old meta to get labels for index cleanup
 		oldMetaItem, oldMetaErr := txn.Get(oldMetaKey)
 		if oldMetaErr == nil {
 			if metaErr := oldMetaItem.Value(func(val []byte) error {
@@ -191,6 +222,8 @@ func (b *Backend) putInTxn(txn *badger.Txn, entry *physical.Entry) error {
 						return delErr
 					}
 				}
+				// Delete old composite index entries
+				b.deleteCompositeKeys(txn, oldLabels, oldTsHex, refHex)
 				return nil
 			}); metaErr != nil {
 				return metaErr
@@ -217,7 +250,7 @@ func (b *Backend) putInTxn(txn *badger.Txn, entry *physical.Entry) error {
 		}
 	}
 
-	// Store meta (contains all entry fields needed for queries and Get)
+	// Store meta
 	metaKey := []byte(prefixMeta + suffix)
 	if ttl > 0 {
 		if err := txn.SetEntry(badger.NewEntry(metaKey, encodeMeta(entry)).WithTTL(ttl)); err != nil {
@@ -254,7 +287,58 @@ func (b *Backend) putInTxn(txn *badger.Txn, entry *physical.Entry) error {
 		}
 	}
 
+	// Store composite index entries
+	b.compositesMu.RLock()
+	composites := b.composites
+	b.compositesMu.RUnlock()
+
+	for _, def := range composites {
+		if key, ok := buildCompositeKey(def, entry.Labels, tsHex, refHex); ok {
+			if ttl > 0 {
+				if err := txn.SetEntry(badger.NewEntry(key, nil).WithTTL(ttl)); err != nil {
+					return err
+				}
+			} else {
+				if err := txn.Set(key, nil); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
 	return nil
+}
+
+// buildCompositeKey returns the composite key if the labels have all required keys.
+func buildCompositeKey(def physical.CompositeIndexDef, labels map[string]string, tsHex, refHex string) ([]byte, bool) {
+	var buf strings.Builder
+	buf.WriteString(prefixComposite)
+	buf.WriteString(def.Name)
+	buf.WriteByte('/')
+	for _, k := range def.Keys {
+		v, ok := labels[k]
+		if !ok {
+			return nil, false
+		}
+		buf.WriteString(v)
+		buf.WriteByte('/')
+	}
+	buf.WriteString(tsHex)
+	buf.WriteByte('/')
+	buf.WriteString(refHex)
+	return []byte(buf.String()), true
+}
+
+func (b *Backend) deleteCompositeKeys(txn *badger.Txn, labels map[string]string, tsHex, refHex string) {
+	b.compositesMu.RLock()
+	composites := b.composites
+	b.compositesMu.RUnlock()
+
+	for _, def := range composites {
+		if key, ok := buildCompositeKey(def, labels, tsHex, refHex); ok {
+			_ = txn.Delete(key)
+		}
+	}
 }
 
 // Get retrieves an entry by reference.
@@ -320,11 +404,11 @@ func (b *Backend) Delete(_ context.Context, r reference.Reference) error {
 	}
 
 	return b.db.Update(func(txn *badger.Txn) error {
-		return deleteInTxn(txn, r)
+		return b.deleteInTxn(txn, r)
 	})
 }
 
-func deleteInTxn(txn *badger.Txn, r reference.Reference) error {
+func (b *Backend) deleteInTxn(txn *badger.Txn, r reference.Reference) error {
 	refHex := reference.Hex(r)
 	refKey := []byte(prefixRef + refHex)
 	item, getErr := txn.Get(refKey)
@@ -359,6 +443,7 @@ func deleteInTxn(txn *badger.Txn, r reference.Reference) error {
 					return delErr
 				}
 			}
+			b.deleteCompositeKeys(txn, labels, tsHex, refHex)
 			return nil
 		}); valErr != nil {
 			return valErr
@@ -384,6 +469,11 @@ func (b *Backend) Query(_ context.Context, opts *physical.QueryOptions) (*physic
 		opts = &physical.QueryOptions{}
 	}
 
+	// Check for OR label filter
+	if opts.LabelFilter != nil && len(opts.LabelFilter.OR) > 0 {
+		return b.queryByLabelFilter(opts)
+	}
+
 	if len(opts.Labels) > 0 {
 		return b.queryByLabel(opts)
 	}
@@ -398,7 +488,6 @@ func (b *Backend) queryByEntry(opts *physical.QueryOptions) (*physical.QueryResu
 		limit = 1000
 	}
 
-	// Pre-compute hex bounds for seek and early termination.
 	var afterHex, beforeHex string
 	if opts.After > 0 {
 		afterHex = timestampToHex(opts.After)
@@ -445,7 +534,6 @@ func (b *Backend) queryByEntry(opts *physical.QueryOptions) (*physical.QueryResu
 			}
 		}
 
-		// queryByEntry never has label filters — only expiry check needed.
 		needExpiry := !opts.IncludeExpired
 		skipFirst := opts.Cursor != ""
 
@@ -457,14 +545,12 @@ func (b *Backend) queryByEntry(opts *physical.QueryOptions) (*physical.QueryResu
 
 			key := it.Item().Key()
 			suffix := string(key[len(prefixMeta):])
-			// suffix = {tsHex(16)}/{refHex(64)}
 			if len(suffix) < 81 {
 				continue
 			}
 
 			tsHex := suffix[:16]
 
-			// Early termination: keys are sorted by tsHex.
 			if !opts.Descending && beforeHex != "" && tsHex >= beforeHex {
 				break
 			}
@@ -472,8 +558,6 @@ func (b *Backend) queryByEntry(opts *physical.QueryOptions) (*physical.QueryResu
 				break
 			}
 
-			// Fast path: only read expiresAt (8 bytes, zero label alloc) for filtering.
-			// Full decode only for entries that become results.
 			var skip bool
 			var entry *physical.Entry
 			err := it.Item().Value(func(val []byte) error {
@@ -488,7 +572,6 @@ func (b *Backend) queryByEntry(opts *physical.QueryOptions) (*physical.QueryResu
 					}
 				}
 				if len(results) >= limit {
-					// We've hit the limit — just need to know there's more.
 					return nil
 				}
 				var buildErr error
@@ -529,10 +612,7 @@ func (b *Backend) queryByEntry(opts *physical.QueryOptions) (*physical.QueryResu
 	}, nil
 }
 
-// pickDrivingLabel selects the label with the fewest index entries (most selective)
-// by sampling up to a small number of keys per label prefix. For single-label queries
-// this is a no-op. For multi-label, we peek at each label/{k}/{v}/ prefix and pick
-// the one with the smallest estimated cardinality.
+// pickDrivingLabel selects the label with the fewest index entries.
 func pickDrivingLabel(db *badger.DB, labels map[string]string) (string, string) {
 	if len(labels) <= 1 {
 		for k, v := range labels {
@@ -541,10 +621,9 @@ func pickDrivingLabel(db *badger.DB, labels map[string]string) (string, string) 
 		return "", ""
 	}
 
-	// Sample up to sampleLimit keys per prefix to estimate cardinality.
 	const sampleLimit = 101
 	bestKey, bestVal := "", ""
-	bestCount := int(^uint(0) >> 1) // max int
+	bestCount := int(^uint(0) >> 1)
 
 	_ = db.View(func(txn *badger.Txn) error {
 		for k, v := range labels {
@@ -565,7 +644,6 @@ func pickDrivingLabel(db *badger.DB, labels map[string]string) (string, string) 
 				bestKey = k
 				bestVal = v
 			}
-			// If we find one with 0 entries, no need to check others.
 			if bestCount == 0 {
 				break
 			}
@@ -577,22 +655,23 @@ func pickDrivingLabel(db *badger.DB, labels map[string]string) (string, string) 
 }
 
 func (b *Backend) queryByLabel(opts *physical.QueryOptions) (*physical.QueryResult, error) {
+	// Try composite index first
+	if def, vals, ok := b.findCompositeIndex(opts.Labels); ok {
+		return b.queryByComposite(def, vals, opts)
+	}
+
 	now := time.Now().UnixNano()
 	limit := opts.Limit
 	if limit <= 0 {
 		limit = 1000
 	}
 
-	// Pick the most selective label as the driving index key.
-	// We estimate selectivity by peeking at how many entries each label prefix
-	// contains (fewer = more selective = better driver).
 	dk, dv := pickDrivingLabel(b.db, opts.Labels)
 
 	var results []*physical.Entry
 	var nextCursor string
 	hasMore := false
 
-	// Pre-compute hex bounds for time-range early termination.
 	var afterHex, beforeHex string
 	if opts.After > 0 {
 		afterHex = timestampToHex(opts.After)
@@ -605,7 +684,7 @@ func (b *Backend) queryByLabel(opts *physical.QueryOptions) (*physical.QueryResu
 		labelPrefix := []byte(prefixLabel + dk + "/" + dv + "/")
 
 		iterOpts := badger.DefaultIteratorOptions
-		iterOpts.PrefetchValues = false // label keys have nil values
+		iterOpts.PrefetchValues = false
 		iterOpts.Prefix = labelPrefix
 		iterOpts.Reverse = opts.Descending
 
@@ -643,15 +722,13 @@ func (b *Backend) queryByLabel(opts *physical.QueryOptions) (*physical.QueryResu
 			}
 
 			key := it.Item().Key()
-			// key = label/{dk}/{dv}/{tsHex}/{refHex}
 			suffix := string(key[len(labelPrefix):])
-			if len(suffix) < 17 { // tsHex(16) + "/" minimum
+			if len(suffix) < 17 {
 				continue
 			}
 
 			tsHex := suffix[:16]
 
-			// Early termination based on time bounds.
 			if !opts.Descending && beforeHex != "" && tsHex >= beforeHex {
 				break
 			}
@@ -659,7 +736,6 @@ func (b *Backend) queryByLabel(opts *physical.QueryOptions) (*physical.QueryResu
 				break
 			}
 
-			// Point-get meta for filtering and reconstruction.
 			metaKey := []byte(prefixMeta + suffix)
 			metaItem, metaGetErr := txn.Get(metaKey)
 			if metaGetErr != nil {
@@ -717,9 +793,250 @@ func (b *Backend) queryByLabel(opts *physical.QueryOptions) (*physical.QueryResu
 	}, nil
 }
 
-// Count returns the number of entries matching the given options without
-// deserializing full entries. For label queries it iterates the label index;
-// for unfiltered queries it iterates the meta prefix. Only expiry is checked.
+// findCompositeIndex checks if query labels match a registered composite index.
+func (b *Backend) findCompositeIndex(labels map[string]string) (physical.CompositeIndexDef, []string, bool) {
+	b.compositesMu.RLock()
+	defer b.compositesMu.RUnlock()
+
+	var best physical.CompositeIndexDef
+	var bestVals []string
+
+	for _, def := range b.composites {
+		vals := make([]string, 0, len(def.Keys))
+		match := true
+		for _, k := range def.Keys {
+			v, ok := labels[k]
+			if !ok {
+				match = false
+				break
+			}
+			vals = append(vals, v)
+		}
+		if match && len(def.Keys) > len(best.Keys) {
+			best = def
+			bestVals = vals
+		}
+	}
+
+	return best, bestVals, len(best.Keys) > 0
+}
+
+// queryByComposite scans a composite index prefix.
+func (b *Backend) queryByComposite(def physical.CompositeIndexDef, vals []string, opts *physical.QueryOptions) (*physical.QueryResult, error) {
+	now := time.Now().UnixNano()
+	limit := opts.Limit
+	if limit <= 0 {
+		limit = 1000
+	}
+
+	var prefixBuf strings.Builder
+	prefixBuf.WriteString(prefixComposite)
+	prefixBuf.WriteString(def.Name)
+	prefixBuf.WriteByte('/')
+	for _, v := range vals {
+		prefixBuf.WriteString(v)
+		prefixBuf.WriteByte('/')
+	}
+	compositePrefix := []byte(prefixBuf.String())
+
+	var afterHex, beforeHex string
+	if opts.After > 0 {
+		afterHex = timestampToHex(opts.After)
+	}
+	if opts.Before > 0 {
+		beforeHex = timestampToHex(opts.Before)
+	}
+
+	var results []*physical.Entry
+	var nextCursor string
+	hasMore := false
+
+	err := b.db.View(func(txn *badger.Txn) error {
+		iterOpts := badger.DefaultIteratorOptions
+		iterOpts.PrefetchValues = false
+		iterOpts.Prefix = compositePrefix
+		iterOpts.Reverse = opts.Descending
+
+		it := txn.NewIterator(iterOpts)
+		defer it.Close()
+
+		var seekKey []byte
+		switch {
+		case opts.Cursor != "":
+			seekKey = append(compositePrefix, []byte(opts.Cursor)...)
+			if opts.Descending {
+				seekKey = append(seekKey, 0xFF)
+			}
+		case opts.Descending:
+			if beforeHex != "" {
+				seekKey = append(compositePrefix, []byte(beforeHex)...)
+				seekKey = append(seekKey, 0xFF)
+			} else {
+				seekKey = prefixEndKey(compositePrefix)
+			}
+		default:
+			if afterHex != "" {
+				seekKey = append(compositePrefix, []byte(afterHex)...)
+			} else {
+				seekKey = compositePrefix
+			}
+		}
+
+		skipFirst := opts.Cursor != ""
+
+		for it.Seek(seekKey); it.ValidForPrefix(compositePrefix); it.Next() {
+			if skipFirst {
+				skipFirst = false
+				continue
+			}
+
+			key := it.Item().Key()
+			// Extract suffix (tsHex/refHex) from the end of the composite key
+			rest := string(key[len(compositePrefix):])
+			// rest = tsHex(16)/refHex(64)
+			if len(rest) < 81 {
+				continue
+			}
+
+			tsHex := rest[:16]
+
+			if !opts.Descending && beforeHex != "" && tsHex >= beforeHex {
+				break
+			}
+			if opts.Descending && afterHex != "" && tsHex <= afterHex {
+				break
+			}
+
+			suffix := rest // tsHex/refHex
+			metaKey := []byte(prefixMeta + suffix)
+			metaItem, metaGetErr := txn.Get(metaKey)
+			if metaGetErr != nil {
+				continue
+			}
+
+			var skip bool
+			var entry *physical.Entry
+			if metaDecErr := metaItem.Value(func(val []byte) error {
+				expiresAt, labels, decErr := decodeMeta(val)
+				if decErr != nil {
+					return decErr
+				}
+				// Check expiry and any extra labels not in the composite index
+				if !opts.IncludeExpired && expiresAt > 0 && expiresAt <= now {
+					skip = true
+					return nil
+				}
+				// Validate extra labels beyond the composite index
+				for k, v := range opts.Labels {
+					if labels[k] != v {
+						skip = true
+						return nil
+					}
+				}
+				if len(results) >= limit {
+					return nil
+				}
+				var buildErr error
+				entry, buildErr = entryFromSuffix(suffix, expiresAt, labels)
+				return buildErr
+			}); metaDecErr != nil {
+				continue
+			}
+			if skip {
+				continue
+			}
+
+			if len(results) >= limit {
+				hasMore = true
+				break
+			}
+
+			results = append(results, entry)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("badger composite query: %w", err)
+	}
+
+	if hasMore && len(results) > 0 {
+		last := results[len(results)-1]
+		nextCursor = timestampToHex(last.Timestamp) + "/" + reference.Hex(last.Ref)
+	}
+
+	return &physical.QueryResult{
+		Entries:    results,
+		NextCursor: nextCursor,
+		HasMore:    hasMore,
+	}, nil
+}
+
+// queryByLabelFilter handles OR label filter queries.
+func (b *Backend) queryByLabelFilter(opts *physical.QueryOptions) (*physical.QueryResult, error) {
+	limit := opts.Limit
+	if limit <= 0 {
+		limit = 1000
+	}
+
+	seen := make(map[reference.Reference]bool)
+	var allEntries []*physical.Entry
+
+	for _, group := range opts.LabelFilter.OR {
+		groupLabels := make(map[string]string, len(group.Predicates))
+		for _, p := range group.Predicates {
+			groupLabels[p.Key] = p.Value
+		}
+		groupOpts := *opts
+		groupOpts.Labels = groupLabels
+		groupOpts.LabelFilter = nil
+		groupOpts.Limit = limit + 1
+
+		result, err := b.queryByLabel(&groupOpts)
+		if err != nil {
+			return nil, err
+		}
+		for _, e := range result.Entries {
+			if !seen[e.Ref] {
+				seen[e.Ref] = true
+				allEntries = append(allEntries, e)
+			}
+		}
+	}
+
+	// Sort merged results by timestamp
+	sort.Slice(allEntries, func(i, j int) bool {
+		if opts.Descending {
+			if allEntries[i].Timestamp == allEntries[j].Timestamp {
+				return reference.Hex(allEntries[i].Ref) > reference.Hex(allEntries[j].Ref)
+			}
+			return allEntries[i].Timestamp > allEntries[j].Timestamp
+		}
+		if allEntries[i].Timestamp == allEntries[j].Timestamp {
+			return reference.Hex(allEntries[i].Ref) < reference.Hex(allEntries[j].Ref)
+		}
+		return allEntries[i].Timestamp < allEntries[j].Timestamp
+	})
+
+	hasMore := len(allEntries) > limit
+	if hasMore {
+		allEntries = allEntries[:limit]
+	}
+
+	var nextCursor string
+	if hasMore && len(allEntries) > 0 {
+		last := allEntries[len(allEntries)-1]
+		nextCursor = timestampToHex(last.Timestamp) + "/" + reference.Hex(last.Ref)
+	}
+
+	return &physical.QueryResult{
+		Entries:    allEntries,
+		NextCursor: nextCursor,
+		HasMore:    hasMore,
+	}, nil
+}
+
+// Count returns the number of entries matching the given options.
 func (b *Backend) Count(_ context.Context, opts *physical.QueryOptions) (int64, error) {
 	if b.closed.Load() {
 		return 0, physical.ErrClosed
@@ -753,7 +1070,7 @@ func (b *Backend) Count(_ context.Context, opts *physical.QueryOptions) (int64, 
 func (b *Backend) countByEntry(txn *badger.Txn, opts *physical.QueryOptions, now int64, afterHex, beforeHex string, count *int64) error {
 	prefix := []byte(prefixMeta)
 	iterOpts := badger.DefaultIteratorOptions
-	iterOpts.PrefetchValues = !opts.IncludeExpired // only need values to check expiry
+	iterOpts.PrefetchValues = !opts.IncludeExpired
 	iterOpts.PrefetchSize = 100
 	iterOpts.Prefix = prefix
 
@@ -861,9 +1178,7 @@ func (b *Backend) countByLabel(txn *badger.Txn, opts *physical.QueryOptions, now
 	return nil
 }
 
-// DeleteExpired is a no-op for badger. Expired keys are handled natively
-// via WithTTL: iterators skip them automatically, and badger's GC/compaction
-// reclaims the space.
+// DeleteExpired is a no-op for badger.
 func (b *Backend) DeleteExpired(_ context.Context, _ time.Time) (int, error) {
 	if b.closed.Load() {
 		return 0, physical.ErrClosed
@@ -884,10 +1199,7 @@ func (b *Backend) Stats(_ context.Context) (*physical.Stats, error) {
 	}, nil
 }
 
-// RunGC triggers value log garbage collection. It rewrites vlog files where
-// at least the given fraction (0.0–1.0) of space is reclaimable. A
-// discardRatio of 0.5 is a reasonable default. Returns nil when there is
-// nothing left to collect.
+// RunGC triggers value log garbage collection.
 func (b *Backend) RunGC(discardRatio float64) error {
 	if b.closed.Load() {
 		return physical.ErrClosed
@@ -903,7 +1215,6 @@ func (b *Backend) RunGC(discardRatio float64) error {
 }
 
 // ScanPrefix returns references matching the given hex prefix.
-// It scans the ref/ keyspace where keys are ref/{refHex}.
 func (b *Backend) ScanPrefix(_ context.Context, hexPrefix string, limit int) ([]reference.Reference, error) {
 	if b.closed.Load() {
 		return nil, physical.ErrClosed
@@ -945,15 +1256,13 @@ func (b *Backend) Close() error {
 }
 
 // encodeMeta encodes ExpiresAt and Labels into a compact binary format.
-// Layout: ExpiresAt(8) + LabelCount(2) + for each label: keyLen(2) + key + valLen(2) + val
 func encodeMeta(entry *physical.Entry) []byte {
-	// Calculate size
 	size := 8 + 2
 	for k, v := range entry.Labels {
 		size += 2 + len(k) + 2 + len(v)
 	}
 	buf := make([]byte, size)
-	binary.BigEndian.PutUint64(buf[0:8], uint64(entry.ExpiresAt)) //nolint:gosec // expiresAt can be 0 or positive
+	binary.BigEndian.PutUint64(buf[0:8], uint64(entry.ExpiresAt)) //nolint:gosec
 	binary.BigEndian.PutUint16(buf[8:10], uint16(len(entry.Labels)))
 	off := 10
 	for k, v := range entry.Labels {
@@ -969,7 +1278,6 @@ func encodeMeta(entry *physical.Entry) []byte {
 	return buf
 }
 
-// decodeMeta decodes the compact binary metadata format.
 func decodeMeta(data []byte) (expiresAt int64, labels map[string]string, err error) {
 	if len(data) < 10 {
 		return 0, nil, fmt.Errorf("meta too short: %d", len(data))
@@ -1004,7 +1312,6 @@ func decodeMeta(data []byte) (expiresAt int64, labels map[string]string, err err
 	return expiresAt, labels, nil
 }
 
-// decodeMetaExpiresAt reads only the first 8 bytes of a meta value. Zero allocations.
 func decodeMetaExpiresAt(data []byte) (int64, error) {
 	if len(data) < 8 {
 		return 0, fmt.Errorf("meta too short: %d", len(data))
@@ -1012,7 +1319,6 @@ func decodeMetaExpiresAt(data []byte) (int64, error) {
 	return int64(binary.BigEndian.Uint64(data[0:8])), nil
 }
 
-// entryFromMetaBytes reconstructs an Entry from a key suffix and raw meta value bytes.
 func entryFromMetaBytes(suffix string, data []byte) (*physical.Entry, error) {
 	expiresAt, labels, err := decodeMeta(data)
 	if err != nil {
@@ -1021,7 +1327,6 @@ func entryFromMetaBytes(suffix string, data []byte) (*physical.Entry, error) {
 	return entryFromSuffix(suffix, expiresAt, labels)
 }
 
-// matchesMetaFilter checks filter conditions using only metadata fields (no full Entry needed).
 func matchesMetaFilter(expiresAt int64, labels map[string]string, opts *physical.QueryOptions, now int64) bool {
 	if !opts.IncludeExpired && expiresAt > 0 && expiresAt <= now {
 		return false
@@ -1034,19 +1339,16 @@ func matchesMetaFilter(expiresAt int64, labels map[string]string, opts *physical
 	return true
 }
 
-// prefixEndKey returns a key just past the end of the given prefix,
-// suitable for Badger reverse-seek to land on the last key under prefix.
 func prefixEndKey(prefix []byte) []byte {
 	end := make([]byte, len(prefix))
 	copy(end, prefix)
-	// Increment the last byte; works for all ASCII prefixes used here.
 	end[len(end)-1]++
 	return end
 }
 
 func timestampToHex(ts int64) string {
 	buf := make([]byte, 8)
-	binary.BigEndian.PutUint64(buf, uint64(ts)) //nolint:gosec // timestamp is always positive
+	binary.BigEndian.PutUint64(buf, uint64(ts)) //nolint:gosec
 	return fmt.Sprintf("%016x", buf)
 }
 
@@ -1058,8 +1360,6 @@ func hexToTimestamp(h string) (int64, error) {
 	return int64(binary.BigEndian.Uint64(b)), nil
 }
 
-// entryFromSuffix reconstructs a full Entry from a meta key suffix and already-decoded meta fields.
-// suffix format: {tsHex(16)}/{refHex(64)}
 func entryFromSuffix(suffix string, expiresAt int64, labels map[string]string) (*physical.Entry, error) {
 	tsHex := suffix[:16]
 	refHex := suffix[17:]

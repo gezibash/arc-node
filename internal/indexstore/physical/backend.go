@@ -25,9 +25,28 @@ type Entry struct {
 	ExpiresAt int64
 }
 
+// LabelPredicate is a single label match condition (exact key=value).
+type LabelPredicate struct {
+	Key   string
+	Value string
+}
+
+// LabelFilterGroup is a set of predicates that must all match (AND).
+type LabelFilterGroup struct {
+	Predicates []LabelPredicate
+}
+
+// LabelFilter represents a boolean combination of label predicates.
+// Semantically: (group[0].AND) OR (group[1].AND) OR ...
+// Empty OR means no label filtering.
+type LabelFilter struct {
+	OR []LabelFilterGroup
+}
+
 // QueryOptions specifies filtering and pagination for queries.
 type QueryOptions struct {
-	Labels         map[string]string
+	Labels         map[string]string // Simple AND labels (existing, kept for compatibility)
+	LabelFilter    *LabelFilter      // Structured filter with OR support (takes precedence over Labels when set)
 	After          int64
 	Before         int64
 	Limit          int
@@ -53,6 +72,23 @@ type Stats struct {
 // scanning indexed entries by hex reference prefix.
 type PrefixScanner interface {
 	ScanPrefix(ctx context.Context, hexPrefix string, limit int) ([]reference.Reference, error)
+}
+
+// CompositeIndexDef defines a composite index over an ordered set of label keys.
+type CompositeIndexDef struct {
+	Name string   // Unique name, e.g., "dm_thread"
+	Keys []string // Ordered label keys, e.g., ["app", "thread"]
+}
+
+// CompositeIndexer is an optional interface for backends that support
+// pre-materialized composite label indexes.
+type CompositeIndexer interface {
+	// RegisterCompositeIndex registers a composite index definition.
+	// Must be called before any Put operations that should use this index.
+	RegisterCompositeIndex(def CompositeIndexDef) error
+
+	// CompositeIndexes returns all registered composite index definitions.
+	CompositeIndexes() []CompositeIndexDef
 }
 
 // Backend is the physical storage interface for index storage.
