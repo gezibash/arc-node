@@ -4,15 +4,15 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
-	"github.com/gezibash/arc/pkg/identity"
 	"github.com/gezibash/arc-node/cmd/arc/tui"
 	"github.com/gezibash/arc-node/pkg/client"
 	"github.com/gezibash/arc-node/pkg/dm"
+	"github.com/gezibash/arc/pkg/identity"
+	"github.com/gezibash/arc/pkg/reference"
 )
 
 type tuiView int
@@ -23,251 +23,452 @@ const (
 	viewRead
 )
 
-type tuiModel struct {
+type dmApp struct {
 	ctx     context.Context
 	client  *client.Client
 	threads *dm.Threads
 	self    identity.PublicKey
-	view    tuiView
-	thList  threadsModel
-	chat    chatModel
-	read    readModel
-	layout  tui.Layout
-	err     error
-	sub     <-chan *dm.Message
-	subErr  <-chan error
-	spinner spinner.Model
-	ready   bool
-	nodePub *identity.PublicKey
+	layout  *tui.Layout
+
+	// Centralized domain state.
+	threadList []dm.Thread
+	chatMsgs   []dm.Message
+	previews   map[reference.Reference]string
+	connected  bool
+
+	// Current chat conversation SDK (nil when on threads view).
+	chatSDK *dm.DM
+
+	// View state.
+	view   tuiView
+	thList threadsView
+	chat   chatView
+	read   readView
 }
 
-func runTUI(ctx context.Context, c *client.Client, threads *dm.Threads, kp *identity.Keypair, nodePub *identity.PublicKey) error {
-	s := spinner.New()
-	s.Spinner = spinner.Dot
-	s.Style = lipgloss.NewStyle().Foreground(tui.AccentColor)
-
-	var nodeKey string
-	if nodePub != nil {
-		nodeKey = hex.EncodeToString(nodePub[:4])
-	}
-
+func runTUI(ctx context.Context, c *client.Client, threads *dm.Threads, kp *identity.Keypair) error {
 	self := kp.PublicKey()
+	base := tui.NewBase(ctx, c, "dm", "")
 
-	m := tuiModel{
-		ctx:     ctx,
-		client:  c,
-		threads: threads,
-		self:    self,
-		view:    viewThreads,
-		thList:  newThreadsModel(ctx, threads, self),
-		layout: tui.Layout{
-			AppName: "dm",
-			NodeKey: nodeKey,
-		},
-		spinner: s,
-		nodePub: nodePub,
+	app := &dmApp{
+		ctx:      ctx,
+		client:   c,
+		threads:  threads,
+		self:     self,
+		layout:   base.Layout,
+		previews: make(map[reference.Reference]string),
+		view:     viewThreads,
+		thList:   newThreadsView(),
 	}
-	p := tea.NewProgram(m, tea.WithAltScreen())
-	_, err := p.Run()
-	return err
+
+	base = base.WithApp(app)
+	return base.Run()
 }
 
-func (m tuiModel) Init() tea.Cmd {
+func (a *dmApp) CanQuit() bool {
+	return a.view == viewThreads && !a.thList.prompting
+}
+
+func (a *dmApp) Subscribe() tui.SubscribeFunc {
+	threads := a.threads
+	return func(ctx context.Context) (<-chan tea.Msg, error) {
+		msgs, errs, err := threads.SubscribeAll(ctx)
+		if err != nil {
+			return nil, err
+		}
+		out := make(chan tea.Msg, 64)
+		go func() {
+			defer close(out)
+			for {
+				select {
+				case m, ok := <-msgs:
+					if !ok {
+						return
+					}
+					out <- newMessageMsg{msg: *m}
+				case _, ok := <-errs:
+					if !ok {
+						return
+					}
+					// Error on the subscription — close to trigger reconnect.
+					return
+				case <-ctx.Done():
+					return
+				}
+			}
+		}()
+		return out, nil
+	}
+}
+
+func (a *dmApp) Init() tea.Cmd {
 	return tea.Batch(
-		m.thList.Init(),
-		m.spinner.Tick,
-		m.startGlobalSubscription(),
-		m.pingNode(),
+		a.fetchThreads(),
+		a.thList.spinner.Tick,
 	)
 }
 
-func (m tuiModel) pingNode() tea.Cmd {
-	c := m.client
-	ctx := m.ctx
+func (a *dmApp) fetchThreads() tea.Cmd {
+	threads := a.threads
+	ctx := a.ctx
 	return func() tea.Msg {
-		latency, err := c.Ping(ctx)
+		result, err := threads.ListThreads(ctx)
 		if err != nil {
-			return pingResultMsg{err: err}
+			return errMsg{err: err}
 		}
-		return pingResultMsg{latency: latency}
+		return threadsLoadedMsg{threads: result}
 	}
 }
 
-func schedulePing() tea.Cmd {
-	return tea.Tick(5*time.Second, func(_ time.Time) tea.Msg {
-		return pingTickMsg{}
-	})
+func (a *dmApp) fetchAllThreadPreviews() tea.Cmd {
+	n := len(a.threadList)
+	if n > 10 {
+		n = 10
+	}
+	cmds := make([]tea.Cmd, n)
+	for i := 0; i < n; i++ {
+		th := a.threadList[i]
+		threads := a.threads
+		ctx := a.ctx
+		cmds[i] = func() tea.Msg {
+			preview, err := threads.PreviewThread(ctx, th)
+			if err != nil {
+				return threadPreviewLoadedMsg{convID: th.ConvID, preview: ""}
+			}
+			return threadPreviewLoadedMsg{convID: th.ConvID, preview: preview}
+		}
+	}
+	return tea.Batch(cmds...)
 }
 
-func (m tuiModel) startGlobalSubscription() tea.Cmd {
-	threads := m.threads
-	ctx := m.ctx
+func (a *dmApp) fetchChatMessages() tea.Cmd {
+	sdk := a.chatSDK
+	ctx := a.ctx
 	return func() tea.Msg {
-		msgs, errs, err := threads.SubscribeAll(ctx)
+		result, err := sdk.List(ctx, dm.ListOptions{
+			Limit:      50,
+			Descending: false,
+		})
 		if err != nil {
-			return subscriptionErrorMsg{err: err}
+			return errMsg{err: err}
 		}
-		return subscriptionStartedMsg{msgs: msgs, errs: errs}
+		return chatMessagesLoadedMsg{messages: result.Messages}
 	}
 }
 
-func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (a *dmApp) fetchPreviewCmd(msg dm.Message) tea.Cmd {
+	sdk := a.chatSDK
+	ctx := a.ctx
+	ref := msg.Ref
+	return func() tea.Msg {
+		preview, err := sdk.Preview(ctx, msg)
+		if err != nil {
+			return chatPreviewLoadedMsg{ref: ref, preview: ""}
+		}
+		return chatPreviewLoadedMsg{ref: ref, preview: preview}
+	}
+}
+
+func (a *dmApp) fetchAllChatPreviews(messages []dm.Message) tea.Cmd {
+	n := len(messages)
+	if n > 50 {
+		n = 50
+	}
+	cmds := make([]tea.Cmd, n)
+	for i := 0; i < n; i++ {
+		cmds[i] = a.fetchPreviewCmd(messages[i])
+	}
+	return tea.Batch(cmds...)
+}
+
+func (a *dmApp) updateThreadFromMessage(msg dm.Message) {
+	convID := msg.Labels["conversation"]
+	if convID == "" {
+		return
+	}
+
+	peer := msg.From
+	if msg.From == a.self {
+		peer = msg.To
+	}
+
+	for i, th := range a.threadList {
+		if th.ConvID == convID {
+			a.threadList[i].LastMsg = msg
+			a.threadList[i].Preview = ""
+			updated := a.threadList[i]
+			copy(a.threadList[1:i+1], a.threadList[:i])
+			a.threadList[0] = updated
+			return
+		}
+	}
+
+	a.threadList = append([]dm.Thread{{
+		ConvID:  convID,
+		PeerPub: peer,
+		LastMsg: msg,
+	}}, a.threadList...)
+}
+
+func (a *dmApp) appendChatMessage(msg dm.Message) {
+	for _, existing := range a.chatMsgs {
+		if existing.Ref == msg.Ref {
+			return
+		}
+	}
+	a.chatMsgs = append(a.chatMsgs, msg)
+}
+
+func (a *dmApp) Update(msg tea.Msg) (tui.App, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		if msg.String() == "ctrl+c" {
-			return m, tea.Quit
-		}
-		if msg.String() == "q" && m.view == viewThreads && !m.thList.prompting {
-			return m, tea.Quit
-		}
 	case tea.WindowSizeMsg:
-		m.layout.Width = msg.Width
-		m.layout.Height = msg.Height
-		m.thList.layout = &m.layout
-	case subscriptionStartedMsg:
-		m.sub = msg.msgs
-		m.subErr = msg.errs
-		m.ready = true
-		return m, tea.Batch(
-			waitForMessage(m.sub),
-			waitForSubError(m.subErr),
-		)
-	case subscriptionErrorMsg:
-		m.err = msg.err
-		return m, nil
-	case newMessageMsg:
-		// Update thread list regardless of current view.
-		m.thList.updateThread(msg.msg)
-		var cmds []tea.Cmd
-		cmds = append(cmds, waitForMessage(m.sub))
-		// If we're in the chat view for this conversation, forward to chat.
-		if m.view == viewChat {
-			convID := msg.msg.Labels["conversation"]
-			chatPeer := m.chat.peer
-			expectedConv := dm.ConversationID(m.self, chatPeer)
-			if convID == expectedConv {
-				m.chat.appendMessage(msg.msg)
-				m.chat.rebuildViewport()
-				cmds = append(cmds, m.chat.fetchPreviewCmd(msg.msg))
+		if a.view == viewChat {
+			a.chat = onResizeChat(a.chat, a.layout)
+			a.chat = rebuildChatViewport(a.chat, a.chatMsgs, a.previews, a.self, a.layout)
+		}
+		return a, nil
+
+	case tui.SubConnectedMsg:
+		a.connected = true
+		return a, nil
+	case tui.SubClosedMsg:
+		a.connected = false
+		return a, nil
+	// Domain state mutations.
+	case threadsLoadedMsg:
+		a.threadList = msg.threads
+		a.thList.loading = false
+		return a, a.fetchAllThreadPreviews()
+
+	case threadPreviewLoadedMsg:
+		for i, th := range a.threadList {
+			if th.ConvID == msg.convID {
+				a.threadList[i].Preview = msg.preview
+				break
 			}
 		}
-		return m, tea.Batch(cmds...)
-	case subErrorMsg:
-		m.err = msg.err
-		return m, nil
+		return a, nil
+
+	case newMessageMsg:
+		a.updateThreadFromMessage(msg.msg)
+		var cmds []tea.Cmd
+		if a.view == viewChat && a.chatSDK != nil {
+			convID := msg.msg.Labels["conversation"]
+			expectedConv := dm.ConversationID(a.self, a.chatSDK.PeerPublicKey())
+			if convID == expectedConv {
+				a.appendChatMessage(msg.msg)
+				a.chat = rebuildChatViewport(a.chat, a.chatMsgs, a.previews, a.self, a.layout)
+				cmds = append(cmds, a.fetchPreviewCmd(msg.msg))
+			}
+		}
+		return a, tea.Batch(cmds...)
+
+	case chatMessagesLoadedMsg:
+		if a.view != viewChat || a.chatSDK == nil {
+			return a, nil
+		}
+		a.chatMsgs = msg.messages
+		a.chat.loading = false
+		a.chat = rebuildChatViewport(a.chat, a.chatMsgs, a.previews, a.self, a.layout)
+		return a, a.fetchAllChatPreviews(msg.messages)
+
+	case chatPreviewLoadedMsg:
+		a.previews[msg.ref] = msg.preview
+		if a.view == viewChat {
+			a.chat = rebuildChatViewport(a.chat, a.chatMsgs, a.previews, a.self, a.layout)
+		}
+		return a, nil
+
+	case sendMsg:
+		sdk := a.chatSDK
+		ctx := a.ctx
+		text := msg.text
+		return a, func() tea.Msg {
+			result, err := sdk.Send(ctx, []byte(text), nil)
+			if err != nil {
+				return errMsg{err: err}
+			}
+			return chatSendDoneMsg{ref: result.Ref, text: text, ts: time.Now().UnixNano()}
+		}
+	case chatSendDoneMsg:
+		a.chat.sending = false
+		if a.view == viewChat && a.chatSDK != nil {
+			peer := a.chatSDK.PeerPublicKey()
+			convID := dm.ConversationID(a.self, peer)
+			localMsg := dm.Message{
+				Ref:       msg.ref,
+				Labels:    localConversationLabels(convID, a.self, peer),
+				Timestamp: msg.ts,
+				From:      a.self,
+				To:        peer,
+			}
+			a.updateThreadFromMessage(localMsg)
+			a.appendChatMessage(localMsg)
+			if msg.text != "" {
+				a.previews[msg.ref] = truncateLocalPreview(msg.text)
+			}
+			a.chat = rebuildChatViewport(a.chat, a.chatMsgs, a.previews, a.self, a.layout)
+		}
+		return a, nil
+
+	// Navigation.
 	case openThreadMsg:
-		sdk, err := m.threads.OpenConversation(msg.thread.PeerPub)
+		sdk, err := a.threads.OpenConversation(msg.thread.PeerPub)
 		if err != nil {
-			m.err = err
-			return m, nil
+			return a, func() tea.Msg { return tui.ErrMsg{Err: err} }
 		}
-		m.view = viewChat
-		m.layout.AppName = "dm · " + hex.EncodeToString(msg.thread.PeerPub[:4])
-		m.chat = newChatModel(m.ctx, sdk, &m.layout)
-		return m, m.chat.Init()
+		a.view = viewChat
+		a.chatSDK = sdk
+		a.chatMsgs = nil
+		a.layout.AppName = "dm · " + hex.EncodeToString(msg.thread.PeerPub[:4])
+		a.chat = newChatView(a.layout)
+		return a, tea.Batch(
+			a.fetchChatMessages(),
+			a.chat.spinner.Tick,
+			a.chat.textareaBlink(),
+		)
 	case backToThreadsMsg:
-		m.view = viewThreads
-		m.layout.AppName = "dm"
-		return m, nil
+		a.view = viewThreads
+		a.chatSDK = nil
+		a.chatMsgs = nil
+		a.thList.loading = false
+		a.layout.AppName = "dm"
+		return a, nil
 	case openMessageMsg:
-		m.view = viewRead
-		m.read = newReadModel(m.ctx, m.chat.sdk, msg.msg, &m.layout)
-		return m, m.read.Init()
+		a.view = viewRead
+		a.read = newReadView(msg.msg, a.layout)
+		return a, a.startReadContent(msg.msg)
 	case backToChatMsg:
-		m.view = viewChat
-		return m, nil
+		a.view = viewChat
+		return a, nil
+	case contentLoadedMsg:
+		a.read.setContent(msg.content)
+		return a, nil
 	case errMsg:
-		m.err = msg.err
-		return m, nil
-	case pingResultMsg:
-		if msg.err == nil {
-			m.layout.Latency = msg.latency
-			m.layout.Connected = true
-			m.thList.connected = true
+		return a, func() tea.Msg { return tui.ErrMsg{Err: msg.err} }
+	case tui.PingResultMsg:
+		if msg.Err == nil {
+			a.connected = true
 		}
-		return m, schedulePing()
-	case pingTickMsg:
-		return m, m.pingNode()
-	case spinner.TickMsg:
-		m.layout.Frame++
-		var cmd tea.Cmd
-		m.spinner, cmd = m.spinner.Update(msg)
-		return m, cmd
+	case refreshThreadsMsg:
+		a.thList.loading = true
+		return a, tea.Batch(a.fetchThreads(), a.thList.spinner.Tick)
 	}
 
-	switch m.view {
+	// Delegate to active view for UI-only state.
+	switch a.view {
 	case viewThreads:
 		var cmd tea.Cmd
-		m.thList, cmd = m.thList.update(msg)
-		return m, cmd
+		a.thList, cmd = a.thList.update(msg, a.threadList)
+		return a, cmd
 	case viewChat:
 		var cmd tea.Cmd
-		m.chat, cmd = m.chat.update(msg)
-		return m, cmd
+		a.chat, cmd = a.chat.update(msg)
+		return a, cmd
 	case viewRead:
 		var cmd tea.Cmd
-		m.read, cmd = m.read.update(msg)
-		return m, cmd
+		a.read, cmd = a.read.update(msg)
+		return a, cmd
 	}
-	return m, nil
+	return a, nil
 }
 
-func (m tuiModel) View() string {
-	if m.err != nil {
-		body := tui.ErrorStyle.Render("Error: "+m.err.Error()) + "\n\nPress q to quit.\n"
-		return m.layout.Render(body, "q: quit")
+func (a *dmApp) startReadContent(msg dm.Message) tea.Cmd {
+	sdk := a.chatSDK
+	ctx := a.ctx
+	width := 80
+	if a.layout != nil {
+		width = a.layout.Width
 	}
-	switch m.view {
+	return tea.Batch(
+		a.read.spinner.Tick,
+		func() tea.Msg {
+			contentHex := msg.Labels["content"]
+			if contentHex == "" {
+				return errMsg{err: fmt.Errorf("no content label")}
+			}
+			ref, err := reference.FromHex(contentHex)
+			if err != nil {
+				return errMsg{err: err}
+			}
+			result, err := sdk.Read(ctx, ref)
+			if err != nil {
+				return errMsg{err: err}
+			}
+			text := string(result.Content)
+			text = tui.RenderContent(text, width)
+			return contentLoadedMsg{content: text}
+		},
+	)
+}
+
+func (a *dmApp) View() (string, string) {
+	switch a.view {
 	case viewThreads:
-		body, help := m.thList.viewContent()
-		return m.layout.Render(body, help)
+		return a.thList.viewContent(a.threadList, a.self, a.connected, a.layout)
 	case viewChat:
-		body, help := m.chat.viewContent()
-		return m.layout.Render(body, help)
+		return a.chat.viewContent(a.chatMsgs, a.previews, a.self, a.layout)
 	case viewRead:
-		body, help := m.read.viewContent()
-		return m.layout.Render(body, help)
+		return a.read.viewContent()
 	}
-	return ""
+	return "", ""
 }
 
 // Messages
 
+type refreshThreadsMsg struct{}
 type openThreadMsg struct{ thread dm.Thread }
 type backToThreadsMsg struct{}
 type openMessageMsg struct{ msg dm.Message }
 type backToChatMsg struct{}
 type errMsg struct{ err error }
 
-type subscriptionStartedMsg struct {
-	msgs <-chan *dm.Message
-	errs <-chan error
+type threadsLoadedMsg struct{ threads []dm.Thread }
+type threadPreviewLoadedMsg struct {
+	convID  string
+	preview string
 }
-type subscriptionErrorMsg struct{ err error }
 type newMessageMsg struct{ msg dm.Message }
-type subErrorMsg struct{ err error }
-type pingTickMsg struct{}
-type pingResultMsg struct {
-	latency time.Duration
-	err     error
+type chatMessagesLoadedMsg struct{ messages []dm.Message }
+type chatPreviewLoadedMsg struct {
+	ref     reference.Reference
+	preview string
 }
+type chatSendDoneMsg struct {
+	ref  reference.Reference
+	text string
+	ts   int64
+}
+type contentLoadedMsg struct{ content string }
 
-func waitForMessage(ch <-chan *dm.Message) tea.Cmd {
-	return func() tea.Msg {
-		e, ok := <-ch
-		if !ok {
-			return subErrorMsg{err: fmt.Errorf("subscription closed")}
-		}
-		return newMessageMsg{msg: *e}
+func localConversationLabels(convID string, self, peer identity.PublicKey) map[string]string {
+	return map[string]string{
+		"conversation": convID,
+		"dm_from":      hex.EncodeToString(self[:]),
+		"dm_to":        hex.EncodeToString(peer[:]),
 	}
 }
 
-func waitForSubError(ch <-chan error) tea.Cmd {
-	return func() tea.Msg {
-		err, ok := <-ch
-		if !ok {
-			return nil
-		}
-		return subErrorMsg{err: err}
+const (
+	localPreviewMaxBytes = 256
+	localPreviewMaxLines = 4
+)
+
+func truncateLocalPreview(text string) string {
+	data := []byte(text)
+	truncated := false
+	if len(data) > localPreviewMaxBytes {
+		data = data[:localPreviewMaxBytes]
+		truncated = true
 	}
+	lines := strings.SplitN(string(data), "\n", localPreviewMaxLines+1)
+	if len(lines) > localPreviewMaxLines {
+		lines = lines[:localPreviewMaxLines]
+		truncated = true
+	}
+	result := strings.Join(lines, "\n")
+	if truncated {
+		result += "..."
+	}
+	return result
 }

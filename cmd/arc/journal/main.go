@@ -4,21 +4,20 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/gezibash/arc/pkg/identity"
 	"github.com/gezibash/arc-node/internal/config"
 	"github.com/gezibash/arc-node/internal/keyring"
 	"github.com/gezibash/arc-node/pkg/client"
 	"github.com/gezibash/arc-node/pkg/journal"
+	"github.com/gezibash/arc/pkg/identity"
 	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
 type journalCmd struct {
-	v       *viper.Viper
-	client  *client.Client
-	sdk     *journal.Journal
-	nodePub *identity.PublicKey
+	v      *viper.Viper
+	client *client.Client
+	sdk    *journal.Journal
 }
 
 func Entrypoint(v *viper.Viper) *cobra.Command {
@@ -38,7 +37,7 @@ func Entrypoint(v *viper.Viper) *cobra.Command {
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if isatty.IsTerminal(os.Stdin.Fd()) || isatty.IsCygwinTerminal(os.Stdin.Fd()) {
-				return runTUI(cmd.Context(), j.sdk, j.nodePub)
+				return runTUI(cmd.Context(), j.client, j.sdk)
 			}
 			return runListMarkdown(cmd.Context(), j.sdk, os.Stdout)
 		},
@@ -65,7 +64,6 @@ func (j *journalCmd) init(cmd *cobra.Command) error {
 		opts = append(opts, journal.WithNodeKey(*nodeKey))
 	}
 	j.sdk = journal.New(c, kp, opts...)
-	j.nodePub = nodeKey
 	return nil
 }
 

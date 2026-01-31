@@ -28,10 +28,20 @@ func New(addr string, obs *observability.Observability, enableReflection bool, k
 
 	mw := &middleware.Chain{}
 
+	meta := map[string]string{}
+	if obs != nil {
+		if obs.ServiceName != "" {
+			meta["service_name"] = obs.ServiceName
+		}
+		if obs.ServiceVersion != "" {
+			meta["service_version"] = obs.ServiceVersion
+		}
+	}
+
 	serverOpts := []grpc.ServerOption{
 		grpc.ChainUnaryInterceptor(
 			observability.UnaryServerInterceptor(obs.Metrics),
-			envelope.UnaryServerInterceptor(kp, mw),
+			envelope.UnaryServerInterceptor(kp, mw, meta),
 		),
 		grpc.ChainStreamInterceptor(
 			observability.StreamServerInterceptor(obs.Metrics),

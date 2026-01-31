@@ -41,6 +41,11 @@ func (j *Journal) Write(ctx context.Context, plaintext []byte, labels map[string
 }
 
 func (j *Journal) recipientKey() identity.PublicKey {
+	if j.client != nil {
+		if key, ok := j.client.NodeKey(); ok {
+			return key
+		}
+	}
 	if j.nodeKey != nil {
 		return *j.nodeKey
 	}

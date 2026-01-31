@@ -1,7 +1,6 @@
 package journal
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -9,24 +8,14 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/gezibash/arc/pkg/reference"
 	"github.com/gezibash/arc-node/cmd/arc/tui"
 	"github.com/gezibash/arc-node/pkg/journal"
 )
 
-var (
-	headerBarStyle = lipgloss.NewStyle().
-			Foreground(tui.DimColor)
-
-	contentStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.AdaptiveColor{Light: "#1A1A1A", Dark: "#FAFAFA"})
-)
-
-type readModel struct {
-	ctx      context.Context
-	sdk      *journal.Journal
+// readView owns only UI-local state. Content loading is handled by journalApp.
+type readView struct {
 	entry    journal.Entry
 	content  string
 	loading  bool
@@ -36,17 +25,11 @@ type readModel struct {
 	layout   *tui.Layout
 }
 
-type contentLoadedMsg struct {
-	content string
-}
-
-func newReadModel(ctx context.Context, sdk *journal.Journal, entry journal.Entry, layout *tui.Layout) readModel {
+func newReadView(entry journal.Entry, layout *tui.Layout) readView {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(tui.AccentColor)
-	return readModel{
-		ctx:     ctx,
-		sdk:     sdk,
+	return readView{
 		entry:   entry,
 		loading: true,
 		spinner: s,
@@ -54,76 +37,21 @@ func newReadModel(ctx context.Context, sdk *journal.Journal, entry journal.Entry
 	}
 }
 
-// looksLikeMarkdown checks whether any line starts with a markdown block marker.
-func looksLikeMarkdown(text string) bool {
-	for _, line := range strings.Split(text, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "# ") ||
-			strings.HasPrefix(trimmed, "## ") ||
-			strings.HasPrefix(trimmed, "### ") ||
-			strings.HasPrefix(trimmed, "* ") ||
-			strings.HasPrefix(trimmed, "- ") ||
-			strings.HasPrefix(trimmed, "> ") ||
-			strings.HasPrefix(trimmed, "```") ||
-			strings.HasPrefix(trimmed, "---") ||
-			strings.HasPrefix(trimmed, "|") {
-			return true
-		}
-	}
-	return false
+func (v *readView) setContent(content string) {
+	v.content = content
+	v.loading = false
+
+	vpW, vpH := v.vpSize()
+	vp := viewport.New(vpW, vpH)
+	vp.SetContent(v.content)
+	v.viewport = vp
+	v.ready = true
 }
 
-func (m readModel) Init() tea.Cmd {
-	entry := m.entry
-	sdk := m.sdk
-	ctx := m.ctx
-	width := 80
-	if m.layout != nil {
-		width = m.layout.Width
-	}
-	return tea.Batch(
-		m.spinner.Tick,
-		func() tea.Msg {
-			contentHex := entry.Labels["content"]
-			if contentHex == "" {
-				return errMsg{err: fmt.Errorf("no content label")}
-			}
-			ref, err := reference.FromHex(contentHex)
-			if err != nil {
-				return errMsg{err: err}
-			}
-			result, err := sdk.Read(ctx, ref)
-			if err != nil {
-				return errMsg{err: err}
-			}
-			text := string(result.Content)
-
-			if looksLikeMarkdown(text) {
-				renderWidth := width - 10
-				if renderWidth < 40 {
-					renderWidth = 40
-				}
-				renderer, err := glamour.NewTermRenderer(
-					glamour.WithAutoStyle(),
-					glamour.WithWordWrap(renderWidth),
-				)
-				if err == nil {
-					if rendered, err := renderer.Render(text); err == nil {
-						text = rendered
-					}
-				}
-			} else {
-				text = contentStyle.Render(text)
-			}
-			return contentLoadedMsg{content: text}
-		},
-	)
-}
-
-func (m readModel) vpSize() (int, int) {
+func (v readView) vpSize() (int, int) {
 	bodyWidth, bodyHeight := 80, 20
-	if m.layout != nil {
-		bodyWidth, bodyHeight = m.layout.BodySize()
+	if v.layout != nil {
+		bodyWidth, bodyHeight = v.layout.BodySize()
 	}
 	// Sub-header takes 2 lines (ref+date line, blank line)
 	vpH := bodyHeight - 2
@@ -133,67 +61,57 @@ func (m readModel) vpSize() (int, int) {
 	return bodyWidth, vpH
 }
 
-func (m readModel) update(msg tea.Msg) (readModel, tea.Cmd) {
+func (v readView) update(msg tea.Msg) (readView, tea.Cmd) {
 	switch msg := msg.(type) {
-	case contentLoadedMsg:
-		m.content = msg.content
-		m.loading = false
-
-		vpW, vpH := m.vpSize()
-		vp := viewport.New(vpW, vpH)
-		vp.SetContent(m.content)
-		m.viewport = vp
-		m.ready = true
-		return m, nil
 	case spinner.TickMsg:
 		var cmd tea.Cmd
-		m.spinner, cmd = m.spinner.Update(msg)
-		return m, cmd
+		v.spinner, cmd = v.spinner.Update(msg)
+		return v, cmd
 	case tea.WindowSizeMsg:
-		if m.ready {
-			vpW, vpH := m.vpSize()
-			m.viewport.Width = vpW
-			m.viewport.Height = vpH
+		if v.ready {
+			vpW, vpH := v.vpSize()
+			v.viewport.Width = vpW
+			v.viewport.Height = vpH
 		}
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "esc", "backspace", "q":
-			return m, func() tea.Msg { return backToListMsg{} }
+			return v, func() tea.Msg { return backToListMsg{} }
 		}
-		if m.ready {
+		if v.ready {
 			var cmd tea.Cmd
-			m.viewport, cmd = m.viewport.Update(msg)
-			return m, cmd
+			v.viewport, cmd = v.viewport.Update(msg)
+			return v, cmd
 		}
 	}
-	return m, nil
+	return v, nil
 }
 
-func (m readModel) renderSubHeader() string {
-	short := reference.Hex(m.entry.Ref)[:8]
-	ts := time.Unix(0, m.entry.Timestamp)
+func (v readView) renderSubHeader() string {
+	short := reference.Hex(v.entry.Ref)[:8]
+	ts := time.Unix(0, v.entry.Timestamp)
 	return tui.RefStyle.Render(short) + " " +
-		headerBarStyle.Render("·") + " " +
-		headerBarStyle.Render(ts.Format("Jan 2, 2006 15:04"))
+		tui.HeaderBarStyle.Render("·") + " " +
+		tui.HeaderBarStyle.Render(ts.Format("Jan 2, 2006 15:04"))
 }
 
-func (m readModel) viewContent() (string, string) {
+func (v readView) viewContent() (string, string) {
 	helpText := "↑/↓: scroll • q/esc: back"
 
 	var b strings.Builder
 
-	if m.loading {
-		b.WriteString(m.renderSubHeader())
+	if v.loading {
+		b.WriteString(v.renderSubHeader())
 		b.WriteString("\n\n")
-		b.WriteString(fmt.Sprintf("%s Loading...\n", m.spinner.View()))
+		b.WriteString(fmt.Sprintf("%s Loading...\n", v.spinner.View()))
 		return b.String(), helpText
 	}
 
-	b.WriteString(m.renderSubHeader())
+	b.WriteString(v.renderSubHeader())
 	b.WriteString("\n")
 
-	if m.ready {
-		b.WriteString(m.viewport.View())
+	if v.ready {
+		b.WriteString(v.viewport.View())
 	}
 
 	b.WriteString("\n")

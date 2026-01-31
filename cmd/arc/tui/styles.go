@@ -43,4 +43,10 @@ var (
 	PeerStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.AdaptiveColor{Light: "#D4A017", Dark: "#FFD866"}).
 			Bold(true)
+
+	HeaderBarStyle = lipgloss.NewStyle().
+			Foreground(DimColor)
+
+	ContentStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.AdaptiveColor{Light: "#1A1A1A", Dark: "#FAFAFA"})
 )

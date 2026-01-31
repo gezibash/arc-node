@@ -3,8 +3,8 @@ package dm
 import (
 	"fmt"
 
-	"github.com/gezibash/arc/pkg/identity"
 	"github.com/gezibash/arc-node/pkg/client"
+	"github.com/gezibash/arc/pkg/identity"
 )
 
 const contentType = "application/x-arc-dm+encrypted"
@@ -58,6 +58,11 @@ func (d *DM) PeerPublicKey() identity.PublicKey {
 }
 
 func (d *DM) recipientKey() identity.PublicKey {
+	if d.client != nil {
+		if key, ok := d.client.NodeKey(); ok {
+			return key
+		}
+	}
 	if d.nodeKey != nil {
 		return *d.nodeKey
 	}

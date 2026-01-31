@@ -19,6 +19,8 @@ type Observability struct {
 	Metrics        *Metrics
 	TracerProvider trace.TracerProvider
 	Shutdown       *ShutdownCoordinator
+	ServiceName    string
+	ServiceVersion string
 
 	sdkTP *sdktrace.TracerProvider
 }
@@ -58,6 +60,8 @@ func New(ctx context.Context, cfg ObsConfig, w io.Writer) (*Observability, error
 		Metrics:        metrics,
 		TracerProvider: tp,
 		Shutdown:       shutdown,
+		ServiceName:    cfg.ServiceName,
+		ServiceVersion: cfg.ServiceVersion,
 		sdkTP:          sdkTP,
 	}, nil
 }

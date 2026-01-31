@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	nodev1 "github.com/gezibash/arc-node/api/arc/node/v1"
@@ -19,13 +20,43 @@ import (
 var marshalOpts = proto.MarshalOptions{Deterministic: true}
 
 type Client struct {
-	conn *grpc.ClientConn
-	stub nodev1.NodeServiceClient
+	conn     *grpc.ClientConn
+	stub     nodev1.NodeServiceClient
+	nodeInfo *nodeInfoState
 }
 
 type clientConfig struct {
 	kp      *identity.Keypair
 	nodeKey *identity.PublicKey
+}
+
+// NodeInfo describes the remote node as observed by the client.
+type NodeInfo struct {
+	PublicKey      identity.PublicKey
+	ServiceName    string
+	ServiceVersion string
+}
+
+type nodeInfoState struct {
+	mu   sync.RWMutex
+	info NodeInfo
+	ok   bool
+}
+
+func (s *nodeInfoState) set(info NodeInfo) {
+	s.mu.Lock()
+	s.info = info
+	s.ok = true
+	s.mu.Unlock()
+}
+
+func (s *nodeInfoState) get() (NodeInfo, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if !s.ok {
+		return NodeInfo{}, false
+	}
+	return s.info, true
 }
 
 // Option configures client behavior.
@@ -47,18 +78,19 @@ func Dial(addr string, opts ...Option) (*Client, error) {
 		o(cfg)
 	}
 
+	infoState := &nodeInfoState{}
+	if cfg.nodeKey != nil {
+		infoState.set(NodeInfo{PublicKey: *cfg.nodeKey})
+	}
+
 	dialOpts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	}
 
 	if cfg.kp != nil {
-		var nodeKey identity.PublicKey
-		if cfg.nodeKey != nil {
-			nodeKey = *cfg.nodeKey
-		}
 		dialOpts = append(dialOpts,
-			grpc.WithUnaryInterceptor(clientUnaryInterceptor(cfg.kp, nodeKey)),
-			grpc.WithStreamInterceptor(clientStreamInterceptor(cfg.kp, nodeKey)),
+			grpc.WithUnaryInterceptor(clientUnaryInterceptor(cfg.kp, infoState)),
+			grpc.WithStreamInterceptor(clientStreamInterceptor(cfg.kp, infoState)),
 		)
 	}
 
@@ -67,12 +99,13 @@ func Dial(addr string, opts ...Option) (*Client, error) {
 		return nil, fmt.Errorf("dial %s: %w", addr, err)
 	}
 	return &Client{
-		conn: conn,
-		stub: nodev1.NewNodeServiceClient(conn),
+		conn:     conn,
+		stub:     nodev1.NewNodeServiceClient(conn),
+		nodeInfo: infoState,
 	}, nil
 }
 
-func clientUnaryInterceptor(kp *identity.Keypair, nodeKey identity.PublicKey) grpc.UnaryClientInterceptor {
+func clientUnaryInterceptor(kp *identity.Keypair, infoState *nodeInfoState) grpc.UnaryClientInterceptor {
 	return func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, callOpts ...grpc.CallOption) error {
 		// Marshal request to get payload bytes.
 		protoMsg, ok := req.(proto.Message)
@@ -85,6 +118,12 @@ func clientUnaryInterceptor(kp *identity.Keypair, nodeKey identity.PublicKey) gr
 		}
 
 		// Seal the outgoing envelope.
+		var nodeKey identity.PublicKey
+		if infoState != nil {
+			if info, ok := infoState.get(); ok {
+				nodeKey = info.PublicKey
+			}
+		}
 		env, err := envelope.Seal(kp, nodeKey, payload, method, kp.PublicKey(), 0, nil)
 		if err != nil {
 			return fmt.Errorf("seal envelope: %w", err)
@@ -101,9 +140,25 @@ func clientUnaryInterceptor(kp *identity.Keypair, nodeKey identity.PublicKey) gr
 			return err
 		}
 
-		// Verify response envelope if we have a node key and trailing metadata.
-		if nodeKey != (identity.PublicKey{}) && len(trailer) > 0 {
-			respFrom, _, _, respTs, respSig, respCT, _, _, extractErr := envelope.ExtractTrailing(trailer)
+		if len(trailer) > 0 {
+			respFrom, _, _, respTs, respSig, respCT, _, meta, extractErr := envelope.ExtractTrailing(trailer)
+			if extractErr == nil && infoState != nil {
+				info := NodeInfo{
+					PublicKey:      respFrom,
+					ServiceName:    meta["service_name"],
+					ServiceVersion: meta["service_version"],
+				}
+				if existing, ok := infoState.get(); ok {
+					if info.ServiceName == "" {
+						info.ServiceName = existing.ServiceName
+					}
+					if info.ServiceVersion == "" {
+						info.ServiceVersion = existing.ServiceVersion
+					}
+				}
+				infoState.set(info)
+			}
+
 			if extractErr == nil {
 				if respProto, ok := reply.(proto.Message); ok {
 					if respPayload, marshalErr := marshalOpts.Marshal(respProto); marshalErr == nil {
@@ -120,10 +175,18 @@ func clientUnaryInterceptor(kp *identity.Keypair, nodeKey identity.PublicKey) gr
 	}
 }
 
-func clientStreamInterceptor(kp *identity.Keypair, nodeKey identity.PublicKey) grpc.StreamClientInterceptor {
+func clientStreamInterceptor(kp *identity.Keypair, infoState *nodeInfoState) grpc.StreamClientInterceptor {
 	return func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, callOpts ...grpc.CallOption) (grpc.ClientStream, error) {
+		if infoState == nil {
+			return nil, fmt.Errorf("node public key unavailable")
+		}
+		info, ok := infoState.get()
+		if !ok || info.PublicKey == (identity.PublicKey{}) {
+			return nil, fmt.Errorf("node public key unknown; call Ping first")
+		}
+
 		// Seal envelope with empty payload for stream open.
-		env, err := envelope.Seal(kp, nodeKey, []byte{}, method, kp.PublicKey(), 0, nil)
+		env, err := envelope.Seal(kp, info.PublicKey, []byte{}, method, kp.PublicKey(), 0, nil)
 		if err != nil {
 			return nil, fmt.Errorf("seal stream envelope: %w", err)
 		}
@@ -136,6 +199,23 @@ func clientStreamInterceptor(kp *identity.Keypair, nodeKey identity.PublicKey) g
 
 func (c *Client) Close() error {
 	return c.conn.Close()
+}
+
+// NodeInfo returns the last observed node info from response envelopes.
+func (c *Client) NodeInfo() (NodeInfo, bool) {
+	if c == nil || c.nodeInfo == nil {
+		return NodeInfo{}, false
+	}
+	return c.nodeInfo.get()
+}
+
+// NodeKey returns the last observed node public key.
+func (c *Client) NodeKey() (identity.PublicKey, bool) {
+	info, ok := c.NodeInfo()
+	if !ok || info.PublicKey == (identity.PublicKey{}) {
+		return identity.PublicKey{}, false
+	}
+	return info.PublicKey, true
 }
 
 // Ping measures round-trip latency to the node.

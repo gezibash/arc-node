@@ -1,7 +1,6 @@
 package dm
 
 import (
-	"context"
 	"encoding/hex"
 	"fmt"
 	"strings"
@@ -18,45 +17,20 @@ import (
 	"github.com/gezibash/arc-node/pkg/dm"
 )
 
-type chatModel struct {
-	ctx       context.Context
-	sdk       *dm.DM
-	self      identity.PublicKey
-	peer      identity.PublicKey
-	messages  []dm.Message
-	previews  map[reference.Reference]string
+// chatView owns only UI-local state. Domain data (messages, previews) lives
+// in dmApp.
+type chatView struct {
 	viewport  viewport.Model
 	textarea  textarea.Model
 	spinner   spinner.Model
-	layout    *tui.Layout
-	loading   bool
 	ready     bool
-	sending   bool
 	atBottom  bool
-	sub       <-chan *dm.Message
-	subErr    <-chan error
+	sending   bool
+	loading   bool
 	inputRows int
 }
 
-type chatMessagesLoadedMsg struct {
-	messages []dm.Message
-}
-
-type chatPreviewLoadedMsg struct {
-	ref     reference.Reference
-	preview string
-}
-
-type chatSubStartedMsg struct {
-	msgs <-chan *dm.Message
-	errs <-chan error
-}
-
-type chatNewMessageMsg struct{ msg dm.Message }
-type chatSubErrorMsg struct{ err error }
-type chatSendDoneMsg struct{ ref reference.Reference }
-
-func newChatModel(ctx context.Context, sdk *dm.DM, layout *tui.Layout) chatModel {
+func newChatView(layout *tui.Layout) chatView {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(tui.AccentColor)
@@ -76,130 +50,69 @@ func newChatModel(ctx context.Context, sdk *dm.DM, layout *tui.Layout) chatModel
 	}
 	ta.SetWidth(width)
 
-	return chatModel{
-		ctx:       ctx,
-		sdk:       sdk,
-		self:      sdk.SelfPublicKey(),
-		peer:      sdk.PeerPublicKey(),
-		previews:  make(map[reference.Reference]string),
+	return chatView{
 		textarea:  ta,
 		spinner:   s,
-		layout:    layout,
 		loading:   true,
 		atBottom:  true,
 		inputRows: 2,
 	}
 }
 
-func (m chatModel) Init() tea.Cmd {
-	return tea.Batch(
-		m.fetchMessages(),
-		m.spinner.Tick,
-		textarea.Blink,
-	)
+func (v chatView) textareaBlink() tea.Cmd {
+	return textarea.Blink
 }
 
-func (m chatModel) fetchMessages() tea.Cmd {
-	sdk := m.sdk
-	ctx := m.ctx
-	return func() tea.Msg {
-		result, err := sdk.List(ctx, dm.ListOptions{
-			Limit:      50,
-			Descending: false,
-		})
-		if err != nil {
-			return errMsg{err: err}
-		}
-		return chatMessagesLoadedMsg{messages: result.Messages}
-	}
-}
-
-func (m chatModel) startSubscription() tea.Cmd {
-	sdk := m.sdk
-	ctx := m.ctx
-	return func() tea.Msg {
-		msgs, errs, err := sdk.Subscribe(ctx, dm.ListOptions{})
-		if err != nil {
-			return chatSubErrorMsg{err: err}
-		}
-		return chatSubStartedMsg{msgs: msgs, errs: errs}
-	}
-}
-
-func (m chatModel) fetchPreviewCmd(msg dm.Message) tea.Cmd {
-	sdk := m.sdk
-	ctx := m.ctx
-	ref := msg.Ref
-	return func() tea.Msg {
-		preview, err := sdk.Preview(ctx, msg)
-		if err != nil {
-			return chatPreviewLoadedMsg{ref: ref, preview: ""}
-		}
-		return chatPreviewLoadedMsg{ref: ref, preview: preview}
-	}
-}
-
-func (m chatModel) fetchAllPreviews(messages []dm.Message) tea.Cmd {
-	n := len(messages)
-	if n > 50 {
-		n = 50
-	}
-	cmds := make([]tea.Cmd, n)
-	for i := 0; i < n; i++ {
-		cmds[i] = m.fetchPreviewCmd(messages[i])
-	}
-	return tea.Batch(cmds...)
-}
-
-func (m *chatModel) appendMessage(msg dm.Message) {
-	for _, existing := range m.messages {
-		if existing.Ref == msg.Ref {
-			return
-		}
-	}
-	m.messages = append(m.messages, msg)
-}
-
-func (m chatModel) vpSize() (int, int) {
+func (v chatView) vpSize(layout *tui.Layout) (int, int) {
 	bodyWidth, bodyHeight := 80, 20
-	if m.layout != nil {
-		bodyWidth, bodyHeight = m.layout.BodySize()
+	if layout != nil {
+		bodyWidth, bodyHeight = layout.BodySize()
 	}
-	// Reserve: 1 line separator + inputRows lines for textarea + 1 blank
-	vpH := bodyHeight - m.inputRows - 2
+	vpH := bodyHeight - v.inputRows - 2
 	if vpH < 3 {
 		vpH = 3
 	}
 	return bodyWidth, vpH
 }
 
-func (m *chatModel) rebuildViewport() {
-	vpW, vpH := m.vpSize()
-	if !m.ready {
-		m.viewport = viewport.New(vpW, vpH)
-		m.ready = true
-	} else {
-		m.viewport.Width = vpW
-		m.viewport.Height = vpH
+func onResizeChat(v chatView, layout *tui.Layout) chatView {
+	if layout != nil {
+		w, _ := layout.BodySize()
+		if w > 4 {
+			v.textarea.SetWidth(w - 4)
+		}
 	}
-	m.viewport.SetContent(m.renderMessages(vpW))
-	if m.atBottom {
-		m.viewport.GotoBottom()
-	}
+	return v
 }
 
-func (m chatModel) renderMessages(width int) string {
-	if len(m.messages) == 0 {
+func rebuildChatViewport(v chatView, msgs []dm.Message, previews map[reference.Reference]string, self identity.PublicKey, layout *tui.Layout) chatView {
+	vpW, vpH := v.vpSize(layout)
+	if !v.ready {
+		v.viewport = viewport.New(vpW, vpH)
+		v.ready = true
+	} else {
+		v.viewport.Width = vpW
+		v.viewport.Height = vpH
+	}
+	v.viewport.SetContent(renderMessages(msgs, previews, self, vpW))
+	if v.atBottom {
+		v.viewport.GotoBottom()
+	}
+	return v
+}
+
+func renderMessages(msgs []dm.Message, previews map[reference.Reference]string, self identity.PublicKey, width int) string {
+	if len(msgs) == 0 {
 		return tui.PreviewStyle.Render("No messages yet. Start typing below.")
 	}
 
 	var b strings.Builder
-	for _, msg := range m.messages {
+	for _, msg := range msgs {
 		ts := time.Unix(0, msg.Timestamp)
 		timeStr := ts.Format("15:04")
-		sender := senderLabel(msg.From, m.self)
+		sender := senderLabel(msg.From, self)
 
-		preview := m.previews[msg.Ref]
+		preview := previews[msg.Ref]
 		if preview == "" {
 			preview = "(encrypted)"
 		}
@@ -208,9 +121,10 @@ func (m chatModel) renderMessages(width int) string {
 		if len(line) > width-2 {
 			line = line[:width-5] + "..."
 		}
+		_ = line
 
 		senderStyle := tui.PeerStyle
-		if msg.From == m.self {
+		if msg.From == self {
 			senderStyle = tui.RefStyle
 		}
 		b.WriteString(tui.PreviewStyle.Render(timeStr+" ") + senderStyle.Render("["+sender+"]") + " " + preview)
@@ -219,138 +133,68 @@ func (m chatModel) renderMessages(width int) string {
 	return b.String()
 }
 
-func (m chatModel) update(msg tea.Msg) (chatModel, tea.Cmd) {
+// sendMsg is emitted when the user presses enter with non-empty text.
+// dmApp.Update() handles the actual send.
+type sendMsg struct{ text string }
+
+// update handles UI-only interactions. Returns updated view and a cmd;
+// domain mutations go through dmApp.Update() via messages.
+func (v chatView) update(msg tea.Msg) (chatView, tea.Cmd) {
 	switch msg := msg.(type) {
-	case chatMessagesLoadedMsg:
-		m.messages = msg.messages
-		m.loading = false
-		m.rebuildViewport()
-		return m, m.fetchAllPreviews(msg.messages)
-
-	case chatPreviewLoadedMsg:
-		m.previews[msg.ref] = msg.preview
-		m.rebuildViewport()
-		return m, nil
-
-	case chatSubStartedMsg:
-		m.sub = msg.msgs
-		m.subErr = msg.errs
-		return m, tea.Batch(
-			waitForChatMessage(m.sub),
-			waitForChatSubError(m.subErr),
-		)
-
-	case chatNewMessageMsg:
-		m.appendMessage(msg.msg)
-		m.rebuildViewport()
-		return m, tea.Batch(
-			waitForChatMessage(m.sub),
-			m.fetchPreviewCmd(msg.msg),
-		)
-
-	case chatSubErrorMsg:
-		return m, nil
-
-	case chatSendDoneMsg:
-		m.sending = false
-		return m, nil
-
 	case spinner.TickMsg:
 		var cmd tea.Cmd
-		m.spinner, cmd = m.spinner.Update(msg)
-		return m, cmd
-
-	case tea.WindowSizeMsg:
-		if m.layout != nil {
-			w, _ := m.layout.BodySize()
-			if w > 4 {
-				m.textarea.SetWidth(w - 4)
-			}
-		}
-		m.rebuildViewport()
+		v.spinner, cmd = v.spinner.Update(msg)
+		return v, cmd
 
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "esc":
-			return m, func() tea.Msg { return backToThreadsMsg{} }
+			return v, func() tea.Msg { return backToThreadsMsg{} }
 		case "enter":
-			text := strings.TrimSpace(m.textarea.Value())
-			if text == "" || m.sending {
-				return m, nil
+			text := strings.TrimSpace(v.textarea.Value())
+			if text == "" || v.sending {
+				return v, nil
 			}
-			m.sending = true
-			m.textarea.Reset()
-			sdk := m.sdk
-			ctx := m.ctx
-			return m, func() tea.Msg {
-				result, err := sdk.Send(ctx, []byte(text), nil)
-				if err != nil {
-					return errMsg{err: err}
-				}
-				return chatSendDoneMsg{ref: result.Ref}
-			}
+			v.sending = true
+			v.textarea.Reset()
+			return v, func() tea.Msg { return sendMsg{text: text} }
 		}
 	}
 
-	// Update textarea
 	var taCmd tea.Cmd
-	m.textarea, taCmd = m.textarea.Update(msg)
-
-	return m, taCmd
+	v.textarea, taCmd = v.textarea.Update(msg)
+	return v, taCmd
 }
 
-func (m chatModel) viewContent() (string, string) {
+func (v chatView) viewContent(msgs []dm.Message, previews map[reference.Reference]string, self identity.PublicKey, layout *tui.Layout) (string, string) {
 	helpText := "enter: send • esc: back • scroll: ↑/↓"
 
 	var b strings.Builder
 
-	if m.loading {
-		b.WriteString(fmt.Sprintf("%s Loading messages...\n", m.spinner.View()))
+	if v.loading {
+		b.WriteString(fmt.Sprintf("%s Loading messages...\n", v.spinner.View()))
 		return b.String(), helpText
 	}
 
-	// Viewport (messages)
-	if m.ready {
-		b.WriteString(m.viewport.View())
+	if v.ready {
+		b.WriteString(v.viewport.View())
 	}
 
-	// Separator
 	bodyWidth := 80
-	if m.layout != nil {
-		bodyWidth, _ = m.layout.BodySize()
+	if layout != nil {
+		bodyWidth, _ = layout.BodySize()
 	}
 	b.WriteString(tui.PreviewStyle.Render(strings.Repeat("─", bodyWidth)))
 	b.WriteString("\n")
 
-	// Textarea
-	if m.sending {
+	if v.sending {
 		b.WriteString(tui.PreviewStyle.Render("Sending..."))
 	} else {
-		b.WriteString(m.textarea.View())
+		b.WriteString(v.textarea.View())
 	}
 	b.WriteString("\n")
 
 	return b.String(), helpText
-}
-
-func waitForChatMessage(ch <-chan *dm.Message) tea.Cmd {
-	return func() tea.Msg {
-		e, ok := <-ch
-		if !ok {
-			return chatSubErrorMsg{err: fmt.Errorf("subscription closed")}
-		}
-		return chatNewMessageMsg{msg: *e}
-	}
-}
-
-func waitForChatSubError(ch <-chan error) tea.Cmd {
-	return func() tea.Msg {
-		err, ok := <-ch
-		if !ok {
-			return nil
-		}
-		return chatSubErrorMsg{err: err}
-	}
 }
 
 func peerShortHex(pub identity.PublicKey) string {

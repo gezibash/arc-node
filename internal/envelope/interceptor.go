@@ -17,14 +17,14 @@ var marshalOpts = proto.MarshalOptions{Deterministic: true}
 // UnaryServerInterceptor returns a gRPC unary interceptor that verifies
 // incoming request envelopes, runs middleware hooks, signs response envelopes,
 // and injects trailing metadata.
-func UnaryServerInterceptor(kp *identity.Keypair, chain *middleware.Chain) grpc.UnaryServerInterceptor {
+func UnaryServerInterceptor(kp *identity.Keypair, chain *middleware.Chain, respMeta map[string]string) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		md, ok := grpcmd.FromIncomingContext(ctx)
 		if !ok {
 			return nil, status.Error(codes.Unauthenticated, "missing envelope metadata")
 		}
 
-		from, to, origin, ts, sig, ct, hopCount, meta, err := Extract(md)
+		from, to, origin, ts, sig, ct, hopCount, reqMeta, err := Extract(md)
 		if err != nil {
 			return nil, status.Errorf(codes.Unauthenticated, "extract envelope: %v", err)
 		}
@@ -38,7 +38,7 @@ func UnaryServerInterceptor(kp *identity.Keypair, chain *middleware.Chain) grpc.
 			return nil, status.Errorf(codes.Internal, "marshal request: %v", err)
 		}
 
-		_, err = Open(from, to, payload, ct, ts, sig, origin, hopCount, meta)
+		_, err = Open(from, to, payload, ct, ts, sig, origin, hopCount, reqMeta)
 		if err != nil {
 			return nil, status.Errorf(codes.Unauthenticated, "verify envelope: %v", err)
 		}
@@ -47,7 +47,7 @@ func UnaryServerInterceptor(kp *identity.Keypair, chain *middleware.Chain) grpc.
 			PublicKey: from,
 			Origin:    origin,
 			HopCount:  hopCount,
-			Metadata:  meta,
+			Metadata:  reqMeta,
 		}
 		ctx = WithCaller(ctx, caller)
 
@@ -69,7 +69,7 @@ func UnaryServerInterceptor(kp *identity.Keypair, chain *middleware.Chain) grpc.
 		if resp != nil {
 			if respMsg, ok := resp.(proto.Message); ok {
 				if respPayload, marshalErr := marshalOpts.Marshal(respMsg); marshalErr == nil {
-					if respEnv, sealErr := Seal(kp, from, respPayload, info.FullMethod, kp.PublicKey(), 0, nil); sealErr == nil {
+					if respEnv, sealErr := Seal(kp, from, respPayload, info.FullMethod, kp.PublicKey(), 0, respMeta); sealErr == nil {
 						Inject(ctx, respEnv, *respEnv.Message.Signature)
 					}
 				}

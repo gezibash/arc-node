@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/gezibash/arc/pkg/identity"
 	"github.com/gezibash/arc-node/internal/config"
 	"github.com/gezibash/arc-node/internal/keyring"
 	"github.com/gezibash/arc-node/pkg/client"
 	"github.com/gezibash/arc-node/pkg/dm"
+	"github.com/gezibash/arc/pkg/identity"
 	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -20,7 +20,6 @@ type dmCmd struct {
 	client  *client.Client
 	threads *dm.Threads
 	kp      *identity.Keypair
-	nodePub *identity.PublicKey
 }
 
 func Entrypoint(v *viper.Viper) *cobra.Command {
@@ -40,7 +39,7 @@ func Entrypoint(v *viper.Viper) *cobra.Command {
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if isatty.IsTerminal(os.Stdin.Fd()) || isatty.IsCygwinTerminal(os.Stdin.Fd()) {
-				return runTUI(cmd.Context(), d.client, d.threads, d.kp, d.nodePub)
+				return runTUI(cmd.Context(), d.client, d.threads, d.kp)
 			}
 			return runThreadsMarkdown(cmd.Context(), d.threads, d.kp, os.Stdout)
 		},
@@ -55,19 +54,14 @@ func Entrypoint(v *viper.Viper) *cobra.Command {
 }
 
 func (d *dmCmd) init(cmd *cobra.Command) error {
-	c, kp, nodeKey, err := dialNode(cmd, d.v)
+	c, kp, err := dialNode(cmd, d.v)
 	if err != nil {
 		return err
 	}
 	d.client = c
 	d.kp = kp
-	d.nodePub = nodeKey
 
-	var opts []dm.Option
-	if nodeKey != nil {
-		opts = append(opts, dm.WithNodeKey(*nodeKey))
-	}
-	d.threads = dm.NewThreads(c, kp, opts...)
+	d.threads = dm.NewThreads(c, kp)
 	return nil
 }
 
@@ -90,16 +84,16 @@ func (d *dmCmd) openConversation(peerHex string) (*dm.DM, identity.PublicKey, er
 	return sdk, peerPub, nil
 }
 
-func dialNode(cmd *cobra.Command, v *viper.Viper) (*client.Client, *identity.Keypair, *identity.PublicKey, error) {
+func dialNode(cmd *cobra.Command, v *viper.Viper) (*client.Client, *identity.Keypair, error) {
 	addr, _ := cmd.Flags().GetString("addr")
 	kr := openKeyring(v)
 	key, err := loadKey(cmd, v, kr)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("load key: %w", err)
+		return nil, nil, fmt.Errorf("load key: %w", err)
 	}
 	nodeKey, err := kr.Load(cmd.Context(), "node")
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("load node key: %w", err)
+		return nil, nil, fmt.Errorf("load node key: %w", err)
 	}
 	nodePub := nodeKey.Keypair.PublicKey()
 	c, err := client.Dial(addr,
@@ -107,9 +101,9 @@ func dialNode(cmd *cobra.Command, v *viper.Viper) (*client.Client, *identity.Key
 		client.WithNodeKey(nodePub),
 	)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
-	return c, key.Keypair, &nodePub, nil
+	return c, key.Keypair, nil
 }
 
 func loadKey(cmd *cobra.Command, v *viper.Viper, kr *keyring.Keyring) (*keyring.Key, error) {
