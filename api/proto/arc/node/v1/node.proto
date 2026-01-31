@@ -83,6 +83,9 @@ message SubscribeMessagesRequest {
 
 message SubscribeMessagesResponse {
   IndexEntry entry = 1;
+  // Server-side warning (e.g., "lagging", "disconnecting").
+  // Empty when there is no warning.
+  string warning = 10;
 }
 
 // Unified get

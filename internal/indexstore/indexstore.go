@@ -16,6 +16,11 @@ import (
 	"github.com/gezibash/arc-node/internal/observability"
 )
 
+// Options configures an IndexStore.
+type Options struct {
+	SubscriptionConfig SubscriptionConfig
+}
+
 // IndexStore provides indexed storage with CEL queries and subscriptions.
 type IndexStore struct {
 	backend physical.Backend
@@ -25,17 +30,22 @@ type IndexStore struct {
 }
 
 // New creates a new IndexStore with the given backend.
-func New(backend physical.Backend, metrics *observability.Metrics) (*IndexStore, error) {
+func New(backend physical.Backend, metrics *observability.Metrics, opts ...*Options) (*IndexStore, error) {
 	eval, err := celeval.NewEvaluator()
 	if err != nil {
 		return nil, fmt.Errorf("create CEL evaluator: %w", err)
+	}
+
+	cfg := SubscriptionConfig{}
+	if len(opts) > 0 && opts[0] != nil {
+		cfg = opts[0].SubscriptionConfig
 	}
 
 	return &IndexStore{
 		backend: backend,
 		metrics: metrics,
 		eval:    eval,
-		subs:    newSubscriptionManager(eval),
+		subs:    newSubscriptionManager(eval, cfg),
 	}, nil
 }
 
@@ -50,7 +60,7 @@ func (s *IndexStore) Index(ctx context.Context, entry *physical.Entry) (err erro
 		return fmt.Errorf("index entry: %w", err)
 	}
 
-	// Notify subscribers
+	// Notify subscribers (non-blocking async fan-out)
 	if s.subs.Len() > 0 {
 		s.subs.Notify(ctx, entry)
 	}
@@ -102,15 +112,6 @@ func (s *IndexStore) Query(ctx context.Context, opts *QueryOptions) (result *Que
 		opts = &QueryOptions{}
 	}
 
-	// Validate CEL expression if provided
-	var celPrg cel.Program
-	if opts.Expression != "" {
-		celPrg, err = s.eval.Compile(ctx, opts.Expression)
-		if err != nil {
-			return nil, fmt.Errorf("%w: %v", ErrInvalidExpression, err)
-		}
-	}
-
 	// Build physical query options
 	physOpts := &physical.QueryOptions{
 		Labels:         opts.Labels,
@@ -119,12 +120,48 @@ func (s *IndexStore) Query(ctx context.Context, opts *QueryOptions) (result *Que
 		Cursor:         opts.Cursor,
 		Descending:     opts.Descending,
 		IncludeExpired: opts.IncludeExpired,
+		Limit:          opts.Limit,
 	}
 
-	if celPrg != nil && opts.Limit > 0 {
-		physOpts.Limit = opts.Limit * 3
-	} else {
-		physOpts.Limit = opts.Limit
+	// Analyze CEL expression for backend pushdown
+	var residualPrg cel.Program
+	if opts.Expression != "" {
+		analysis := s.eval.Analyze(opts.Expression)
+
+		// Merge extracted labels into physical options
+		if len(analysis.Labels) > 0 {
+			if physOpts.Labels == nil {
+				physOpts.Labels = make(map[string]string)
+			}
+			for k, v := range analysis.Labels {
+				physOpts.Labels[k] = v
+			}
+		}
+
+		// Merge extracted time bounds (take the tighter bound)
+		if analysis.After > 0 && analysis.After > physOpts.After {
+			physOpts.After = analysis.After
+		}
+		if analysis.Before > 0 && (physOpts.Before == 0 || analysis.Before < physOpts.Before) {
+			physOpts.Before = analysis.Before
+		}
+
+		// Merge extracted OR label filter
+		if analysis.LabelFilter != nil {
+			physOpts.LabelFilter = analysis.LabelFilter
+		}
+
+		// Compile residual if not fully pushed
+		if !analysis.FullyPushed {
+			residualPrg, err = s.eval.Compile(ctx, analysis.Residual)
+			if err != nil {
+				return nil, fmt.Errorf("%w: %v", ErrInvalidExpression, err)
+			}
+			// Over-fetch for residual filtering
+			if physOpts.Limit > 0 {
+				physOpts.Limit = physOpts.Limit * 3
+			}
+		}
 	}
 
 	physResult, err := s.backend.Query(ctx, physOpts)
@@ -132,10 +169,10 @@ func (s *IndexStore) Query(ctx context.Context, opts *QueryOptions) (result *Que
 		return nil, fmt.Errorf("query entries: %w", err)
 	}
 
-	// Apply CEL filter if provided
+	// Apply residual CEL filter if provided
 	var entries []*physical.Entry
-	if celPrg != nil {
-		matches, evalErr := s.eval.EvalBatch(ctx, celPrg, physResult.Entries)
+	if residualPrg != nil {
+		matches, evalErr := s.eval.EvalBatch(ctx, residualPrg, physResult.Entries)
 		if evalErr != nil {
 			return nil, fmt.Errorf("evaluate CEL: %w", evalErr)
 		}
@@ -151,7 +188,7 @@ func (s *IndexStore) Query(ctx context.Context, opts *QueryOptions) (result *Que
 	hasMore := physResult.HasMore
 	nextCursor := physResult.NextCursor
 
-	if celPrg != nil && opts.Limit > 0 && len(entries) < opts.Limit && physResult.HasMore {
+	if residualPrg != nil && opts.Limit > 0 && len(entries) < opts.Limit && physResult.HasMore {
 		hasMore = true
 	}
 
@@ -192,11 +229,16 @@ func (s *IndexStore) Count(ctx context.Context, opts *QueryOptions) (count int64
 }
 
 // Subscribe creates a subscription for entries matching the CEL expression.
-func (s *IndexStore) Subscribe(ctx context.Context, expression string) (sub Subscription, err error) {
+func (s *IndexStore) Subscribe(ctx context.Context, expression string, opts ...*SubscriptionOptions) (sub Subscription, err error) {
 	op, ctx := observability.StartOperation(ctx, s.metrics, "indexstore.subscribe")
 	defer op.End(err)
 
-	sub, err = s.subs.Subscribe(ctx, expression)
+	var subOpts *SubscriptionOptions
+	if len(opts) > 0 {
+		subOpts = opts[0]
+	}
+
+	sub, err = s.subs.Subscribe(ctx, expression, subOpts)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrInvalidExpression, err)
 	}
@@ -208,9 +250,16 @@ func (s *IndexStore) Subscribe(ctx context.Context, expression string) (sub Subs
 	return sub, nil
 }
 
+// RegisterCompositeIndex registers a composite label index if the backend supports it.
+func (s *IndexStore) RegisterCompositeIndex(def physical.CompositeIndexDef) error {
+	ci, ok := s.backend.(physical.CompositeIndexer)
+	if !ok {
+		return fmt.Errorf("backend %T does not support composite indexes", s.backend)
+	}
+	return ci.RegisterCompositeIndex(def)
+}
+
 // ResolvePrefix resolves a hex reference prefix to a single full reference.
-// Returns ErrPrefixTooShort if the prefix is less than 4 characters,
-// ErrAmbiguousPrefix if multiple entries match, or ErrNotFound if none match.
 func (s *IndexStore) ResolvePrefix(ctx context.Context, hexPrefix string) (ref reference.Reference, err error) {
 	op, ctx := observability.StartOperation(ctx, s.metrics, "indexstore.resolve_prefix")
 	defer op.End(err)
@@ -276,6 +325,11 @@ func (s *IndexStore) Stats(ctx context.Context) (stats *physical.Stats, err erro
 // SubscriptionCount returns the number of active subscriptions.
 func (s *IndexStore) SubscriptionCount() int {
 	return s.subs.Len()
+}
+
+// SubscriptionMetrics returns aggregate subscription health metrics.
+func (s *IndexStore) SubscriptionMetrics() map[string]int64 {
+	return s.subs.Metrics()
 }
 
 // StartCleanup launches a background goroutine that periodically removes

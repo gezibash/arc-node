@@ -367,6 +367,11 @@ func (b *Backend) Query(ctx context.Context, opts *physical.QueryOptions) (*phys
 		opts = &physical.QueryOptions{}
 	}
 
+	// Handle OR label filter via union of sub-queries
+	if opts.LabelFilter != nil && len(opts.LabelFilter.OR) > 0 {
+		return b.queryByLabelFilter(ctx, opts)
+	}
+
 	limit := opts.Limit
 	if limit <= 0 {
 		limit = 1000
@@ -395,13 +400,10 @@ func (b *Backend) Query(ctx context.Context, opts *physical.QueryOptions) (*phys
 	if hasCursor {
 		cursorScoreStr := strconv.FormatInt(cursorTs, 10)
 		if opts.Descending {
-			// We want entries before cursorTs (or same ts, different ref).
-			// Use cursorTs as max (inclusive — we filter ties client-side).
 			if maxScore == "+inf" || cursorTs < scoreToInt(maxScore) {
 				maxScore = cursorScoreStr
 			}
 		} else {
-			// We want entries after cursorTs (or same ts, different ref).
 			if minScore == "-inf" || cursorTs > scoreToInt(minScore) {
 				minScore = cursorScoreStr
 			}
@@ -597,6 +599,68 @@ func (b *Backend) queryLabels(ctx context.Context, opts *physical.QueryOptions, 
 		}
 	}
 	return refs
+}
+
+// queryByLabelFilter handles OR label filter queries by running sub-queries per group and merging.
+func (b *Backend) queryByLabelFilter(ctx context.Context, opts *physical.QueryOptions) (*physical.QueryResult, error) {
+	limit := opts.Limit
+	if limit <= 0 {
+		limit = 1000
+	}
+
+	seen := make(map[string]bool)
+	var allCandidates []entryWithRef
+	now := time.Now().UnixNano()
+
+	for _, group := range opts.LabelFilter.OR {
+		groupLabels := make(map[string]string, len(group.Predicates))
+		for _, p := range group.Predicates {
+			groupLabels[p.Key] = p.Value
+		}
+		groupOpts := *opts
+		groupOpts.Labels = groupLabels
+		groupOpts.LabelFilter = nil
+		groupOpts.Limit = limit + 1
+
+		result, err := b.Query(ctx, &groupOpts)
+		if err != nil {
+			return nil, err
+		}
+		for _, e := range result.Entries {
+			rh := reference.Hex(e.Ref)
+			if !seen[rh] {
+				seen[rh] = true
+				if !opts.IncludeExpired && e.ExpiresAt > 0 && e.ExpiresAt <= now {
+					continue
+				}
+				allCandidates = append(allCandidates, entryWithRef{entry: e, refHex: rh})
+			}
+		}
+	}
+
+	sortEntries(allCandidates, opts.Descending)
+
+	hasMore := len(allCandidates) > limit
+	if hasMore {
+		allCandidates = allCandidates[:limit]
+	}
+
+	entries := make([]*physical.Entry, len(allCandidates))
+	for i, item := range allCandidates {
+		entries[i] = item.entry
+	}
+
+	nextCursor := ""
+	if hasMore && len(entries) > 0 {
+		last := entries[len(entries)-1]
+		nextCursor = timestampToHex(last.Timestamp) + "/" + reference.Hex(last.Ref)
+	}
+
+	return &physical.QueryResult{
+		Entries:    entries,
+		NextCursor: nextCursor,
+		HasMore:    hasMore,
+	}, nil
 }
 
 // Count returns the number of entries matching the given options.

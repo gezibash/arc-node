@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -243,6 +244,11 @@ func (b *Backend) Query(ctx context.Context, opts *physical.QueryOptions) (*phys
 		opts = &physical.QueryOptions{}
 	}
 
+	// Handle OR label filter via UNION queries
+	if opts.LabelFilter != nil && len(opts.LabelFilter.OR) > 0 {
+		return b.queryByLabelFilter(ctx, opts)
+	}
+
 	limit := opts.Limit
 	if limit <= 0 {
 		limit = 1000
@@ -421,6 +427,71 @@ func (b *Backend) Query(ctx context.Context, opts *physical.QueryOptions) (*phys
 
 	return &physical.QueryResult{
 		Entries:    entries,
+		NextCursor: nextCursor,
+		HasMore:    hasMore,
+	}, nil
+}
+
+// queryByLabelFilter handles OR label filter queries by running sub-queries per group and merging.
+func (b *Backend) queryByLabelFilter(ctx context.Context, opts *physical.QueryOptions) (*physical.QueryResult, error) {
+	limit := opts.Limit
+	if limit <= 0 {
+		limit = 1000
+	}
+
+	seen := make(map[string]bool)
+	var allEntries []*physical.Entry
+
+	for _, group := range opts.LabelFilter.OR {
+		groupLabels := make(map[string]string, len(group.Predicates))
+		for _, p := range group.Predicates {
+			groupLabels[p.Key] = p.Value
+		}
+		groupOpts := *opts
+		groupOpts.Labels = groupLabels
+		groupOpts.LabelFilter = nil
+		groupOpts.Limit = limit + 1
+
+		result, err := b.Query(ctx, &groupOpts)
+		if err != nil {
+			return nil, err
+		}
+		for _, e := range result.Entries {
+			rh := reference.Hex(e.Ref)
+			if !seen[rh] {
+				seen[rh] = true
+				allEntries = append(allEntries, e)
+			}
+		}
+	}
+
+	// Sort
+	sort.Slice(allEntries, func(i, j int) bool {
+		if opts.Descending {
+			if allEntries[i].Timestamp == allEntries[j].Timestamp {
+				return reference.Hex(allEntries[i].Ref) > reference.Hex(allEntries[j].Ref)
+			}
+			return allEntries[i].Timestamp > allEntries[j].Timestamp
+		}
+		if allEntries[i].Timestamp == allEntries[j].Timestamp {
+			return reference.Hex(allEntries[i].Ref) < reference.Hex(allEntries[j].Ref)
+		}
+		return allEntries[i].Timestamp < allEntries[j].Timestamp
+	})
+
+	hasMore := len(allEntries) > limit
+	if hasMore {
+		allEntries = allEntries[:limit]
+	}
+
+	var nextCursor string
+	if hasMore && len(allEntries) > 0 {
+		last := allEntries[len(allEntries)-1]
+		nextCursor = fmt.Sprintf("%016x/%s", last.Timestamp, reference.Hex(last.Ref))
+	}
+
+	return &physical.QueryResult{
+		Entries:    allEntries,
 		NextCursor: nextCursor,
 		HasMore:    hasMore,
 	}, nil
