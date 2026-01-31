@@ -11,6 +11,8 @@ import (
 	"github.com/gezibash/arc-node/internal/observability"
 	"github.com/gezibash/arc/pkg/identity"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/health"
+	grpc_health_v1 "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
 )
 
@@ -18,6 +20,7 @@ type Server struct {
 	grpcServer *grpc.Server
 	listener   net.Listener
 	keypair    *identity.Keypair
+	health     *health.Server
 }
 
 func New(addr string, obs *observability.Observability, enableReflection bool, kp *identity.Keypair, blobs *blobstore.BlobStore, index *indexstore.IndexStore, opts ...grpc.ServerOption) (*Server, error) {
@@ -53,6 +56,10 @@ func New(addr string, obs *observability.Observability, enableReflection bool, k
 
 	grpcServer := grpc.NewServer(serverOpts...)
 
+	hs := health.NewServer()
+	grpc_health_v1.RegisterHealthServer(grpcServer, hs)
+	hs.SetServingStatus("", grpc_health_v1.HealthCheckResponse_NOT_SERVING)
+
 	nodev1.RegisterNodeServiceServer(grpcServer, &nodeService{
 		blobs:   blobs,
 		index:   index,
@@ -67,7 +74,14 @@ func New(addr string, obs *observability.Observability, enableReflection bool, k
 		grpcServer: grpcServer,
 		listener:   lis,
 		keypair:    kp,
+		health:     hs,
 	}, nil
+}
+
+func (s *Server) SetServingStatus(status grpc_health_v1.HealthCheckResponse_ServingStatus) {
+	if s.health != nil {
+		s.health.SetServingStatus("", status)
+	}
 }
 
 func (s *Server) Serve() error {
@@ -79,6 +93,9 @@ func (s *Server) Addr() string {
 }
 
 func (s *Server) Stop() {
+	if s.health != nil {
+		s.health.SetServingStatus("", grpc_health_v1.HealthCheckResponse_NOT_SERVING)
+	}
 	s.grpcServer.GracefulStop()
 }
 

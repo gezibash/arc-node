@@ -16,6 +16,7 @@ import (
 	"github.com/gezibash/arc-node/internal/server"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	grpc_health_v1 "google.golang.org/grpc/health/grpc_health_v1"
 )
 
 func newStartCmd(v *viper.Viper) *cobra.Command {
@@ -53,6 +54,10 @@ func runStart(cmd *cobra.Command, v *viper.Viper) error {
 	}
 
 	obs.ServeMetrics(ctx, cfg.Observability.MetricsAddr)
+
+	if err := ensureWritableDir(cfg.DataDir); err != nil {
+		return fmt.Errorf("data dir not writable: %w", err)
+	}
 
 	// Initialize storage
 	blobStore, err := arcnode.NewBlobStore(ctx, &cfg.Storage.Blob, obs.Metrics)
@@ -95,6 +100,7 @@ func runStart(cmd *cobra.Command, v *viper.Viper) error {
 	if err != nil {
 		return fmt.Errorf("create server: %w", err)
 	}
+	srv.SetServingStatus(grpc_health_v1.HealthCheckResponse_SERVING)
 
 	obs.Shutdown.Register("grpc-server", func(ctx context.Context) error {
 		srv.Stop()
@@ -119,4 +125,28 @@ func runStart(cmd *cobra.Command, v *viper.Viper) error {
 
 	slog.Info("serving", "addr", srv.Addr(), "metrics", cfg.Observability.MetricsAddr)
 	return srv.Serve()
+}
+
+func ensureWritableDir(path string) error {
+	if path == "" {
+		return fmt.Errorf("empty path")
+	}
+	if err := os.MkdirAll(path, 0o700); err != nil {
+		return err
+	}
+	f, err := os.CreateTemp(path, ".arc-writecheck-*")
+	if err != nil {
+		return err
+	}
+	name := f.Name()
+	if _, err := f.Write([]byte("ok")); err != nil {
+		_ = f.Close()
+		_ = os.Remove(name)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(name)
+		return err
+	}
+	return os.Remove(name)
 }
