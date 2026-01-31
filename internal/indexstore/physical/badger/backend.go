@@ -244,7 +244,7 @@ func (b *Backend) putInTxn(txn *badger.Txn, entry *physical.Entry) error {
 	// Compute TTL for entries with expiration.
 	var ttl time.Duration
 	if entry.ExpiresAt > 0 {
-		ttl = time.Duration(entry.ExpiresAt - time.Now().UnixNano())
+		ttl = time.Until(time.UnixMilli(entry.ExpiresAt))
 		if ttl <= 0 {
 			ttl = time.Millisecond
 		}
@@ -482,7 +482,7 @@ func (b *Backend) Query(_ context.Context, opts *physical.QueryOptions) (*physic
 }
 
 func (b *Backend) queryByEntry(opts *physical.QueryOptions) (*physical.QueryResult, error) {
-	now := time.Now().UnixNano()
+	now := time.Now().UnixMilli()
 	limit := opts.Limit
 	if limit <= 0 {
 		limit = 1000
@@ -660,7 +660,7 @@ func (b *Backend) queryByLabel(opts *physical.QueryOptions) (*physical.QueryResu
 		return b.queryByComposite(def, vals, opts)
 	}
 
-	now := time.Now().UnixNano()
+	now := time.Now().UnixMilli()
 	limit := opts.Limit
 	if limit <= 0 {
 		limit = 1000
@@ -823,7 +823,7 @@ func (b *Backend) findCompositeIndex(labels map[string]string) (physical.Composi
 
 // queryByComposite scans a composite index prefix.
 func (b *Backend) queryByComposite(def physical.CompositeIndexDef, vals []string, opts *physical.QueryOptions) (*physical.QueryResult, error) {
-	now := time.Now().UnixNano()
+	now := time.Now().UnixMilli()
 	limit := opts.Limit
 	if limit <= 0 {
 		limit = 1000
@@ -1045,7 +1045,7 @@ func (b *Backend) Count(_ context.Context, opts *physical.QueryOptions) (int64, 
 		opts = &physical.QueryOptions{}
 	}
 
-	now := time.Now().UnixNano()
+	now := time.Now().UnixMilli()
 	var afterHex, beforeHex string
 	if opts.After > 0 {
 		afterHex = timestampToHex(opts.After)
@@ -1067,11 +1067,12 @@ func (b *Backend) Count(_ context.Context, opts *physical.QueryOptions) (int64, 
 	return count, nil
 }
 
-func (b *Backend) countByEntry(txn *badger.Txn, opts *physical.QueryOptions, now int64, afterHex, beforeHex string, count *int64) error {
+func (b *Backend) countByEntry(txn *badger.Txn, _ *physical.QueryOptions, _ int64, afterHex, beforeHex string, count *int64) error {
 	prefix := []byte(prefixMeta)
 	iterOpts := badger.DefaultIteratorOptions
-	iterOpts.PrefetchValues = !opts.IncludeExpired
-	iterOpts.PrefetchSize = 100
+	// Badger handles TTL natively — expired keys are invisible to iterators.
+	// No need to fetch values just to check ExpiresAt.
+	iterOpts.PrefetchValues = false
 	iterOpts.Prefix = prefix
 
 	it := txn.NewIterator(iterOpts)
@@ -1096,31 +1097,12 @@ func (b *Backend) countByEntry(txn *badger.Txn, opts *physical.QueryOptions, now
 			break
 		}
 
-		if !opts.IncludeExpired {
-			var skip bool
-			if err := it.Item().Value(func(val []byte) error {
-				ea, err := decodeMetaExpiresAt(val)
-				if err != nil {
-					return err
-				}
-				if ea > 0 && ea <= now {
-					skip = true
-				}
-				return nil
-			}); err != nil {
-				continue
-			}
-			if skip {
-				continue
-			}
-		}
-
 		*count++
 	}
 	return nil
 }
 
-func (b *Backend) countByLabel(txn *badger.Txn, opts *physical.QueryOptions, now int64, afterHex, beforeHex string, count *int64) error {
+func (b *Backend) countByLabel(txn *badger.Txn, opts *physical.QueryOptions, _ int64, afterHex, beforeHex string, count *int64) error {
 	dk, dv := pickDrivingLabel(b.db, opts.Labels)
 	labelPrefix := []byte(prefixLabel + dk + "/" + dv + "/")
 
@@ -1138,7 +1120,10 @@ func (b *Backend) countByLabel(txn *badger.Txn, opts *physical.QueryOptions, now
 		seekKey = labelPrefix
 	}
 
-	needValidate := len(opts.Labels) > 1 || !opts.IncludeExpired
+	// Only need meta validation for multi-label AND queries (to verify
+	// additional labels beyond the driving label). Badger handles TTL
+	// natively, so expiry checks are unnecessary.
+	needValidate := len(opts.Labels) > 1
 
 	for it.Seek(seekKey); it.ValidForPrefix(labelPrefix); it.Next() {
 		key := it.Item().Key()
@@ -1160,12 +1145,15 @@ func (b *Backend) countByLabel(txn *badger.Txn, opts *physical.QueryOptions, now
 			}
 			var skip bool
 			if err := metaItem.Value(func(val []byte) error {
-				expiresAt, labels, decErr := decodeMeta(val)
+				_, labels, decErr := decodeMeta(val)
 				if decErr != nil {
 					return decErr
 				}
-				if !matchesMetaFilter(expiresAt, labels, opts, now) {
-					skip = true
+				for k, v := range opts.Labels {
+					if labels[k] != v {
+						skip = true
+						return nil
+					}
 				}
 				return nil
 			}); err != nil || skip {

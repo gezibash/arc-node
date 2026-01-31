@@ -160,9 +160,9 @@ func TestDeleteExpired(t *testing.T) {
 	for i := range 6 {
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], uint64(i))
-		exp := now.Add(time.Hour).UnixNano()
+		exp := now.Add(time.Hour).UnixMilli()
 		if i < 3 {
-			exp = now.Add(-time.Hour).UnixNano()
+			exp = now.Add(-time.Hour).UnixMilli()
 		}
 		be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),

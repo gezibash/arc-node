@@ -158,9 +158,9 @@ func TestDeleteExpired(t *testing.T) {
 	for i := range 6 {
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], uint64(i))
-		exp := now.Add(time.Hour).UnixNano()
+		exp := now.Add(time.Hour).UnixMilli()
 		if i < 3 {
-			exp = now.Add(-time.Hour).UnixNano()
+			exp = now.Add(-time.Hour).UnixMilli()
 		}
 		be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
@@ -170,12 +170,14 @@ func TestDeleteExpired(t *testing.T) {
 		})
 	}
 
+	// Memory backend uses badger in-memory mode, which handles expiration
+	// natively via TTL — DeleteExpired is a no-op.
 	n, err := be.DeleteExpired(ctx, now)
 	if err != nil {
 		t.Fatalf("DeleteExpired: %v", err)
 	}
-	if n != 3 {
-		t.Errorf("deleted = %d, want 3", n)
+	if n != 0 {
+		t.Errorf("deleted = %d, want 0 (badger TTL handles expiration)", n)
 	}
 }
 
