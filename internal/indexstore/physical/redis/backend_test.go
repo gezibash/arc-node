@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math/rand"
 	"os"
 	"testing"
 	"time"
@@ -206,5 +207,327 @@ func TestStats(t *testing.T) {
 	}
 	if stats.BackendType == "" {
 		t.Error("BackendType is empty")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Benchmark helpers
+// ---------------------------------------------------------------------------
+
+var (
+	benchSizes = []int{100, 1_000, 10_000, 100_000}
+
+	typeValues = []string{"text", "image", "video", "audio", "document", "spreadsheet", "presentation", "archive", "code", "binary"}
+	envValues  = []string{"prod", "staging", "dev", "test", "ci"}
+	userPool   = func() []string {
+		u := make([]string, 100)
+		for i := range u {
+			u[i] = fmt.Sprintf("user-%03d", i)
+		}
+		return u
+	}()
+)
+
+const (
+	baseTimestamp = int64(1735689600000)
+	farFuture     = int64(2051222400000)
+)
+
+func benchRef(seed int) reference.Reference {
+	var buf [8]byte
+	binary.BigEndian.PutUint64(buf[:], uint64(seed))
+	return reference.Reference(sha256.Sum256(buf[:]))
+}
+
+func benchEntry(rng *rand.Rand, i int) *physical.Entry {
+	return &physical.Entry{
+		Ref: benchRef(i),
+		Labels: map[string]string{
+			"type": typeValues[rng.Intn(len(typeValues))],
+			"env":  envValues[rng.Intn(len(envValues))],
+			"user": userPool[rng.Intn(len(userPool))],
+		},
+		Timestamp: baseTimestamp + int64(i),
+		ExpiresAt: farFuture + int64(i),
+	}
+}
+
+func benchEntryWithExpiry(rng *rand.Rand, i int, n int) *physical.Entry {
+	var expiresAt int64
+	if rng.Intn(2) == 0 {
+		expiresAt = baseTimestamp + int64(rng.Intn(n/2))
+	} else {
+		expiresAt = farFuture + int64(rng.Intn(n))
+	}
+	return &physical.Entry{
+		Ref: benchRef(i),
+		Labels: map[string]string{
+			"type": typeValues[rng.Intn(len(typeValues))],
+			"env":  envValues[rng.Intn(len(envValues))],
+			"user": userPool[rng.Intn(len(userPool))],
+		},
+		Timestamp: baseTimestamp + int64(i),
+		ExpiresAt: expiresAt,
+	}
+}
+
+func seedBench(b *testing.B, be physical.Backend, n int) {
+	b.Helper()
+	rng := rand.New(rand.NewSource(42))
+	ctx := context.Background()
+	const batchSize = 1000
+	batch := make([]*physical.Entry, 0, batchSize)
+	for i := range n {
+		batch = append(batch, benchEntry(rng, i))
+		if len(batch) >= batchSize {
+			if err := be.PutBatch(ctx, batch); err != nil {
+				b.Fatal(err)
+			}
+			batch = batch[:0]
+		}
+	}
+	if len(batch) > 0 {
+		if err := be.PutBatch(ctx, batch); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func seedBenchWithExpiry(b *testing.B, be physical.Backend, n int) {
+	b.Helper()
+	rng := rand.New(rand.NewSource(42))
+	ctx := context.Background()
+	const batchSize = 1000
+	batch := make([]*physical.Entry, 0, batchSize)
+	for i := range n {
+		batch = append(batch, benchEntryWithExpiry(rng, i, n))
+		if len(batch) >= batchSize {
+			if err := be.PutBatch(ctx, batch); err != nil {
+				b.Fatal(err)
+			}
+			batch = batch[:0]
+		}
+	}
+	if len(batch) > 0 {
+		if err := be.PutBatch(ctx, batch); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func newBenchBackend(b *testing.B) physical.Backend {
+	b.Helper()
+	prefix := fmt.Sprintf("bench-%d-", time.Now().UnixNano())
+	cfg := map[string]string{
+		"addr":       redisAddr(),
+		"db":         "15",
+		"key_prefix": prefix,
+	}
+	be, err := NewFactory(context.Background(), cfg)
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.Cleanup(func() { be.Close() })
+	return be
+}
+
+func queryBench(b *testing.B, sizes []int, opts func(n int) *physical.QueryOptions) {
+	for _, n := range sizes {
+		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
+			be := newBenchBackend(b)
+			seedBench(b, be, n)
+			ctx := context.Background()
+			qo := opts(n)
+			b.ResetTimer()
+			for range b.N {
+				if _, err := be.Query(ctx, qo); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
+func countBench(b *testing.B, sizes []int, opts func(n int) *physical.QueryOptions) {
+	for _, n := range sizes {
+		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
+			be := newBenchBackend(b)
+			seedBench(b, be, n)
+			ctx := context.Background()
+			qo := opts(n)
+			b.ResetTimer()
+			for range b.N {
+				if _, err := be.Count(ctx, qo); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Put benchmarks
+// ---------------------------------------------------------------------------
+
+func BenchmarkPut(b *testing.B) {
+	be := newBenchBackend(b)
+	rng := rand.New(rand.NewSource(42))
+	ctx := context.Background()
+
+	b.ResetTimer()
+	for i := range b.N {
+		entry := &physical.Entry{
+			Ref: benchRef(i),
+			Labels: map[string]string{
+				"type": typeValues[rng.Intn(len(typeValues))],
+				"env":  envValues[rng.Intn(len(envValues))],
+				"user": userPool[rng.Intn(len(userPool))],
+			},
+			Timestamp: baseTimestamp + int64(i),
+			ExpiresAt: baseTimestamp + int64(i) + 1000,
+		}
+		if err := be.Put(ctx, entry); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkPutBatch(b *testing.B) {
+	for _, batchSize := range []int{10, 100, 1000} {
+		b.Run(fmt.Sprintf("batch=%d", batchSize), func(b *testing.B) {
+			be := newBenchBackend(b)
+			rng := rand.New(rand.NewSource(42))
+			ctx := context.Background()
+
+			b.ResetTimer()
+			for i := range b.N {
+				batch := make([]*physical.Entry, batchSize)
+				for j := range batchSize {
+					idx := i*batchSize + j
+					batch[j] = &physical.Entry{
+						Ref: benchRef(idx),
+						Labels: map[string]string{
+							"type": typeValues[rng.Intn(len(typeValues))],
+							"env":  envValues[rng.Intn(len(envValues))],
+							"user": userPool[rng.Intn(len(userPool))],
+						},
+						Timestamp: baseTimestamp + int64(idx),
+						ExpiresAt: baseTimestamp + int64(idx) + 1000,
+					}
+				}
+				if err := be.PutBatch(ctx, batch); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Get benchmarks
+// ---------------------------------------------------------------------------
+
+func BenchmarkGet(b *testing.B) {
+	for _, n := range benchSizes {
+		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
+			be := newBenchBackend(b)
+			seedBench(b, be, n)
+			rng := rand.New(rand.NewSource(99))
+			ctx := context.Background()
+
+			b.ResetTimer()
+			for range b.N {
+				ref := benchRef(rng.Intn(n))
+				if _, err := be.Get(ctx, ref); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Query benchmarks
+// ---------------------------------------------------------------------------
+
+func BenchmarkQueryNoFilter(b *testing.B) {
+	queryBench(b, benchSizes, func(_ int) *physical.QueryOptions {
+		return &physical.QueryOptions{Limit: 100}
+	})
+}
+
+func BenchmarkQuerySingleLabel(b *testing.B) {
+	queryBench(b, benchSizes, func(_ int) *physical.QueryOptions {
+		return &physical.QueryOptions{Labels: map[string]string{"type": "text"}, Limit: 100}
+	})
+}
+
+func BenchmarkQueryMultiLabel(b *testing.B) {
+	queryBench(b, benchSizes, func(_ int) *physical.QueryOptions {
+		return &physical.QueryOptions{Labels: map[string]string{"type": "text", "env": "prod"}, Limit: 100}
+	})
+}
+
+func BenchmarkQueryTimeRange(b *testing.B) {
+	queryBench(b, benchSizes, func(n int) *physical.QueryOptions {
+		return &physical.QueryOptions{
+			After: baseTimestamp + int64(n*45/100), Before: baseTimestamp + int64(n*55/100), Limit: 100,
+		}
+	})
+}
+
+func BenchmarkQueryDescending(b *testing.B) {
+	queryBench(b, benchSizes, func(_ int) *physical.QueryOptions {
+		return &physical.QueryOptions{Labels: map[string]string{"type": "text"}, Limit: 100, Descending: true}
+	})
+}
+
+// ---------------------------------------------------------------------------
+// Count benchmarks
+// ---------------------------------------------------------------------------
+
+func BenchmarkCountNoFilter(b *testing.B) {
+	countBench(b, benchSizes, func(_ int) *physical.QueryOptions {
+		return &physical.QueryOptions{}
+	})
+}
+
+func BenchmarkCount(b *testing.B) {
+	countBench(b, benchSizes, func(_ int) *physical.QueryOptions {
+		return &physical.QueryOptions{Labels: map[string]string{"type": "text"}}
+	})
+}
+
+func BenchmarkCountMultiLabel(b *testing.B) {
+	countBench(b, benchSizes, func(_ int) *physical.QueryOptions {
+		return &physical.QueryOptions{Labels: map[string]string{"type": "text", "env": "prod"}}
+	})
+}
+
+// ---------------------------------------------------------------------------
+// DeleteExpired benchmarks
+// ---------------------------------------------------------------------------
+
+func BenchmarkDeleteExpiredBench(b *testing.B) {
+	for _, n := range benchSizes {
+		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
+			ctx := context.Background()
+			midpoint := time.UnixMilli(baseTimestamp + int64(n/2))
+
+			for range b.N {
+				b.StopTimer()
+				be := newBenchBackend(b)
+				seedBenchWithExpiry(b, be, n)
+				b.StartTimer()
+
+				if _, err := be.DeleteExpired(ctx, midpoint); err != nil {
+					b.Fatal(err)
+				}
+
+				b.StopTimer()
+				be.Close()
+				b.StartTimer()
+			}
+		})
 	}
 }
