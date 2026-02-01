@@ -1,8 +1,10 @@
 package journal
 
 import (
+	"encoding/hex"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/gezibash/arc-node/internal/config"
 	"github.com/gezibash/arc-node/internal/keyring"
@@ -15,9 +17,12 @@ import (
 )
 
 type journalCmd struct {
-	v      *viper.Viper
-	client *client.Client
-	sdk    *journal.Journal
+	v          *viper.Viper
+	client     *client.Client
+	sdk        *journal.Journal
+	search     *journal.SearchIndex
+	searchPath string
+	searchDir  string
 }
 
 func Entrypoint(v *viper.Viper) *cobra.Command {
@@ -30,6 +35,9 @@ func Entrypoint(v *viper.Viper) *cobra.Command {
 			return j.init(cmd)
 		},
 		PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
+			if j.search != nil {
+				j.search.Close()
+			}
 			if j.client != nil {
 				return j.client.Close()
 			}
@@ -37,7 +45,7 @@ func Entrypoint(v *viper.Viper) *cobra.Command {
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if isatty.IsTerminal(os.Stdin.Fd()) || isatty.IsCygwinTerminal(os.Stdin.Fd()) {
-				return runTUI(cmd.Context(), j.client, j.sdk)
+				return runTUI(cmd.Context(), j.client, j.sdk, j.searchDir)
 			}
 			return runListMarkdown(cmd.Context(), j.sdk, os.Stdout)
 		},
@@ -48,6 +56,11 @@ func Entrypoint(v *viper.Viper) *cobra.Command {
 		newListCmd(j),
 		newReadCmd(j),
 		newEditCmd(j),
+		newSearchCmd(j),
+		newFetchCmd(j),
+		newPullCmd(j),
+		newPushCmd(j),
+		newReindexCmd(j),
 	)
 	return cmd
 }
@@ -59,10 +72,25 @@ func (j *journalCmd) init(cmd *cobra.Command) error {
 	}
 	j.client = c
 
+	dataDir := j.v.GetString("data_dir")
+	if dataDir == "" {
+		dataDir = config.DefaultDataDir()
+	}
+	pub := kp.PublicKey()
+	keyHex := hex.EncodeToString(pub[:])
+	j.searchDir = filepath.Join(dataDir, "journal", keyHex)
+	j.searchPath = filepath.Join(j.searchDir, "search.db")
+	idx, err := journal.OpenSearchIndex(j.searchPath)
+	if err != nil {
+		return fmt.Errorf("open search index: %w", err)
+	}
+	j.search = idx
+
 	var opts []journal.Option
 	if nodeKey != nil {
 		opts = append(opts, journal.WithNodeKey(*nodeKey))
 	}
+	opts = append(opts, journal.WithSearchIndex(idx))
 	j.sdk = journal.New(c, kp, opts...)
 	return nil
 }

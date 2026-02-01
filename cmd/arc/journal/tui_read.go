@@ -75,7 +75,7 @@ func (v readView) update(msg tea.Msg) (readView, tea.Cmd) {
 		}
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "esc", "backspace", "q":
+		case "esc", "backspace":
 			return v, func() tea.Msg { return backToListMsg{} }
 		}
 		if v.ready {
@@ -88,7 +88,11 @@ func (v readView) update(msg tea.Msg) (readView, tea.Cmd) {
 }
 
 func (v readView) renderSubHeader() string {
+	var zeroRef reference.Reference
 	short := reference.Hex(v.entry.Ref)[:8]
+	if v.entry.EntryRef != zeroRef {
+		short = reference.Hex(v.entry.EntryRef)[:8]
+	}
 	ts := time.UnixMilli(v.entry.Timestamp)
 	return tui.RefStyle.Render(short) + " " +
 		tui.HeaderBarStyle.Render("·") + " " +
@@ -96,7 +100,7 @@ func (v readView) renderSubHeader() string {
 }
 
 func (v readView) viewContent() (string, string) {
-	helpText := "↑/↓: scroll • q/esc: back"
+	helpText := "↑/↓: scroll • esc: back"
 
 	var b strings.Builder
 

@@ -3,8 +3,20 @@ package tui
 import (
 	"strings"
 
-	"github.com/charmbracelet/glamour"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/reflow/wordwrap"
 )
+
+// RenderContent word-wraps text to fit within the given width and applies
+// the content style. No heavyweight markdown rendering — just clean wrapping.
+func RenderContent(text string, width int) string {
+	w := width - 4
+	if w < 40 {
+		w = 40
+	}
+	wrapped := wordwrap.String(text, w)
+	return ContentStyle.Render(wrapped)
+}
 
 // LooksLikeMarkdown checks whether any line starts with a markdown block marker.
 func LooksLikeMarkdown(text string) bool {
@@ -25,23 +37,16 @@ func LooksLikeMarkdown(text string) bool {
 	return false
 }
 
-// RenderContent applies glamour rendering if the text looks like markdown,
-// otherwise applies a plain content style.
-func RenderContent(text string, width int) string {
-	if LooksLikeMarkdown(text) {
-		renderWidth := width - 10
-		if renderWidth < 40 {
-			renderWidth = 40
-		}
-		renderer, err := glamour.NewTermRenderer(
-			glamour.WithAutoStyle(),
-			glamour.WithWordWrap(renderWidth),
-		)
-		if err == nil {
-			if rendered, err := renderer.Render(text); err == nil {
-				return rendered
-			}
-		}
+// ContentWidth returns a usable content width with padding accounted for.
+func ContentWidth(width int) int {
+	w := width - 4
+	if w < 40 {
+		w = 40
 	}
-	return ContentStyle.Render(text)
+	return w
+}
+
+// Separator renders a dim horizontal rule.
+func Separator(width int) string {
+	return lipgloss.NewStyle().Foreground(DimColor).Render(strings.Repeat("─", ContentWidth(width)))
 }

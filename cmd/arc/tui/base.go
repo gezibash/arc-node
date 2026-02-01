@@ -190,7 +190,7 @@ func (b Base) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.String() == "ctrl+c" {
 			return b, tea.Quit
 		}
-		if msg.String() == "q" && b.app != nil && b.app.CanQuit() {
+		if msg.String() == "esc" && b.app != nil && b.app.CanQuit() {
 			return b, tea.Quit
 		}
 	case tea.WindowSizeMsg:
@@ -267,8 +267,8 @@ func (b Base) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // View renders the layout frame around the app's view.
 func (b Base) View() string {
 	if b.Err != nil {
-		body := ErrorStyle.Render("Error: "+b.Err.Error()) + "\n\nPress q to quit.\n"
-		return b.Layout.Render(body, "q: quit")
+		body := ErrorStyle.Render("Error: "+b.Err.Error()) + "\n\nPress esc to quit.\n"
+		return b.Layout.Render(body, "esc: quit")
 	}
 	if b.app != nil {
 		body, help := b.app.View()

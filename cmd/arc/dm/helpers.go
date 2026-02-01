@@ -2,13 +2,12 @@ package dm
 
 import (
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
-	"strings"
 
+	"github.com/gezibash/arc-node/cmd/arc/render"
 	"github.com/gezibash/arc/pkg/identity"
 )
 
@@ -33,21 +32,11 @@ func readInput(args []string) ([]byte, error) {
 }
 
 func parseLabels(labels []string) (map[string]string, error) {
-	m := make(map[string]string, len(labels))
-	for _, l := range labels {
-		parts := strings.SplitN(l, "=", 2)
-		if len(parts) != 2 {
-			return nil, fmt.Errorf("invalid label format %q, expected key=value", l)
-		}
-		m[parts[0]] = parts[1]
-	}
-	return m, nil
+	return render.ParseLabels(labels)
 }
 
 func writeJSON(w io.Writer, v any) error {
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
-	return enc.Encode(v)
+	return render.WriteJSON(w, v)
 }
 
 // senderLabel returns "You" if the from key matches ours, otherwise a truncated hex.

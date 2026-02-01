@@ -31,8 +31,13 @@ func (j *Journal) List(ctx context.Context, opts ListOptions) (*ListResult, erro
 
 	entries := make([]Entry, len(result.Entries))
 	for i, e := range result.Entries {
+		var entryRef reference.Reference
+		if h := e.Labels["entry"]; h != "" {
+			entryRef, _ = reference.FromHex(h)
+		}
 		entries[i] = Entry{
 			Ref:       e.Ref,
+			EntryRef:  entryRef,
 			Labels:    e.Labels,
 			Timestamp: e.Timestamp,
 		}

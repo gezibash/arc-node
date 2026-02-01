@@ -3,14 +3,13 @@ package dm
 import (
 	"context"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
-	"regexp"
 	"slices"
 	"strings"
 	"time"
 
+	"github.com/gezibash/arc-node/cmd/arc/render"
 	"github.com/gezibash/arc-node/pkg/dm"
 	"github.com/gezibash/arc/pkg/identity"
 	"github.com/gezibash/arc/pkg/reference"
@@ -70,6 +69,7 @@ type jsonMessage struct {
 }
 
 func formatListJSON(w io.Writer, result *dm.ListResult, preview bool, sdk *dm.DM, self identity.PublicKey) error {
+	var jsonResults []jsonMessage
 	for _, m := range result.Messages {
 		jm := jsonMessage{
 			Reference: reference.Hex(m.Ref),
@@ -84,44 +84,45 @@ func formatListJSON(w io.Writer, result *dm.ListResult, preview bool, sdk *dm.DM
 				jm.Preview = text
 			}
 		}
-		data, err := json.Marshal(jm)
-		if err != nil {
-			return err
-		}
-		fmt.Fprintf(w, "%s\n", data)
+		jsonResults = append(jsonResults, jm)
 	}
-	return nil
+
+	meta := buildDMMeta("arc dm list", result)
+	return render.JSONEnvelope(w, meta, jsonResults)
 }
 
 // --- Markdown ---
 
 func formatListMarkdown(w io.Writer, result *dm.ListResult, preview bool, sdk *dm.DM, self identity.PublicKey) error {
-	fmt.Fprintln(w, "## Conversation")
-	fmt.Fprintln(w)
+	meta := buildDMMeta("arc dm list", result)
+	return render.MarkdownWithFrontmatter(w, meta, func(w io.Writer) error {
+		fmt.Fprintln(w, "## Conversation")
+		fmt.Fprintln(w)
 
-	for _, m := range result.Messages {
-		ts := time.UnixMilli(m.Timestamp)
-		short := reference.Hex(m.Ref)[:8]
-		sender := senderLabel(m.From, self)
-		fmt.Fprintf(w, "### %s — %s [%s]\n", sender, ts.Format("2006-01-02 15:04"), short)
+		for _, m := range result.Messages {
+			ts := time.UnixMilli(m.Timestamp)
+			short := reference.Hex(m.Ref)[:8]
+			sender := senderLabel(m.From, self)
+			fmt.Fprintf(w, "### %s — %s [%s]\n", sender, ts.Format("2006-01-02 15:04"), short)
 
-		if preview && sdk != nil {
-			text, err := sdk.Preview(context.Background(), m)
-			if err == nil && text != "" {
-				fmt.Fprintln(w)
-				fmt.Fprintln(w, text)
+			if preview && sdk != nil {
+				text, err := sdk.Preview(context.Background(), m)
+				if err == nil && text != "" {
+					fmt.Fprintln(w)
+					fmt.Fprintln(w, text)
+				}
 			}
+
+			fmt.Fprintln(w)
+			fmt.Fprintln(w, "---")
+			fmt.Fprintln(w)
 		}
 
-		fmt.Fprintln(w)
-		fmt.Fprintln(w, "---")
-		fmt.Fprintln(w)
-	}
-
-	if result.HasMore {
-		fmt.Fprintf(w, "_More messages available (cursor: %s)_\n", result.NextCursor)
-	}
-	return nil
+		if result.HasMore {
+			fmt.Fprintf(w, "_More messages available (cursor: %s)_\n", result.NextCursor)
+		}
+		return nil
+	})
 }
 
 // runThreadsMarkdown is the default non-TTY handler for bare `arc dm`.
@@ -151,27 +152,38 @@ func runThreadsMarkdown(ctx context.Context, threads *dm.Threads, kp *identity.K
 	return nil
 }
 
+// --- Metadata ---
+
+func buildDMMeta(command string, result *dm.ListResult) render.Metadata {
+	meta := render.Metadata{
+		Command:      command,
+		TotalCount:   len(result.Messages),
+		ShowingCount: len(result.Messages),
+		HasMore:      result.HasMore,
+		NextCursor:   result.NextCursor,
+	}
+	if len(result.Messages) > 0 {
+		oldest := result.Messages[0].Timestamp
+		newest := result.Messages[0].Timestamp
+		for _, m := range result.Messages[1:] {
+			if m.Timestamp < oldest {
+				oldest = m.Timestamp
+			}
+			if m.Timestamp > newest {
+				newest = m.Timestamp
+			}
+		}
+		meta.TimeRange = &render.TimeRange{Oldest: oldest, Newest: newest}
+	}
+	return meta
+}
+
 // --- Helpers ---
 
-var hexPattern = regexp.MustCompile(`^[0-9a-fA-F]{64}$`)
-
 func truncateHexValue(v string) string {
-	if hexPattern.MatchString(v) {
-		return v[:8]
-	}
-	return v
+	return render.TruncateHexValue(v)
 }
 
 func formatDuration(d time.Duration) string {
-	if d < time.Minute {
-		return fmt.Sprintf("%ds", int(d.Seconds()))
-	}
-	m := int(d.Minutes())
-	s := int(d.Seconds()) % 60
-	if d < time.Hour {
-		return fmt.Sprintf("%dm %ds", m, s)
-	}
-	h := int(d.Hours())
-	m = m % 60
-	return fmt.Sprintf("%dh %dm %ds", h, m, s)
+	return render.FormatDuration(d)
 }

@@ -2,7 +2,6 @@ package journal
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 
 	"github.com/gezibash/arc-node/pkg/client"
@@ -44,8 +43,8 @@ func (j *Journal) ReadForEdit(ctx context.Context, msgRefHex string) (plaintext 
 }
 
 // Edit encrypts new plaintext and publishes it as a replacement for the
-// message identified by msgRef, carrying forward the original labels.
-func (j *Journal) Edit(ctx context.Context, msgRef reference.Reference, newPlaintext []byte, origLabels map[string]string) (*EditResult, error) {
+// entry identified by oldEntryRef, carrying forward the original labels.
+func (j *Journal) Edit(ctx context.Context, oldEntryRef reference.Reference, newPlaintext []byte, origLabels map[string]string) (*EditResult, error) {
 	ciphertext, err := encrypt(newPlaintext, &j.symKey)
 	if err != nil {
 		return nil, fmt.Errorf("encrypt: %w", err)
@@ -73,12 +72,20 @@ func (j *Journal) Edit(ctx context.Context, msgRef reference.Reference, newPlain
 	}
 	labelMap["app"] = "journal"
 	labelMap["type"] = "entry"
-	labelMap["replaces"] = hex.EncodeToString(msgRef[:])
+	labelMap["replaces"] = reference.Hex(oldEntryRef)
+
+	newEntryRef := ComputeEntryRef(newContentRef, msg.Timestamp, pub)
+	labelMap["entry"] = reference.Hex(newEntryRef)
 
 	ref, err := j.client.SendMessage(ctx, msg, labelMap)
 	if err != nil {
 		return nil, fmt.Errorf("send message: %w", err)
 	}
 
-	return &EditResult{Ref: ref}, nil
+	if j.search != nil {
+		_ = j.search.DeleteByEntryRef(oldEntryRef)
+		_ = j.search.Index(newContentRef, newEntryRef, string(newPlaintext), msg.Timestamp)
+	}
+
+	return &EditResult{Ref: ref, EntryRef: newEntryRef}, nil
 }

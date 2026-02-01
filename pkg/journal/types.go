@@ -4,17 +4,18 @@ import "github.com/gezibash/arc/pkg/reference"
 
 // Entry represents a journal entry.
 type Entry struct {
-	Ref       reference.Reference
+	Ref       reference.Reference // msgRef (node-level, immutable)
+	EntryRef  reference.Reference // deterministic journal-level ID
 	Labels    map[string]string
 	Timestamp int64
 	Content   []byte // populated by Read; nil in List results
 }
 
 // WriteResult is returned by Write.
-type WriteResult struct{ Ref reference.Reference }
+type WriteResult struct{ Ref, EntryRef reference.Reference }
 
 // EditResult is returned by Edit.
-type EditResult struct{ Ref reference.Reference }
+type EditResult struct{ Ref, EntryRef reference.Reference }
 
 // ListResult is returned by List.
 type ListResult struct {

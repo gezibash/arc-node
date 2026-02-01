@@ -47,6 +47,10 @@ var (
 	HeaderBarStyle = lipgloss.NewStyle().
 			Foreground(DimColor)
 
+	GroupHeaderStyle = lipgloss.NewStyle().
+				Foreground(DimColor).
+				Bold(true)
+
 	ContentStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.AdaptiveColor{Light: "#1A1A1A", Dark: "#FAFAFA"})
 )

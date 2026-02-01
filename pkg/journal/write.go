@@ -8,6 +8,7 @@ import (
 
 	"github.com/gezibash/arc/pkg/identity"
 	"github.com/gezibash/arc/pkg/message"
+	"github.com/gezibash/arc/pkg/reference"
 )
 
 // Write encrypts plaintext and publishes it as a journal entry with the given labels.
@@ -30,14 +31,19 @@ func (j *Journal) Write(ctx context.Context, plaintext []byte, labels map[string
 		return nil, fmt.Errorf("sign message: %w", err)
 	}
 
+	entryRef := ComputeEntryRef(contentRef, msg.Timestamp, pub)
+
 	labelMap := j.ownerLabels(labels)
+	labelMap["entry"] = reference.Hex(entryRef)
 
 	ref, err := j.client.SendMessage(ctx, msg, labelMap)
 	if err != nil {
 		return nil, fmt.Errorf("send message: %w", err)
 	}
 
-	return &WriteResult{Ref: ref}, nil
+	j.IndexEntry(contentRef, entryRef, string(plaintext), msg.Timestamp)
+
+	return &WriteResult{Ref: ref, EntryRef: entryRef}, nil
 }
 
 func (j *Journal) recipientKey() identity.PublicKey {
