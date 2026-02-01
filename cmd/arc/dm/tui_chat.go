@@ -108,7 +108,7 @@ func renderMessages(msgs []dm.Message, previews map[reference.Reference]string, 
 
 	var b strings.Builder
 	for _, msg := range msgs {
-		ts := time.Unix(0, msg.Timestamp)
+		ts := time.UnixMilli(msg.Timestamp)
 		timeStr := ts.Format("15:04")
 		sender := senderLabel(msg.From, self)
 

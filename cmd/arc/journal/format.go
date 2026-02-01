@@ -31,7 +31,7 @@ func formatListText(w io.Writer, result *journal.ListResult, preview bool, sdk *
 
 func formatEntryText(w io.Writer, e journal.Entry, preview bool, sdk *journal.Journal) {
 	short := reference.Hex(e.Ref)[:8]
-	ts := time.Unix(0, e.Timestamp)
+	ts := time.UnixMilli(e.Timestamp)
 	age := time.Since(ts).Truncate(time.Second)
 
 	var parts []string
@@ -90,7 +90,7 @@ func formatListMarkdown(w io.Writer, result *journal.ListResult, preview bool, s
 	fmt.Fprintln(w)
 
 	for _, e := range result.Entries {
-		ts := time.Unix(0, e.Timestamp)
+		ts := time.UnixMilli(e.Timestamp)
 		short := reference.Hex(e.Ref)[:8]
 		fmt.Fprintf(w, "### %s [%s]\n", ts.Format("2006-01-02 15:04"), short)
 

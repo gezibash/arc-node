@@ -118,7 +118,7 @@ func (v listView) viewContent(entries []journal.Entry, previews map[reference.Re
 	for i, e := range visible {
 		idx := start + i
 		short := reference.Hex(e.Ref)[:8]
-		ts := time.Unix(0, e.Timestamp)
+		ts := time.UnixMilli(e.Timestamp)
 		age := formatDuration(time.Since(ts).Truncate(time.Second)) + " ago"
 
 		if idx == v.cursor {

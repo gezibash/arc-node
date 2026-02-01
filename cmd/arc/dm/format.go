@@ -33,7 +33,7 @@ func formatListText(w io.Writer, result *dm.ListResult, preview bool, sdk *dm.DM
 
 func formatMessageText(w io.Writer, m dm.Message, preview bool, sdk *dm.DM, self identity.PublicKey) {
 	short := reference.Hex(m.Ref)[:8]
-	ts := time.Unix(0, m.Timestamp)
+	ts := time.UnixMilli(m.Timestamp)
 	age := time.Since(ts).Truncate(time.Second)
 	sender := senderLabel(m.From, self)
 
@@ -100,7 +100,7 @@ func formatListMarkdown(w io.Writer, result *dm.ListResult, preview bool, sdk *d
 	fmt.Fprintln(w)
 
 	for _, m := range result.Messages {
-		ts := time.Unix(0, m.Timestamp)
+		ts := time.UnixMilli(m.Timestamp)
 		short := reference.Hex(m.Ref)[:8]
 		sender := senderLabel(m.From, self)
 		fmt.Fprintf(w, "### %s — %s [%s]\n", sender, ts.Format("2006-01-02 15:04"), short)
@@ -143,7 +143,7 @@ func runThreadsMarkdown(ctx context.Context, threads *dm.Threads, kp *identity.K
 	for _, th := range items {
 		peerHex := hex.EncodeToString(th.PeerPub[:])
 		peerShort := peerHex[:8]
-		ts := time.Unix(0, th.LastMsg.Timestamp)
+		ts := time.UnixMilli(th.LastMsg.Timestamp)
 		sender := senderLabel(th.LastMsg.From, self)
 		fmt.Fprintf(w, "- **%s** — last: %s (%s) `%s`\n", peerShort, sender, ts.Format("2006-01-02 15:04"), peerHex)
 	}

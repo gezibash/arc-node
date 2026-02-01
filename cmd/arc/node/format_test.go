@@ -25,7 +25,7 @@ func testEntry(labels map[string]string) *client.Entry {
 	return &client.Entry{
 		Ref:       ref,
 		Labels:    labels,
-		Timestamp: time.Now().Add(-5 * time.Second).UnixNano(),
+		Timestamp: time.Now().Add(-5 * time.Second).UnixMilli(),
 	}
 }
 
@@ -147,7 +147,7 @@ func testPreviewEntry(contentBody []byte) (*client.Entry, ContentLoader) {
 	e := &client.Entry{
 		Ref:       reference.Compute([]byte("msg")),
 		Labels:    map[string]string{"content": contentHex},
-		Timestamp: time.Now().Add(-2 * time.Second).UnixNano(),
+		Timestamp: time.Now().Add(-2 * time.Second).UnixMilli(),
 	}
 
 	loader := func(_ context.Context, ref reference.Reference) ([]byte, error) {

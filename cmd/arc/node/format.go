@@ -40,7 +40,7 @@ func formatTextHeader(w io.Writer) {
 func formatEntryText(w io.Writer, e *client.Entry, preview bool, ctx context.Context, loader ContentLoader) error {
 	refHex := reference.Hex(e.Ref)
 	short := refHex[:8]
-	ts := time.Unix(0, e.Timestamp)
+	ts := time.UnixMilli(e.Timestamp)
 	age := time.Since(ts).Truncate(time.Second)
 
 	var parts []string

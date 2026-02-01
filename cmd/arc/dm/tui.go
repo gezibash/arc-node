@@ -288,7 +288,7 @@ func (a *dmApp) Update(msg tea.Msg) (tui.App, tea.Cmd) {
 			if err != nil {
 				return errMsg{err: err}
 			}
-			return chatSendDoneMsg{ref: result.Ref, text: text, ts: time.Now().UnixNano()}
+			return chatSendDoneMsg{ref: result.Ref, text: text, ts: time.Now().UnixMilli()}
 		}
 	case chatSendDoneMsg:
 		a.chat.sending = false

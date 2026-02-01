@@ -170,7 +170,7 @@ func (v threadsView) viewContent(threads []dm.Thread, self identity.PublicKey, c
 	for i, th := range visible {
 		idx := start + i
 		peerShort := hex.EncodeToString(th.PeerPub[:4])
-		ts := time.Unix(0, th.LastMsg.Timestamp)
+		ts := time.UnixMilli(th.LastMsg.Timestamp)
 		age := formatDuration(time.Since(ts).Truncate(time.Second)) + " ago"
 
 		if idx == v.cursor {

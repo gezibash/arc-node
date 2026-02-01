@@ -58,7 +58,7 @@ func newGetCmd(n *nodeCmd) *cobra.Command {
 			case client.GetKindMessage:
 				slog.DebugContext(cmd.Context(), "resolved to message", "ref", reference.Hex(result.Ref))
 				fmt.Fprintf(os.Stdout, "ref:       %s\n", reference.Hex(result.Ref))
-				fmt.Fprintf(os.Stdout, "timestamp: %d (%s)\n", result.Timestamp, time.Unix(0, result.Timestamp).UTC().Format(time.RFC3339))
+				fmt.Fprintf(os.Stdout, "timestamp: %d (%s)\n", result.Timestamp, time.UnixMilli(result.Timestamp).UTC().Format(time.RFC3339))
 
 				if len(result.Labels) > 0 {
 					fmt.Fprintln(os.Stdout, "labels:")

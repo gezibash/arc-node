@@ -88,7 +88,7 @@ func (v readView) update(msg tea.Msg) (readView, tea.Cmd) {
 
 func (v readView) renderSubHeader() string {
 	short := reference.Hex(v.msg.Ref)[:8]
-	ts := time.Unix(0, v.msg.Timestamp)
+	ts := time.UnixMilli(v.msg.Timestamp)
 	return tui.RefStyle.Render(short) + " " +
 		tui.HeaderBarStyle.Render("·") + " " +
 		tui.HeaderBarStyle.Render(ts.Format("Jan 2, 2006 15:04"))
