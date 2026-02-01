@@ -103,7 +103,7 @@ func runStart(cmd *cobra.Command, v *viper.Viper) error {
 	srv.SetServingStatus(grpc_health_v1.HealthCheckResponse_SERVING)
 
 	obs.Shutdown.Register("grpc-server", func(ctx context.Context) error {
-		srv.Stop()
+		srv.Stop(ctx)
 		return nil
 	})
 

@@ -24,6 +24,8 @@ const (
 	NodeService_SendMessage_FullMethodName       = "/arc.node.v1.NodeService/SendMessage"
 	NodeService_QueryMessages_FullMethodName     = "/arc.node.v1.NodeService/QueryMessages"
 	NodeService_SubscribeMessages_FullMethodName = "/arc.node.v1.NodeService/SubscribeMessages"
+	NodeService_Federate_FullMethodName          = "/arc.node.v1.NodeService/Federate"
+	NodeService_ListPeers_FullMethodName         = "/arc.node.v1.NodeService/ListPeers"
 	NodeService_ResolveGet_FullMethodName        = "/arc.node.v1.NodeService/ResolveGet"
 )
 
@@ -38,6 +40,8 @@ type NodeServiceClient interface {
 	SendMessage(ctx context.Context, in *SendMessageRequest, opts ...grpc.CallOption) (*SendMessageResponse, error)
 	QueryMessages(ctx context.Context, in *QueryMessagesRequest, opts ...grpc.CallOption) (*QueryMessagesResponse, error)
 	SubscribeMessages(ctx context.Context, in *SubscribeMessagesRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[SubscribeMessagesResponse], error)
+	Federate(ctx context.Context, in *FederateRequest, opts ...grpc.CallOption) (*FederateResponse, error)
+	ListPeers(ctx context.Context, in *ListPeersRequest, opts ...grpc.CallOption) (*ListPeersResponse, error)
 	// Unified get: resolve prefix against blobs and messages
 	ResolveGet(ctx context.Context, in *ResolveGetRequest, opts ...grpc.CallOption) (*ResolveGetResponse, error)
 }
@@ -109,6 +113,26 @@ func (c *nodeServiceClient) SubscribeMessages(ctx context.Context, in *Subscribe
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type NodeService_SubscribeMessagesClient = grpc.ServerStreamingClient[SubscribeMessagesResponse]
 
+func (c *nodeServiceClient) Federate(ctx context.Context, in *FederateRequest, opts ...grpc.CallOption) (*FederateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FederateResponse)
+	err := c.cc.Invoke(ctx, NodeService_Federate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeServiceClient) ListPeers(ctx context.Context, in *ListPeersRequest, opts ...grpc.CallOption) (*ListPeersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListPeersResponse)
+	err := c.cc.Invoke(ctx, NodeService_ListPeers_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *nodeServiceClient) ResolveGet(ctx context.Context, in *ResolveGetRequest, opts ...grpc.CallOption) (*ResolveGetResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ResolveGetResponse)
@@ -130,6 +154,8 @@ type NodeServiceServer interface {
 	SendMessage(context.Context, *SendMessageRequest) (*SendMessageResponse, error)
 	QueryMessages(context.Context, *QueryMessagesRequest) (*QueryMessagesResponse, error)
 	SubscribeMessages(*SubscribeMessagesRequest, grpc.ServerStreamingServer[SubscribeMessagesResponse]) error
+	Federate(context.Context, *FederateRequest) (*FederateResponse, error)
+	ListPeers(context.Context, *ListPeersRequest) (*ListPeersResponse, error)
 	// Unified get: resolve prefix against blobs and messages
 	ResolveGet(context.Context, *ResolveGetRequest) (*ResolveGetResponse, error)
 	mustEmbedUnimplementedNodeServiceServer()
@@ -156,6 +182,12 @@ func (UnimplementedNodeServiceServer) QueryMessages(context.Context, *QueryMessa
 }
 func (UnimplementedNodeServiceServer) SubscribeMessages(*SubscribeMessagesRequest, grpc.ServerStreamingServer[SubscribeMessagesResponse]) error {
 	return status.Error(codes.Unimplemented, "method SubscribeMessages not implemented")
+}
+func (UnimplementedNodeServiceServer) Federate(context.Context, *FederateRequest) (*FederateResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Federate not implemented")
+}
+func (UnimplementedNodeServiceServer) ListPeers(context.Context, *ListPeersRequest) (*ListPeersResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListPeers not implemented")
 }
 func (UnimplementedNodeServiceServer) ResolveGet(context.Context, *ResolveGetRequest) (*ResolveGetResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ResolveGet not implemented")
@@ -264,6 +296,42 @@ func _NodeService_SubscribeMessages_Handler(srv interface{}, stream grpc.ServerS
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type NodeService_SubscribeMessagesServer = grpc.ServerStreamingServer[SubscribeMessagesResponse]
 
+func _NodeService_Federate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FederateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).Federate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_Federate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).Federate(ctx, req.(*FederateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NodeService_ListPeers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListPeersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).ListPeers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_ListPeers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).ListPeers(ctx, req.(*ListPeersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _NodeService_ResolveGet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ResolveGetRequest)
 	if err := dec(in); err != nil {
@@ -304,6 +372,14 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "QueryMessages",
 			Handler:    _NodeService_QueryMessages_Handler,
+		},
+		{
+			MethodName: "Federate",
+			Handler:    _NodeService_Federate_Handler,
+		},
+		{
+			MethodName: "ListPeers",
+			Handler:    _NodeService_ListPeers_Handler,
 		},
 		{
 			MethodName: "ResolveGet",

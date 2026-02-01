@@ -386,3 +386,63 @@ func (c *Client) SubscribeMessages(ctx context.Context, expression string, label
 
 	return entries, errs, nil
 }
+
+// PeerDirection indicates whether a peer is inbound or outbound.
+type PeerDirection int
+
+const (
+	PeerDirectionOutbound PeerDirection = 0 // we subscribe to them
+	PeerDirectionInbound  PeerDirection = 1 // they subscribe to us
+)
+
+// PeerInfo describes an active peer connection.
+type PeerInfo struct {
+	Address           string            `json:"address,omitempty"`
+	Labels            map[string]string `json:"labels,omitempty"`
+	BytesReceived     int64             `json:"bytes_received"`
+	EntriesReplicated int64             `json:"entries_replicated"`
+	EntriesSent       int64             `json:"entries_sent"`
+	StartedAt         int64             `json:"started_at"`
+	Direction         PeerDirection     `json:"direction"`
+	PublicKey         []byte            `json:"public_key,omitempty"`
+}
+
+func (c *Client) ListPeers(ctx context.Context) ([]PeerInfo, error) {
+	resp, err := c.stub.ListPeers(ctx, &nodev1.ListPeersRequest{})
+	if err != nil {
+		return nil, err
+	}
+	peers := make([]PeerInfo, len(resp.Peers))
+	for i, p := range resp.Peers {
+		peers[i] = PeerInfo{
+			Address:           p.Address,
+			Labels:            p.Labels,
+			BytesReceived:     p.BytesReceived,
+			EntriesReplicated: p.EntriesReplicated,
+			EntriesSent:       p.EntriesSent,
+			StartedAt:         p.StartedAt,
+			Direction:         PeerDirection(p.Direction),
+			PublicKey:         p.PublicKey,
+		}
+	}
+	return peers, nil
+}
+
+type FederateResult struct {
+	Status  string
+	Message string
+}
+
+func (c *Client) Federate(ctx context.Context, peer string, labels map[string]string) (*FederateResult, error) {
+	resp, err := c.stub.Federate(ctx, &nodev1.FederateRequest{
+		Peer:   peer,
+		Labels: labels,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &FederateResult{
+		Status:  resp.Status,
+		Message: resp.Message,
+	}, nil
+}

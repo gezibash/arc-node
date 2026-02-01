@@ -67,6 +67,52 @@ func (Order) EnumDescriptor() ([]byte, []int) {
 	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{0}
 }
 
+type PeerDirection int32
+
+const (
+	PeerDirection_PEER_DIRECTION_OUTBOUND PeerDirection = 0 // we subscribe to them
+	PeerDirection_PEER_DIRECTION_INBOUND  PeerDirection = 1 // they subscribe to us
+)
+
+// Enum value maps for PeerDirection.
+var (
+	PeerDirection_name = map[int32]string{
+		0: "PEER_DIRECTION_OUTBOUND",
+		1: "PEER_DIRECTION_INBOUND",
+	}
+	PeerDirection_value = map[string]int32{
+		"PEER_DIRECTION_OUTBOUND": 0,
+		"PEER_DIRECTION_INBOUND":  1,
+	}
+)
+
+func (x PeerDirection) Enum() *PeerDirection {
+	p := new(PeerDirection)
+	*p = x
+	return p
+}
+
+func (x PeerDirection) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (PeerDirection) Descriptor() protoreflect.EnumDescriptor {
+	return file_arc_node_v1_node_proto_enumTypes[1].Descriptor()
+}
+
+func (PeerDirection) Type() protoreflect.EnumType {
+	return &file_arc_node_v1_node_proto_enumTypes[1]
+}
+
+func (x PeerDirection) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use PeerDirection.Descriptor instead.
+func (PeerDirection) EnumDescriptor() ([]byte, []int) {
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{1}
+}
+
 type ResolveGetResponse_Kind int32
 
 const (
@@ -97,11 +143,11 @@ func (x ResolveGetResponse_Kind) String() string {
 }
 
 func (ResolveGetResponse_Kind) Descriptor() protoreflect.EnumDescriptor {
-	return file_arc_node_v1_node_proto_enumTypes[1].Descriptor()
+	return file_arc_node_v1_node_proto_enumTypes[2].Descriptor()
 }
 
 func (ResolveGetResponse_Kind) Type() protoreflect.EnumType {
-	return &file_arc_node_v1_node_proto_enumTypes[1]
+	return &file_arc_node_v1_node_proto_enumTypes[2]
 }
 
 func (x ResolveGetResponse_Kind) Number() protoreflect.EnumNumber {
@@ -110,7 +156,7 @@ func (x ResolveGetResponse_Kind) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ResolveGetResponse_Kind.Descriptor instead.
 func (ResolveGetResponse_Kind) EnumDescriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{12, 0}
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{17, 0}
 }
 
 type PutContentRequest struct {
@@ -650,8 +696,11 @@ func (x *SubscribeMessagesRequest) GetExpression() string {
 }
 
 type SubscribeMessagesResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Entry         *IndexEntry            `protobuf:"bytes,1,opt,name=entry,proto3" json:"entry,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Entry *IndexEntry            `protobuf:"bytes,1,opt,name=entry,proto3" json:"entry,omitempty"`
+	// Server-side warning (e.g., "lagging", "disconnecting").
+	// Empty when there is no warning.
+	Warning       string `protobuf:"bytes,10,opt,name=warning,proto3" json:"warning,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -693,6 +742,297 @@ func (x *SubscribeMessagesResponse) GetEntry() *IndexEntry {
 	return nil
 }
 
+func (x *SubscribeMessagesResponse) GetWarning() string {
+	if x != nil {
+		return x.Warning
+	}
+	return ""
+}
+
+type FederateRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Peer          string                 `protobuf:"bytes,1,opt,name=peer,proto3" json:"peer,omitempty"`
+	Labels        map[string]string      `protobuf:"bytes,2,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FederateRequest) Reset() {
+	*x = FederateRequest{}
+	mi := &file_arc_node_v1_node_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FederateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FederateRequest) ProtoMessage() {}
+
+func (x *FederateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_arc_node_v1_node_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FederateRequest.ProtoReflect.Descriptor instead.
+func (*FederateRequest) Descriptor() ([]byte, []int) {
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *FederateRequest) GetPeer() string {
+	if x != nil {
+		return x.Peer
+	}
+	return ""
+}
+
+func (x *FederateRequest) GetLabels() map[string]string {
+	if x != nil {
+		return x.Labels
+	}
+	return nil
+}
+
+type FederateResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Status        string                 `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FederateResponse) Reset() {
+	*x = FederateResponse{}
+	mi := &file_arc_node_v1_node_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FederateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FederateResponse) ProtoMessage() {}
+
+func (x *FederateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_arc_node_v1_node_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FederateResponse.ProtoReflect.Descriptor instead.
+func (*FederateResponse) Descriptor() ([]byte, []int) {
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *FederateResponse) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *FederateResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+type ListPeersRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListPeersRequest) Reset() {
+	*x = ListPeersRequest{}
+	mi := &file_arc_node_v1_node_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListPeersRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListPeersRequest) ProtoMessage() {}
+
+func (x *ListPeersRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_arc_node_v1_node_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListPeersRequest.ProtoReflect.Descriptor instead.
+func (*ListPeersRequest) Descriptor() ([]byte, []int) {
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{13}
+}
+
+type PeerInfo struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Address           string                 `protobuf:"bytes,1,opt,name=address,proto3" json:"address,omitempty"`
+	Labels            map[string]string      `protobuf:"bytes,2,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	BytesReceived     int64                  `protobuf:"varint,3,opt,name=bytes_received,json=bytesReceived,proto3" json:"bytes_received,omitempty"`
+	EntriesReplicated int64                  `protobuf:"varint,4,opt,name=entries_replicated,json=entriesReplicated,proto3" json:"entries_replicated,omitempty"`
+	StartedAt         int64                  `protobuf:"varint,5,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
+	Direction         PeerDirection          `protobuf:"varint,6,opt,name=direction,proto3,enum=arc.node.v1.PeerDirection" json:"direction,omitempty"`
+	PublicKey         []byte                 `protobuf:"bytes,7,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
+	EntriesSent       int64                  `protobuf:"varint,8,opt,name=entries_sent,json=entriesSent,proto3" json:"entries_sent,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *PeerInfo) Reset() {
+	*x = PeerInfo{}
+	mi := &file_arc_node_v1_node_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PeerInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PeerInfo) ProtoMessage() {}
+
+func (x *PeerInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_arc_node_v1_node_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PeerInfo.ProtoReflect.Descriptor instead.
+func (*PeerInfo) Descriptor() ([]byte, []int) {
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *PeerInfo) GetAddress() string {
+	if x != nil {
+		return x.Address
+	}
+	return ""
+}
+
+func (x *PeerInfo) GetLabels() map[string]string {
+	if x != nil {
+		return x.Labels
+	}
+	return nil
+}
+
+func (x *PeerInfo) GetBytesReceived() int64 {
+	if x != nil {
+		return x.BytesReceived
+	}
+	return 0
+}
+
+func (x *PeerInfo) GetEntriesReplicated() int64 {
+	if x != nil {
+		return x.EntriesReplicated
+	}
+	return 0
+}
+
+func (x *PeerInfo) GetStartedAt() int64 {
+	if x != nil {
+		return x.StartedAt
+	}
+	return 0
+}
+
+func (x *PeerInfo) GetDirection() PeerDirection {
+	if x != nil {
+		return x.Direction
+	}
+	return PeerDirection_PEER_DIRECTION_OUTBOUND
+}
+
+func (x *PeerInfo) GetPublicKey() []byte {
+	if x != nil {
+		return x.PublicKey
+	}
+	return nil
+}
+
+func (x *PeerInfo) GetEntriesSent() int64 {
+	if x != nil {
+		return x.EntriesSent
+	}
+	return 0
+}
+
+type ListPeersResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Peers         []*PeerInfo            `protobuf:"bytes,1,rep,name=peers,proto3" json:"peers,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListPeersResponse) Reset() {
+	*x = ListPeersResponse{}
+	mi := &file_arc_node_v1_node_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListPeersResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListPeersResponse) ProtoMessage() {}
+
+func (x *ListPeersResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_arc_node_v1_node_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListPeersResponse.ProtoReflect.Descriptor instead.
+func (*ListPeersResponse) Descriptor() ([]byte, []int) {
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *ListPeersResponse) GetPeers() []*PeerInfo {
+	if x != nil {
+		return x.Peers
+	}
+	return nil
+}
+
 type ResolveGetRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Prefix        string                 `protobuf:"bytes,1,opt,name=prefix,proto3" json:"prefix,omitempty"` // hex prefix (minimum 4 characters)
@@ -702,7 +1042,7 @@ type ResolveGetRequest struct {
 
 func (x *ResolveGetRequest) Reset() {
 	*x = ResolveGetRequest{}
-	mi := &file_arc_node_v1_node_proto_msgTypes[11]
+	mi := &file_arc_node_v1_node_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -714,7 +1054,7 @@ func (x *ResolveGetRequest) String() string {
 func (*ResolveGetRequest) ProtoMessage() {}
 
 func (x *ResolveGetRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_node_v1_node_proto_msgTypes[11]
+	mi := &file_arc_node_v1_node_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -727,7 +1067,7 @@ func (x *ResolveGetRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveGetRequest.ProtoReflect.Descriptor instead.
 func (*ResolveGetRequest) Descriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{11}
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *ResolveGetRequest) GetPrefix() string {
@@ -750,7 +1090,7 @@ type ResolveGetResponse struct {
 
 func (x *ResolveGetResponse) Reset() {
 	*x = ResolveGetResponse{}
-	mi := &file_arc_node_v1_node_proto_msgTypes[12]
+	mi := &file_arc_node_v1_node_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -762,7 +1102,7 @@ func (x *ResolveGetResponse) String() string {
 func (*ResolveGetResponse) ProtoMessage() {}
 
 func (x *ResolveGetResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_node_v1_node_proto_msgTypes[12]
+	mi := &file_arc_node_v1_node_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -775,7 +1115,7 @@ func (x *ResolveGetResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveGetResponse.ProtoReflect.Descriptor instead.
 func (*ResolveGetResponse) Descriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{12}
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *ResolveGetResponse) GetKind() ResolveGetResponse_Kind {
@@ -867,9 +1207,37 @@ const file_arc_node_v1_node_proto_rawDesc = "" +
 	"expression\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"J\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"d\n" +
 	"\x19SubscribeMessagesResponse\x12-\n" +
-	"\x05entry\x18\x01 \x01(\v2\x17.arc.node.v1.IndexEntryR\x05entry\"+\n" +
+	"\x05entry\x18\x01 \x01(\v2\x17.arc.node.v1.IndexEntryR\x05entry\x12\x18\n" +
+	"\awarning\x18\n" +
+	" \x01(\tR\awarning\"\xa2\x01\n" +
+	"\x0fFederateRequest\x12\x12\n" +
+	"\x04peer\x18\x01 \x01(\tR\x04peer\x12@\n" +
+	"\x06labels\x18\x02 \x03(\v2(.arc.node.v1.FederateRequest.LabelsEntryR\x06labels\x1a9\n" +
+	"\vLabelsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"D\n" +
+	"\x10FederateResponse\x12\x16\n" +
+	"\x06status\x18\x01 \x01(\tR\x06status\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"\x12\n" +
+	"\x10ListPeersRequest\"\x8b\x03\n" +
+	"\bPeerInfo\x12\x18\n" +
+	"\aaddress\x18\x01 \x01(\tR\aaddress\x129\n" +
+	"\x06labels\x18\x02 \x03(\v2!.arc.node.v1.PeerInfo.LabelsEntryR\x06labels\x12%\n" +
+	"\x0ebytes_received\x18\x03 \x01(\x03R\rbytesReceived\x12-\n" +
+	"\x12entries_replicated\x18\x04 \x01(\x03R\x11entriesReplicated\x12\x1d\n" +
+	"\n" +
+	"started_at\x18\x05 \x01(\x03R\tstartedAt\x128\n" +
+	"\tdirection\x18\x06 \x01(\x0e2\x1a.arc.node.v1.PeerDirectionR\tdirection\x12\x1d\n" +
+	"\n" +
+	"public_key\x18\a \x01(\fR\tpublicKey\x12!\n" +
+	"\fentries_sent\x18\b \x01(\x03R\ventriesSent\x1a9\n" +
+	"\vLabelsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"@\n" +
+	"\x11ListPeersResponse\x12+\n" +
+	"\x05peers\x18\x01 \x03(\v2\x15.arc.node.v1.PeerInfoR\x05peers\"+\n" +
 	"\x11ResolveGetRequest\x12\x16\n" +
 	"\x06prefix\x18\x01 \x01(\tR\x06prefix\"\xc7\x02\n" +
 	"\x12ResolveGetResponse\x128\n" +
@@ -886,7 +1254,10 @@ const file_arc_node_v1_node_proto_rawDesc = "" +
 	"\fKIND_MESSAGE\x10\x01*2\n" +
 	"\x05Order\x12\x13\n" +
 	"\x0fORDER_ASCENDING\x10\x00\x12\x14\n" +
-	"\x10ORDER_DESCENDING\x10\x012\x8a\x04\n" +
+	"\x10ORDER_DESCENDING\x10\x01*H\n" +
+	"\rPeerDirection\x12\x1b\n" +
+	"\x17PEER_DIRECTION_OUTBOUND\x10\x00\x12\x1a\n" +
+	"\x16PEER_DIRECTION_INBOUND\x10\x012\x9f\x05\n" +
 	"\vNodeService\x12M\n" +
 	"\n" +
 	"PutContent\x12\x1e.arc.node.v1.PutContentRequest\x1a\x1f.arc.node.v1.PutContentResponse\x12M\n" +
@@ -894,7 +1265,9 @@ const file_arc_node_v1_node_proto_rawDesc = "" +
 	"GetContent\x12\x1e.arc.node.v1.GetContentRequest\x1a\x1f.arc.node.v1.GetContentResponse\x12P\n" +
 	"\vSendMessage\x12\x1f.arc.node.v1.SendMessageRequest\x1a .arc.node.v1.SendMessageResponse\x12V\n" +
 	"\rQueryMessages\x12!.arc.node.v1.QueryMessagesRequest\x1a\".arc.node.v1.QueryMessagesResponse\x12d\n" +
-	"\x11SubscribeMessages\x12%.arc.node.v1.SubscribeMessagesRequest\x1a&.arc.node.v1.SubscribeMessagesResponse0\x01\x12M\n" +
+	"\x11SubscribeMessages\x12%.arc.node.v1.SubscribeMessagesRequest\x1a&.arc.node.v1.SubscribeMessagesResponse0\x01\x12G\n" +
+	"\bFederate\x12\x1c.arc.node.v1.FederateRequest\x1a\x1d.arc.node.v1.FederateResponse\x12J\n" +
+	"\tListPeers\x12\x1d.arc.node.v1.ListPeersRequest\x1a\x1e.arc.node.v1.ListPeersResponse\x12M\n" +
 	"\n" +
 	"ResolveGet\x12\x1e.arc.node.v1.ResolveGetRequest\x1a\x1f.arc.node.v1.ResolveGetResponseB5Z3github.com/gezibash/arc-node/api/arc/node/v1;nodev1b\x06proto3"
 
@@ -910,57 +1283,73 @@ func file_arc_node_v1_node_proto_rawDescGZIP() []byte {
 	return file_arc_node_v1_node_proto_rawDescData
 }
 
-var file_arc_node_v1_node_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_arc_node_v1_node_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
+var file_arc_node_v1_node_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
+var file_arc_node_v1_node_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
 var file_arc_node_v1_node_proto_goTypes = []any{
 	(Order)(0),                        // 0: arc.node.v1.Order
-	(ResolveGetResponse_Kind)(0),      // 1: arc.node.v1.ResolveGetResponse.Kind
-	(*PutContentRequest)(nil),         // 2: arc.node.v1.PutContentRequest
-	(*PutContentResponse)(nil),        // 3: arc.node.v1.PutContentResponse
-	(*GetContentRequest)(nil),         // 4: arc.node.v1.GetContentRequest
-	(*GetContentResponse)(nil),        // 5: arc.node.v1.GetContentResponse
-	(*IndexEntry)(nil),                // 6: arc.node.v1.IndexEntry
-	(*SendMessageRequest)(nil),        // 7: arc.node.v1.SendMessageRequest
-	(*SendMessageResponse)(nil),       // 8: arc.node.v1.SendMessageResponse
-	(*QueryMessagesRequest)(nil),      // 9: arc.node.v1.QueryMessagesRequest
-	(*QueryMessagesResponse)(nil),     // 10: arc.node.v1.QueryMessagesResponse
-	(*SubscribeMessagesRequest)(nil),  // 11: arc.node.v1.SubscribeMessagesRequest
-	(*SubscribeMessagesResponse)(nil), // 12: arc.node.v1.SubscribeMessagesResponse
-	(*ResolveGetRequest)(nil),         // 13: arc.node.v1.ResolveGetRequest
-	(*ResolveGetResponse)(nil),        // 14: arc.node.v1.ResolveGetResponse
-	nil,                               // 15: arc.node.v1.IndexEntry.LabelsEntry
-	nil,                               // 16: arc.node.v1.SendMessageRequest.LabelsEntry
-	nil,                               // 17: arc.node.v1.QueryMessagesRequest.LabelsEntry
-	nil,                               // 18: arc.node.v1.SubscribeMessagesRequest.LabelsEntry
-	nil,                               // 19: arc.node.v1.ResolveGetResponse.LabelsEntry
+	(PeerDirection)(0),                // 1: arc.node.v1.PeerDirection
+	(ResolveGetResponse_Kind)(0),      // 2: arc.node.v1.ResolveGetResponse.Kind
+	(*PutContentRequest)(nil),         // 3: arc.node.v1.PutContentRequest
+	(*PutContentResponse)(nil),        // 4: arc.node.v1.PutContentResponse
+	(*GetContentRequest)(nil),         // 5: arc.node.v1.GetContentRequest
+	(*GetContentResponse)(nil),        // 6: arc.node.v1.GetContentResponse
+	(*IndexEntry)(nil),                // 7: arc.node.v1.IndexEntry
+	(*SendMessageRequest)(nil),        // 8: arc.node.v1.SendMessageRequest
+	(*SendMessageResponse)(nil),       // 9: arc.node.v1.SendMessageResponse
+	(*QueryMessagesRequest)(nil),      // 10: arc.node.v1.QueryMessagesRequest
+	(*QueryMessagesResponse)(nil),     // 11: arc.node.v1.QueryMessagesResponse
+	(*SubscribeMessagesRequest)(nil),  // 12: arc.node.v1.SubscribeMessagesRequest
+	(*SubscribeMessagesResponse)(nil), // 13: arc.node.v1.SubscribeMessagesResponse
+	(*FederateRequest)(nil),           // 14: arc.node.v1.FederateRequest
+	(*FederateResponse)(nil),          // 15: arc.node.v1.FederateResponse
+	(*ListPeersRequest)(nil),          // 16: arc.node.v1.ListPeersRequest
+	(*PeerInfo)(nil),                  // 17: arc.node.v1.PeerInfo
+	(*ListPeersResponse)(nil),         // 18: arc.node.v1.ListPeersResponse
+	(*ResolveGetRequest)(nil),         // 19: arc.node.v1.ResolveGetRequest
+	(*ResolveGetResponse)(nil),        // 20: arc.node.v1.ResolveGetResponse
+	nil,                               // 21: arc.node.v1.IndexEntry.LabelsEntry
+	nil,                               // 22: arc.node.v1.SendMessageRequest.LabelsEntry
+	nil,                               // 23: arc.node.v1.QueryMessagesRequest.LabelsEntry
+	nil,                               // 24: arc.node.v1.SubscribeMessagesRequest.LabelsEntry
+	nil,                               // 25: arc.node.v1.FederateRequest.LabelsEntry
+	nil,                               // 26: arc.node.v1.PeerInfo.LabelsEntry
+	nil,                               // 27: arc.node.v1.ResolveGetResponse.LabelsEntry
 }
 var file_arc_node_v1_node_proto_depIdxs = []int32{
-	15, // 0: arc.node.v1.IndexEntry.labels:type_name -> arc.node.v1.IndexEntry.LabelsEntry
-	16, // 1: arc.node.v1.SendMessageRequest.labels:type_name -> arc.node.v1.SendMessageRequest.LabelsEntry
-	17, // 2: arc.node.v1.QueryMessagesRequest.labels:type_name -> arc.node.v1.QueryMessagesRequest.LabelsEntry
+	21, // 0: arc.node.v1.IndexEntry.labels:type_name -> arc.node.v1.IndexEntry.LabelsEntry
+	22, // 1: arc.node.v1.SendMessageRequest.labels:type_name -> arc.node.v1.SendMessageRequest.LabelsEntry
+	23, // 2: arc.node.v1.QueryMessagesRequest.labels:type_name -> arc.node.v1.QueryMessagesRequest.LabelsEntry
 	0,  // 3: arc.node.v1.QueryMessagesRequest.order:type_name -> arc.node.v1.Order
-	6,  // 4: arc.node.v1.QueryMessagesResponse.entries:type_name -> arc.node.v1.IndexEntry
-	18, // 5: arc.node.v1.SubscribeMessagesRequest.labels:type_name -> arc.node.v1.SubscribeMessagesRequest.LabelsEntry
-	6,  // 6: arc.node.v1.SubscribeMessagesResponse.entry:type_name -> arc.node.v1.IndexEntry
-	1,  // 7: arc.node.v1.ResolveGetResponse.kind:type_name -> arc.node.v1.ResolveGetResponse.Kind
-	19, // 8: arc.node.v1.ResolveGetResponse.labels:type_name -> arc.node.v1.ResolveGetResponse.LabelsEntry
-	2,  // 9: arc.node.v1.NodeService.PutContent:input_type -> arc.node.v1.PutContentRequest
-	4,  // 10: arc.node.v1.NodeService.GetContent:input_type -> arc.node.v1.GetContentRequest
-	7,  // 11: arc.node.v1.NodeService.SendMessage:input_type -> arc.node.v1.SendMessageRequest
-	9,  // 12: arc.node.v1.NodeService.QueryMessages:input_type -> arc.node.v1.QueryMessagesRequest
-	11, // 13: arc.node.v1.NodeService.SubscribeMessages:input_type -> arc.node.v1.SubscribeMessagesRequest
-	13, // 14: arc.node.v1.NodeService.ResolveGet:input_type -> arc.node.v1.ResolveGetRequest
-	3,  // 15: arc.node.v1.NodeService.PutContent:output_type -> arc.node.v1.PutContentResponse
-	5,  // 16: arc.node.v1.NodeService.GetContent:output_type -> arc.node.v1.GetContentResponse
-	8,  // 17: arc.node.v1.NodeService.SendMessage:output_type -> arc.node.v1.SendMessageResponse
-	10, // 18: arc.node.v1.NodeService.QueryMessages:output_type -> arc.node.v1.QueryMessagesResponse
-	12, // 19: arc.node.v1.NodeService.SubscribeMessages:output_type -> arc.node.v1.SubscribeMessagesResponse
-	14, // 20: arc.node.v1.NodeService.ResolveGet:output_type -> arc.node.v1.ResolveGetResponse
-	15, // [15:21] is the sub-list for method output_type
-	9,  // [9:15] is the sub-list for method input_type
-	9,  // [9:9] is the sub-list for extension type_name
-	9,  // [9:9] is the sub-list for extension extendee
-	0,  // [0:9] is the sub-list for field type_name
+	7,  // 4: arc.node.v1.QueryMessagesResponse.entries:type_name -> arc.node.v1.IndexEntry
+	24, // 5: arc.node.v1.SubscribeMessagesRequest.labels:type_name -> arc.node.v1.SubscribeMessagesRequest.LabelsEntry
+	7,  // 6: arc.node.v1.SubscribeMessagesResponse.entry:type_name -> arc.node.v1.IndexEntry
+	25, // 7: arc.node.v1.FederateRequest.labels:type_name -> arc.node.v1.FederateRequest.LabelsEntry
+	26, // 8: arc.node.v1.PeerInfo.labels:type_name -> arc.node.v1.PeerInfo.LabelsEntry
+	1,  // 9: arc.node.v1.PeerInfo.direction:type_name -> arc.node.v1.PeerDirection
+	17, // 10: arc.node.v1.ListPeersResponse.peers:type_name -> arc.node.v1.PeerInfo
+	2,  // 11: arc.node.v1.ResolveGetResponse.kind:type_name -> arc.node.v1.ResolveGetResponse.Kind
+	27, // 12: arc.node.v1.ResolveGetResponse.labels:type_name -> arc.node.v1.ResolveGetResponse.LabelsEntry
+	3,  // 13: arc.node.v1.NodeService.PutContent:input_type -> arc.node.v1.PutContentRequest
+	5,  // 14: arc.node.v1.NodeService.GetContent:input_type -> arc.node.v1.GetContentRequest
+	8,  // 15: arc.node.v1.NodeService.SendMessage:input_type -> arc.node.v1.SendMessageRequest
+	10, // 16: arc.node.v1.NodeService.QueryMessages:input_type -> arc.node.v1.QueryMessagesRequest
+	12, // 17: arc.node.v1.NodeService.SubscribeMessages:input_type -> arc.node.v1.SubscribeMessagesRequest
+	14, // 18: arc.node.v1.NodeService.Federate:input_type -> arc.node.v1.FederateRequest
+	16, // 19: arc.node.v1.NodeService.ListPeers:input_type -> arc.node.v1.ListPeersRequest
+	19, // 20: arc.node.v1.NodeService.ResolveGet:input_type -> arc.node.v1.ResolveGetRequest
+	4,  // 21: arc.node.v1.NodeService.PutContent:output_type -> arc.node.v1.PutContentResponse
+	6,  // 22: arc.node.v1.NodeService.GetContent:output_type -> arc.node.v1.GetContentResponse
+	9,  // 23: arc.node.v1.NodeService.SendMessage:output_type -> arc.node.v1.SendMessageResponse
+	11, // 24: arc.node.v1.NodeService.QueryMessages:output_type -> arc.node.v1.QueryMessagesResponse
+	13, // 25: arc.node.v1.NodeService.SubscribeMessages:output_type -> arc.node.v1.SubscribeMessagesResponse
+	15, // 26: arc.node.v1.NodeService.Federate:output_type -> arc.node.v1.FederateResponse
+	18, // 27: arc.node.v1.NodeService.ListPeers:output_type -> arc.node.v1.ListPeersResponse
+	20, // 28: arc.node.v1.NodeService.ResolveGet:output_type -> arc.node.v1.ResolveGetResponse
+	21, // [21:29] is the sub-list for method output_type
+	13, // [13:21] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_arc_node_v1_node_proto_init() }
@@ -973,8 +1362,8 @@ func file_arc_node_v1_node_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_arc_node_v1_node_proto_rawDesc), len(file_arc_node_v1_node_proto_rawDesc)),
-			NumEnums:      2,
-			NumMessages:   18,
+			NumEnums:      3,
+			NumMessages:   25,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

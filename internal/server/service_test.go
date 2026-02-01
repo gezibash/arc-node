@@ -68,7 +68,7 @@ func newTestServer(t *testing.T) (*Server, *identity.Keypair, string) {
 	}
 
 	go srv.Serve()
-	t.Cleanup(srv.Stop)
+	t.Cleanup(func() { srv.Stop(context.Background()) })
 
 	return srv, kp, srv.Addr()
 }
@@ -91,6 +91,18 @@ func newTestClient(t *testing.T, addr string, nodeKP *identity.Keypair) (*client
 	return c, callerKP
 }
 
+func newTestAdminClient(t *testing.T, addr string, nodeKP *identity.Keypair) *client.Client {
+	t.Helper()
+	c, err := client.Dial(addr,
+		client.WithIdentity(nodeKP),
+		client.WithNodeKey(nodeKP.PublicKey()),
+	)
+	if err != nil {
+		t.Fatalf("dial admin: %v", err)
+	}
+	t.Cleanup(func() { c.Close() })
+	return c
+}
 func makeMessage(t *testing.T, kp *identity.Keypair, contentType string) message.Message {
 	t.Helper()
 	pub := kp.PublicKey()
@@ -554,5 +566,204 @@ func TestSubscribeMessagesCancelContext(t *testing.T) {
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("entries channel did not close after context cancel")
+	}
+}
+
+// --- Federate ---
+
+func TestFederateRequiresAdmin(t *testing.T) {
+	_, kp, addr := newTestServer(t)
+	c, _ := newTestClient(t, addr, kp)
+	ctx := context.Background()
+
+	_, err := c.Federate(ctx, "localhost:0", nil)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if s, ok := status.FromError(err); !ok || s.Code() != codes.PermissionDenied {
+		t.Errorf("code = %v, want PermissionDenied", err)
+	}
+}
+
+func TestListPeersReturnsActiveFederation(t *testing.T) {
+	_, peerKP, peerAddr := newTestServer(t)
+	_ = peerKP
+	_, localKP, localAddr := newTestServer(t)
+
+	admin := newTestAdminClient(t, localAddr, localKP)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// No peers initially.
+	peers, err := admin.ListPeers(ctx)
+	if err != nil {
+		t.Fatalf("ListPeers: %v", err)
+	}
+	if len(peers) != 0 {
+		t.Fatalf("expected 0 peers, got %d", len(peers))
+	}
+
+	// Start federation.
+	_, err = admin.Federate(ctx, peerAddr, map[string]string{"env": "test"})
+	if err != nil {
+		t.Fatalf("Federate: %v", err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	peers, err = admin.ListPeers(ctx)
+	if err != nil {
+		t.Fatalf("ListPeers: %v", err)
+	}
+	if len(peers) != 1 {
+		t.Fatalf("expected 1 peer, got %d", len(peers))
+	}
+	if peers[0].Address != peerAddr {
+		t.Errorf("peer address = %q, want %q", peers[0].Address, peerAddr)
+	}
+	if peers[0].Labels["env"] != "test" {
+		t.Errorf("peer label env = %q, want %q", peers[0].Labels["env"], "test")
+	}
+	if peers[0].StartedAt == 0 {
+		t.Error("peer StartedAt should be non-zero")
+	}
+	if peers[0].Direction != client.PeerDirectionOutbound {
+		t.Errorf("peer direction = %d, want outbound", peers[0].Direction)
+	}
+}
+
+func TestListPeersShowsInboundSubscribers(t *testing.T) {
+	_, kp, addr := newTestServer(t)
+	admin := newTestAdminClient(t, addr, kp)
+	c, _ := newTestClient(t, addr, kp)
+	ctx := context.Background()
+
+	// No inbound peers initially.
+	peers, err := admin.ListPeers(ctx)
+	if err != nil {
+		t.Fatalf("ListPeers: %v", err)
+	}
+	if len(peers) != 0 {
+		t.Fatalf("expected 0 peers, got %d", len(peers))
+	}
+
+	// Open a subscription.
+	subCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	_, _, err = c.SubscribeMessages(subCtx, "true", map[string]string{"env": "test"})
+	if err != nil {
+		t.Fatalf("SubscribeMessages: %v", err)
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	peers, err = admin.ListPeers(ctx)
+	if err != nil {
+		t.Fatalf("ListPeers: %v", err)
+	}
+
+	var inbound []client.PeerInfo
+	for _, p := range peers {
+		if p.Direction == client.PeerDirectionInbound {
+			inbound = append(inbound, p)
+		}
+	}
+	if len(inbound) != 1 {
+		t.Fatalf("expected 1 inbound peer, got %d", len(inbound))
+	}
+	if inbound[0].Labels["env"] != "test" {
+		t.Errorf("inbound label env = %q, want %q", inbound[0].Labels["env"], "test")
+	}
+
+	// Cancel subscription and verify it disappears.
+	cancel()
+	time.Sleep(100 * time.Millisecond)
+
+	peers, err = admin.ListPeers(ctx)
+	if err != nil {
+		t.Fatalf("ListPeers: %v", err)
+	}
+	inbound = nil
+	for _, p := range peers {
+		if p.Direction == client.PeerDirectionInbound {
+			inbound = append(inbound, p)
+		}
+	}
+	if len(inbound) != 0 {
+		t.Fatalf("expected 0 inbound peers after cancel, got %d", len(inbound))
+	}
+}
+
+func TestFederateReplicatesMessages(t *testing.T) {
+	t.Log("starting peer server")
+	_, peerKP, peerAddr := newTestServer(t)
+	t.Log("starting local server")
+	_, localKP, localAddr := newTestServer(t)
+
+	t.Log("dialing admin client")
+	admin := newTestAdminClient(t, localAddr, localKP)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	t.Log("sanity query before federation")
+	if _, err := admin.QueryMessages(ctx, &client.QueryOptions{Expression: "false", Limit: 1}); err != nil {
+		t.Fatalf("QueryMessages (pre): %v", err)
+	}
+
+	t.Log("starting federation")
+	result, err := admin.Federate(ctx, peerAddr, nil)
+	if err != nil {
+		t.Fatalf("Federate: %v", err)
+	}
+	if result == nil || result.Status == "" {
+		t.Fatalf("Federate: missing status")
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	t.Log("dialing peer client")
+	peer, callerKP := newTestClient(t, peerAddr, peerKP)
+
+	t.Log("putting content")
+	data := []byte("hello federation")
+	contentRef, err := peer.PutContent(ctx, data)
+	if err != nil {
+		t.Fatalf("PutContent: %v", err)
+	}
+
+	msg := message.New(callerKP.PublicKey(), callerKP.PublicKey(), contentRef, "text/plain")
+	if err := message.Sign(&msg, callerKP); err != nil {
+		t.Fatalf("sign message: %v", err)
+	}
+	t.Log("sending message")
+	if _, err := peer.SendMessage(ctx, msg, map[string]string{"env": "prod"}); err != nil {
+		t.Fatalf("SendMessage: %v", err)
+	}
+
+	deadline := time.After(3 * time.Second)
+	for {
+		result, err := admin.QueryMessages(ctx, &client.QueryOptions{
+			Expression: `labels["env"] == "prod"`,
+		})
+		if err != nil {
+			t.Fatalf("QueryMessages: %v", err)
+		}
+		if len(result.Entries) > 0 {
+			break
+		}
+
+		select {
+		case <-deadline:
+			t.Fatal("federated message did not arrive in time")
+		default:
+			time.Sleep(50 * time.Millisecond)
+		}
+	}
+
+	got, err := admin.GetContent(ctx, contentRef)
+	if err != nil {
+		t.Fatalf("GetContent: %v", err)
+	}
+	if !bytes.Equal(got, data) {
+		t.Errorf("content = %q, want %q", got, data)
 	}
 }

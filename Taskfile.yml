@@ -11,6 +11,11 @@ tasks:
     cmds:
       - git ls-files "*.go" | xargs gofmt -w
   build:
+    desc: Build the arc binary and Docker image
+    deps:
+      - build:bin
+      - build:docker
+  build:bin:
     desc: Build the arc binary
     vars:
       VERSION:
@@ -27,3 +32,10 @@ tasks:
       - go.sum
     generates:
       - bin/arc
+  build:docker:
+    desc: Build the Docker image
+    vars:
+      VERSION:
+        sh: git describe --tags --always --dirty 2>/dev/null || echo dev
+    cmds:
+      - docker build -t gezibash/arc:{{.VERSION}} -t gezibash/arc:latest .

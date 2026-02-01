@@ -1,6 +1,8 @@
 package server
 
 import (
+	"context"
+	"log/slog"
 	"net"
 
 	nodev1 "github.com/gezibash/arc-node/api/arc/node/v1"
@@ -21,6 +23,7 @@ type Server struct {
 	listener   net.Listener
 	keypair    *identity.Keypair
 	health     *health.Server
+	federator  *federationManager
 }
 
 func New(addr string, obs *observability.Observability, enableReflection bool, kp *identity.Keypair, blobs *blobstore.BlobStore, index *indexstore.IndexStore, opts ...grpc.ServerOption) (*Server, error) {
@@ -30,6 +33,7 @@ func New(addr string, obs *observability.Observability, enableReflection bool, k
 	}
 
 	mw := &middleware.Chain{}
+	mw.Pre = append(mw.Pre, adminOnlyHook(kp.PublicKey(), adminMethods))
 
 	meta := map[string]string{}
 	if obs != nil {
@@ -60,10 +64,20 @@ func New(addr string, obs *observability.Observability, enableReflection bool, k
 	grpc_health_v1.RegisterHealthServer(grpcServer, hs)
 	hs.SetServingStatus("", grpc_health_v1.HealthCheckResponse_NOT_SERVING)
 
+	federator := newFederationManager(blobs, index, kp)
+	if obs != nil && obs.Shutdown != nil {
+		obs.Shutdown.Register("federation", func(ctx context.Context) error {
+			federator.StopAll()
+			return nil
+		})
+	}
+
 	nodev1.RegisterNodeServiceServer(grpcServer, &nodeService{
-		blobs:   blobs,
-		index:   index,
-		metrics: obs.Metrics,
+		blobs:       blobs,
+		index:       index,
+		metrics:     obs.Metrics,
+		federator:   federator,
+		subscribers: newSubscriberTracker(),
 	})
 
 	if enableReflection {
@@ -75,6 +89,7 @@ func New(addr string, obs *observability.Observability, enableReflection bool, k
 		listener:   lis,
 		keypair:    kp,
 		health:     hs,
+		federator:  federator,
 	}, nil
 }
 
@@ -92,11 +107,27 @@ func (s *Server) Addr() string {
 	return s.listener.Addr().String()
 }
 
-func (s *Server) Stop() {
+func (s *Server) Stop(ctx context.Context) {
 	if s.health != nil {
 		s.health.SetServingStatus("", grpc_health_v1.HealthCheckResponse_NOT_SERVING)
 	}
-	s.grpcServer.GracefulStop()
+	if s.federator != nil {
+		s.federator.StopAll()
+	}
+
+	done := make(chan struct{})
+	go func() {
+		s.grpcServer.GracefulStop()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-ctx.Done():
+		slog.Warn("graceful stop timed out, forcing")
+		s.grpcServer.Stop()
+		<-done
+	}
 }
 
 func (s *Server) GRPCServer() *grpc.Server {

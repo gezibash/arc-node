@@ -58,6 +58,8 @@ func Entrypoint(v *viper.Viper) *cobra.Command {
 		newPublishCmd(n),
 		newQueryCmd(n),
 		newWatchCmd(n),
+		newFederateCmd(n),
+		newPeersCmd(n),
 	)
 	return cmd
 }

@@ -1,5 +1,5 @@
 bin/
-arc
+/arc
 .claude/skills
 .task/
 .envrc

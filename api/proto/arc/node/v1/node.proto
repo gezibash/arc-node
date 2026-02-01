@@ -13,6 +13,8 @@ service NodeService {
   rpc SendMessage(SendMessageRequest) returns (SendMessageResponse);
   rpc QueryMessages(QueryMessagesRequest) returns (QueryMessagesResponse);
   rpc SubscribeMessages(SubscribeMessagesRequest) returns (stream SubscribeMessagesResponse);
+  rpc Federate(FederateRequest) returns (FederateResponse);
+  rpc ListPeers(ListPeersRequest) returns (ListPeersResponse);
 
   // Unified get: resolve prefix against blobs and messages
   rpc ResolveGet(ResolveGetRequest) returns (ResolveGetResponse);
@@ -86,6 +88,42 @@ message SubscribeMessagesResponse {
   // Server-side warning (e.g., "lagging", "disconnecting").
   // Empty when there is no warning.
   string warning = 10;
+}
+
+// Federation
+
+message FederateRequest {
+  string peer = 1;
+  map<string, string> labels = 2;
+}
+
+message FederateResponse {
+  string status = 1;
+  string message = 2;
+}
+
+// Peers
+
+message ListPeersRequest {}
+
+enum PeerDirection {
+  PEER_DIRECTION_OUTBOUND = 0; // we subscribe to them
+  PEER_DIRECTION_INBOUND = 1;  // they subscribe to us
+}
+
+message PeerInfo {
+  string address = 1;
+  map<string, string> labels = 2;
+  int64 bytes_received = 3;
+  int64 entries_replicated = 4;
+  int64 started_at = 5;
+  PeerDirection direction = 6;
+  bytes public_key = 7;
+  int64 entries_sent = 8;
+}
+
+message ListPeersResponse {
+  repeated PeerInfo peers = 1;
 }
 
 // Unified get

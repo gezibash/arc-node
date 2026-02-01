@@ -19,9 +19,11 @@ import (
 
 type nodeService struct {
 	nodev1.UnimplementedNodeServiceServer
-	blobs   *blobstore.BlobStore
-	index   *indexstore.IndexStore
-	metrics *observability.Metrics
+	blobs       *blobstore.BlobStore
+	index       *indexstore.IndexStore
+	metrics     *observability.Metrics
+	federator   *federationManager
+	subscribers *subscriberTracker
 }
 
 func (s *nodeService) PutContent(ctx context.Context, req *nodev1.PutContentRequest) (*nodev1.PutContentResponse, error) {
@@ -147,6 +149,17 @@ func (s *nodeService) SubscribeMessages(req *nodev1.SubscribeMessagesRequest, st
 	}
 	defer sub.Cancel()
 
+	// Track this subscriber.
+	var tracker *subscriber
+	if s.subscribers != nil {
+		var pubKey [32]byte
+		if caller, ok := envelope.GetCaller(stream.Context()); ok {
+			pubKey = caller.PublicKey
+		}
+		tracker = s.subscribers.Add(pubKey, req.Labels, req.Expression)
+		defer s.subscribers.Remove(tracker)
+	}
+
 	for {
 		select {
 		case <-stream.Context().Done():
@@ -168,8 +181,69 @@ func (s *nodeService) SubscribeMessages(req *nodev1.SubscribeMessagesRequest, st
 			if err := stream.Send(resp); err != nil {
 				return err
 			}
+			if tracker != nil {
+				tracker.entriesSent.Add(1)
+			}
 		}
 	}
+}
+
+func (s *nodeService) Federate(ctx context.Context, req *nodev1.FederateRequest) (*nodev1.FederateResponse, error) {
+	if req.Peer == "" {
+		return nil, status.Error(codes.InvalidArgument, "peer required")
+	}
+	if s.federator == nil {
+		return nil, status.Error(codes.FailedPrecondition, "federation unavailable")
+	}
+
+	peer := normalizePeerAddr(req.Peer)
+	started, err := s.federator.Start(peer, req.Labels)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "start federation: %v", err)
+	}
+
+	if started {
+		return &nodev1.FederateResponse{
+			Status:  "ok",
+			Message: fmt.Sprintf("federating with %s", peer),
+		}, nil
+	}
+
+	return &nodev1.FederateResponse{
+		Status:  "already_federating",
+		Message: fmt.Sprintf("already federating with %s", peer),
+	}, nil
+}
+
+func (s *nodeService) ListPeers(ctx context.Context, req *nodev1.ListPeersRequest) (*nodev1.ListPeersResponse, error) {
+	var peers []*nodev1.PeerInfo
+
+	// Outbound: peers we are federating from.
+	for _, info := range s.federator.List() {
+		peers = append(peers, &nodev1.PeerInfo{
+			Address:           info.Address,
+			Labels:            info.Labels,
+			BytesReceived:     info.BytesReceived,
+			EntriesReplicated: info.EntriesReplicated,
+			StartedAt:         info.StartedAt.UnixMilli(),
+			Direction:         nodev1.PeerDirection_PEER_DIRECTION_OUTBOUND,
+		})
+	}
+
+	// Inbound: subscribers pulling from us.
+	if s.subscribers != nil {
+		for _, info := range s.subscribers.List() {
+			peers = append(peers, &nodev1.PeerInfo{
+				PublicKey:   info.PublicKey[:],
+				Labels:      info.Labels,
+				EntriesSent: info.EntriesSent,
+				StartedAt:   info.StartedAt.UnixMilli(),
+				Direction:   nodev1.PeerDirection_PEER_DIRECTION_INBOUND,
+			})
+		}
+	}
+
+	return &nodev1.ListPeersResponse{Peers: peers}, nil
 }
 
 func (s *nodeService) ResolveGet(ctx context.Context, req *nodev1.ResolveGetRequest) (*nodev1.ResolveGetResponse, error) {
