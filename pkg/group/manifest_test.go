@@ -189,3 +189,48 @@ func TestUnmarshalInvalid(t *testing.T) {
 		t.Error("expected error for bad version")
 	}
 }
+
+func TestUnmarshalManifestTruncated(t *testing.T) {
+	// Version byte only, missing all other fields.
+	_, err := UnmarshalManifest([]byte{1})
+	if err == nil {
+		t.Error("expected error for truncated data (version only)")
+	}
+
+	// Version + partial group ID.
+	_, err = UnmarshalManifest(append([]byte{1}, make([]byte, 10)...))
+	if err == nil {
+		t.Error("expected error for truncated group ID")
+	}
+}
+
+func TestVerifyManifestBadContentHash(t *testing.T) {
+	groupKP, _ := identity.Generate()
+	admin, _ := identity.Generate()
+
+	m := &Manifest{
+		ID:   groupKP.PublicKey(),
+		Name: "test",
+		Members: []Member{
+			{PublicKey: admin.PublicKey(), Role: RoleAdmin},
+		},
+	}
+
+	msg, _, err := SignManifest(m, groupKP, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Pass tampered data.
+	_, err = VerifyManifest(msg, []byte("tampered"))
+	if err == nil {
+		t.Error("expected error for content hash mismatch")
+	}
+}
+
+func TestMarshalNilManifest(t *testing.T) {
+	_, err := MarshalManifest(nil)
+	if err == nil {
+		t.Error("expected error for nil manifest")
+	}
+}

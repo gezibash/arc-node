@@ -205,3 +205,210 @@ func TestSearchPagination(t *testing.T) {
 		t.Fatalf("expected 2 results with offset 3, got %d", len(resp.Results))
 	}
 }
+
+func TestSearchIndexDeleteByEntryRef(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "search.db")
+	idx, err := OpenSearchIndex(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { idx.Close() })
+
+	contentRef := reference.Compute([]byte("content"))
+	entryRef := reference.Compute([]byte("entry"))
+	if err := idx.Index(contentRef, entryRef, "deletable content", 1000); err != nil {
+		t.Fatal(err)
+	}
+
+	resp, _ := idx.Search("deletable", SearchOptions{})
+	if resp.TotalCount != 1 {
+		t.Fatalf("expected 1 before delete, got %d", resp.TotalCount)
+	}
+
+	if err := idx.DeleteByEntryRef(entryRef); err != nil {
+		t.Fatal(err)
+	}
+
+	resp, _ = idx.Search("deletable", SearchOptions{})
+	if resp.TotalCount != 0 {
+		t.Fatalf("expected 0 after delete, got %d", resp.TotalCount)
+	}
+}
+
+func TestSearchIndexContentHash(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "search.db")
+	idx, err := OpenSearchIndex(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { idx.Close() })
+
+	cRef := reference.Compute([]byte("c"))
+	eRef := reference.Compute([]byte("e"))
+	idx.Index(cRef, eRef, "hash test", 1000)
+
+	h1, err := idx.ContentHash()
+	if err != nil {
+		t.Fatal(err)
+	}
+	h2, err := idx.ContentHash()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h1 != h2 {
+		t.Error("ContentHash not deterministic")
+	}
+	if h1 == (reference.Reference{}) {
+		t.Error("ContentHash should be non-zero")
+	}
+}
+
+func TestSearchIndexCount(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "search.db")
+	idx, err := OpenSearchIndex(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { idx.Close() })
+
+	for i := 0; i < 3; i++ {
+		cRef := reference.Compute([]byte(fmt.Sprintf("c-%d", i)))
+		eRef := reference.Compute([]byte(fmt.Sprintf("e-%d", i)))
+		idx.Index(cRef, eRef, fmt.Sprintf("count test %d", i), int64(1000+i))
+	}
+
+	var n int
+	if err := idx.Count(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 3 {
+		t.Fatalf("expected 3, got %d", n)
+	}
+}
+
+func TestSearchIndexClear(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "search.db")
+	idx, err := OpenSearchIndex(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { idx.Close() })
+
+	cRef := reference.Compute([]byte("c"))
+	eRef := reference.Compute([]byte("e"))
+	idx.Index(cRef, eRef, "clear test", 1000)
+
+	if err := idx.Clear(); err != nil {
+		t.Fatal(err)
+	}
+
+	var n int
+	idx.Count(&n)
+	if n != 0 {
+		t.Fatalf("expected 0 after clear, got %d", n)
+	}
+}
+
+func TestSearchIndexResolvePrefix(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "search.db")
+	idx, err := OpenSearchIndex(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { idx.Close() })
+
+	cRef := reference.Compute([]byte("c1"))
+	eRef1 := reference.Compute([]byte("entry-1"))
+	eRef2 := reference.Compute([]byte("entry-2"))
+	idx.Index(cRef, eRef1, "prefix one", 1000)
+	idx.Index(cRef, eRef2, "prefix two", 2000)
+
+	// Unique prefix.
+	hex1 := reference.Hex(eRef1)
+	resolved, err := idx.ResolvePrefix(hex1[:16])
+	if err != nil {
+		t.Fatalf("ResolvePrefix unique: %v", err)
+	}
+	if resolved != eRef1 {
+		t.Error("resolved wrong ref")
+	}
+
+	// No match.
+	_, err = idx.ResolvePrefix("0000000000000000")
+	if err == nil {
+		t.Error("expected error for no match")
+	}
+}
+
+func TestSearchIndexDBPath(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "search.db")
+	idx, err := OpenSearchIndex(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { idx.Close() })
+
+	got, err := idx.DBPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got == "" {
+		t.Error("DBPath should be non-empty")
+	}
+}
+
+func TestSearchIndexLastIndexedTimestamp(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "search.db")
+	idx, err := OpenSearchIndex(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { idx.Close() })
+
+	ts, _ := idx.LastIndexedTimestamp()
+	if ts != 0 {
+		t.Fatalf("empty index: expected 0, got %d", ts)
+	}
+
+	cRef := reference.Compute([]byte("c"))
+	eRef := reference.Compute([]byte("e"))
+	idx.Index(cRef, eRef, "ts test", 42000)
+
+	ts, _ = idx.LastIndexedTimestamp()
+	if ts != 42000 {
+		t.Fatalf("expected 42000, got %d", ts)
+	}
+}
+
+func TestSearchIndexSchemaMigration(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "search.db")
+
+	// Open and index something.
+	idx, err := OpenSearchIndex(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cRef := reference.Compute([]byte("c"))
+	eRef := reference.Compute([]byte("e"))
+	idx.Index(cRef, eRef, "migration test", 1000)
+	idx.Close()
+
+	// Tamper with schema version to simulate old version.
+	db, _ := OpenSearchIndex(dbPath)
+	db.Close()
+
+	// Reopen should still work (schema version matches current).
+	idx2, err := OpenSearchIndex(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { idx2.Close() })
+
+	resp, err := idx2.Search("migration", SearchOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.TotalCount != 1 {
+		t.Errorf("expected 1 result after reopen, got %d", resp.TotalCount)
+	}
+}

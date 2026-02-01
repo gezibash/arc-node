@@ -434,3 +434,305 @@ func TestOwnerLabels(t *testing.T) {
 		t.Errorf("type = %q, want entry", m["type"])
 	}
 }
+
+func TestReadForEdit(t *testing.T) {
+	j := newTestJournal(t)
+	ctx := context.Background()
+
+	plaintext := []byte("editable entry content")
+	result, err := j.Write(ctx, plaintext, map[string]string{"mood": "calm"})
+	if err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+
+	// List to get the message ref hex.
+	list, err := j.List(ctx, ListOptions{Limit: 1})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(list.Entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(list.Entries))
+	}
+	msgRefHex := reference.Hex(list.Entries[0].Ref)
+
+	got, labels, err := j.ReadForEdit(ctx, msgRefHex)
+	if err != nil {
+		t.Fatalf("ReadForEdit: %v", err)
+	}
+	if string(got) != string(plaintext) {
+		t.Errorf("ReadForEdit content = %q, want %q", got, plaintext)
+	}
+	if labels["mood"] != "calm" {
+		t.Errorf("label mood = %q, want calm", labels["mood"])
+	}
+	_ = result
+}
+
+func TestEditWithSearchIndex(t *testing.T) {
+	j := newTestJournal(t)
+	ctx := context.Background()
+
+	dir := t.TempDir()
+	idx, err := OpenSearchIndex(dir + "/search.db")
+	if err != nil {
+		t.Fatalf("OpenSearchIndex: %v", err)
+	}
+	t.Cleanup(func() { idx.Close() })
+	j.SetSearchIndex(idx)
+
+	orig, err := j.Write(ctx, []byte("original searchable"), nil)
+	if err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+
+	// Verify original is searchable.
+	resp, err := j.Search(ctx, "original", SearchOptions{})
+	if err != nil {
+		t.Fatalf("Search original: %v", err)
+	}
+	if resp.TotalCount != 1 {
+		t.Fatalf("expected 1 search result, got %d", resp.TotalCount)
+	}
+
+	// Edit.
+	list, err := j.List(ctx, ListOptions{Limit: 1})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	_, err = j.Edit(ctx, orig.EntryRef, []byte("edited searchable"), list.Entries[0].Labels)
+	if err != nil {
+		t.Fatalf("Edit: %v", err)
+	}
+
+	// Old content gone from search.
+	resp, err = j.Search(ctx, "original", SearchOptions{})
+	if err != nil {
+		t.Fatalf("Search original after edit: %v", err)
+	}
+	if resp.TotalCount != 0 {
+		t.Errorf("expected 0 results for old content, got %d", resp.TotalCount)
+	}
+
+	// New content in search.
+	resp, err = j.Search(ctx, "edited", SearchOptions{})
+	if err != nil {
+		t.Fatalf("Search edited: %v", err)
+	}
+	if resp.TotalCount != 1 {
+		t.Errorf("expected 1 result for new content, got %d", resp.TotalCount)
+	}
+}
+
+func TestReindex(t *testing.T) {
+	j := newTestJournal(t)
+	ctx := context.Background()
+
+	dir := t.TempDir()
+	idx, err := OpenSearchIndex(dir + "/search.db")
+	if err != nil {
+		t.Fatalf("OpenSearchIndex: %v", err)
+	}
+	t.Cleanup(func() { idx.Close() })
+	j.SetSearchIndex(idx)
+
+	// Write 3 entries.
+	orig, err := j.Write(ctx, []byte("entry alpha"), nil)
+	if err != nil {
+		t.Fatalf("Write alpha: %v", err)
+	}
+	if _, err := j.Write(ctx, []byte("entry beta"), nil); err != nil {
+		t.Fatalf("Write beta: %v", err)
+	}
+	if _, err := j.Write(ctx, []byte("entry gamma"), nil); err != nil {
+		t.Fatalf("Write gamma: %v", err)
+	}
+
+	// Edit alpha → replaces it.
+	list, err := j.List(ctx, ListOptions{Limit: 10})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	var origLabels map[string]string
+	for _, e := range list.Entries {
+		if e.EntryRef == orig.EntryRef {
+			origLabels = e.Labels
+			break
+		}
+	}
+	if _, err := j.Edit(ctx, orig.EntryRef, []byte("entry alpha v2"), origLabels); err != nil {
+		t.Fatalf("Edit: %v", err)
+	}
+
+	// Clear and reindex.
+	if err := j.Reindex(ctx); err != nil {
+		t.Fatalf("Reindex: %v", err)
+	}
+
+	// Should find beta, gamma, alpha-v2 but not original alpha.
+	var count int
+	if err := idx.Count(&count); err != nil {
+		t.Fatalf("Count: %v", err)
+	}
+	if count != 3 {
+		t.Errorf("expected 3 indexed entries, got %d", count)
+	}
+
+	resp, err := j.Search(ctx, "alpha", SearchOptions{})
+	if err != nil {
+		t.Fatalf("Search alpha: %v", err)
+	}
+	if resp.TotalCount != 1 {
+		t.Errorf("expected 1 alpha result, got %d", resp.TotalCount)
+	}
+}
+
+func TestReindexNoSearchIndex(t *testing.T) {
+	j := newTestJournal(t)
+	ctx := context.Background()
+	err := j.Reindex(ctx)
+	if err == nil {
+		t.Error("expected error reindexing without search index")
+	}
+}
+
+func TestSearchNoIndex(t *testing.T) {
+	j := newTestJournal(t)
+	ctx := context.Background()
+	_, err := j.Search(ctx, "test", SearchOptions{})
+	if err == nil {
+		t.Error("expected error searching without search index")
+	}
+}
+
+func TestSearchStateLoadSave(t *testing.T) {
+	dir := t.TempDir()
+	s := LoadSearchState(dir)
+	s.LocalHash = "aaaa"
+	s.RemoteHash = "bbbb"
+	if err := s.Save(); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	s2 := LoadSearchState(dir)
+	if s2.LocalHash != "aaaa" {
+		t.Errorf("LocalHash = %q, want aaaa", s2.LocalHash)
+	}
+	if s2.RemoteHash != "bbbb" {
+		t.Errorf("RemoteHash = %q, want bbbb", s2.RemoteHash)
+	}
+}
+
+func TestSearchStateLoadMissing(t *testing.T) {
+	dir := t.TempDir()
+	s := LoadSearchState(dir)
+	if s.LocalHash != "" || s.RemoteHash != "" {
+		t.Error("missing state file should return zero state")
+	}
+}
+
+func TestSearchStateLocalRefRemoteRef(t *testing.T) {
+	s := &SearchState{
+		LocalHash:  "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+		RemoteHash: "invalid-hex",
+	}
+	lr := s.LocalRef()
+	if lr == (reference.Reference{}) {
+		t.Error("LocalRef should be non-zero for valid hex")
+	}
+	rr := s.RemoteRef()
+	if rr != (reference.Reference{}) {
+		t.Error("RemoteRef should be zero for invalid hex")
+	}
+}
+
+func TestPushAndPullSearchIndex(t *testing.T) {
+	j := newTestJournal(t)
+	ctx := context.Background()
+
+	dir := t.TempDir()
+	idx, err := OpenSearchIndex(dir + "/search.db")
+	if err != nil {
+		t.Fatalf("OpenSearchIndex: %v", err)
+	}
+	t.Cleanup(func() { idx.Close() })
+	j.SetSearchIndex(idx)
+
+	// Write entries to build search index.
+	if _, err := j.Write(ctx, []byte("push pull test alpha"), nil); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	if _, err := j.Write(ctx, []byte("push pull test beta"), nil); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+
+	// Push.
+	_, err = j.PushSearchIndex(ctx, idx)
+	if err != nil {
+		t.Fatalf("PushSearchIndex: %v", err)
+	}
+
+	// Pull to new path.
+	pullDir := t.TempDir()
+	pulled, err := j.PullSearchIndex(ctx, pullDir+"/pulled.db")
+	if err != nil {
+		t.Fatalf("PullSearchIndex: %v", err)
+	}
+	t.Cleanup(func() { pulled.Close() })
+
+	// Verify search works on pulled DB.
+	resp, err := pulled.Search("alpha", SearchOptions{})
+	if err != nil {
+		t.Fatalf("Search on pulled: %v", err)
+	}
+	if resp.TotalCount != 1 {
+		t.Errorf("expected 1 result on pulled index, got %d", resp.TotalCount)
+	}
+}
+
+func TestFetchRemoteSearchInfo(t *testing.T) {
+	j := newTestJournal(t)
+	ctx := context.Background()
+
+	dir := t.TempDir()
+	idx, err := OpenSearchIndex(dir + "/search.db")
+	if err != nil {
+		t.Fatalf("OpenSearchIndex: %v", err)
+	}
+	t.Cleanup(func() { idx.Close() })
+	j.SetSearchIndex(idx)
+
+	if _, err := j.Write(ctx, []byte("info test"), nil); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+
+	if _, err := j.PushSearchIndex(ctx, idx); err != nil {
+		t.Fatalf("PushSearchIndex: %v", err)
+	}
+
+	info, err := j.FetchRemoteSearchInfo(ctx)
+	if err != nil {
+		t.Fatalf("FetchRemoteSearchInfo: %v", err)
+	}
+	if info == nil {
+		t.Fatal("expected non-nil info")
+	}
+	if info.EntryCount != 1 {
+		t.Errorf("EntryCount = %d, want 1", info.EntryCount)
+	}
+	if info.DBHash == "" {
+		t.Error("DBHash should not be empty")
+	}
+}
+
+func TestFetchRemoteSearchInfoEmpty(t *testing.T) {
+	j := newTestJournal(t)
+	ctx := context.Background()
+
+	info, err := j.FetchRemoteSearchInfo(ctx)
+	if err != nil {
+		t.Fatalf("FetchRemoteSearchInfo: %v", err)
+	}
+	if info != nil {
+		t.Errorf("expected nil info, got %+v", info)
+	}
+}

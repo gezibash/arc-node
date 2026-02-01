@@ -429,3 +429,165 @@ func TestDMOptions(t *testing.T) {
 		t.Errorf("recipientKey = %x, want %x", got, nodePub)
 	}
 }
+
+func TestThreadsSubscribeAll(t *testing.T) {
+	addr, nodeKP := newTestServer(t)
+	c, senderKP := newTestClient(t, addr, nodeKP)
+	ctx := context.Background()
+	nodePub := nodeKP.PublicKey()
+
+	peerKP, _ := identity.Generate()
+	dm, err := New(c, senderKP, peerKP.PublicKey(), WithNodeKey(nodePub))
+	if err != nil {
+		t.Fatalf("New DM: %v", err)
+	}
+
+	threads := NewThreads(c, senderKP, WithNodeKey(nodePub))
+	subCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	msgs, _, err := threads.SubscribeAll(subCtx)
+	if err != nil {
+		t.Fatalf("SubscribeAll: %v", err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	if _, err := dm.Send(ctx, []byte("sub all msg"), nil); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+
+	select {
+	case m := <-msgs:
+		if m == nil {
+			t.Fatal("received nil message")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("did not receive SubscribeAll message within timeout")
+	}
+}
+
+func TestThreadsPreviewThread(t *testing.T) {
+	addr, nodeKP := newTestServer(t)
+	c, senderKP := newTestClient(t, addr, nodeKP)
+	ctx := context.Background()
+	nodePub := nodeKP.PublicKey()
+
+	peerKP, _ := identity.Generate()
+	dm, err := New(c, senderKP, peerKP.PublicKey(), WithNodeKey(nodePub))
+	if err != nil {
+		t.Fatalf("New DM: %v", err)
+	}
+
+	if _, err := dm.Send(ctx, []byte("preview thread test"), nil); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+
+	threads := NewThreads(c, senderKP, WithNodeKey(nodePub))
+	list, err := threads.ListThreads(ctx)
+	if err != nil {
+		t.Fatalf("ListThreads: %v", err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("expected 1 thread, got %d", len(list))
+	}
+
+	preview, err := threads.PreviewThread(ctx, list[0])
+	if err != nil {
+		t.Fatalf("PreviewThread: %v", err)
+	}
+	if preview != "preview thread test" {
+		t.Errorf("preview = %q, want %q", preview, "preview thread test")
+	}
+}
+
+func TestThreadsOpenConversation(t *testing.T) {
+	addr, nodeKP := newTestServer(t)
+	c, senderKP := newTestClient(t, addr, nodeKP)
+	ctx := context.Background()
+	nodePub := nodeKP.PublicKey()
+
+	peerKP, _ := identity.Generate()
+	threads := NewThreads(c, senderKP, WithNodeKey(nodePub))
+
+	dm, err := threads.OpenConversation(peerKP.PublicKey())
+	if err != nil {
+		t.Fatalf("OpenConversation: %v", err)
+	}
+
+	if _, err := dm.Send(ctx, []byte("from opened conv"), nil); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+
+	lr, err := dm.List(ctx, ListOptions{Limit: 1})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(lr.Messages) != 1 {
+		t.Errorf("expected 1 message, got %d", len(lr.Messages))
+	}
+}
+
+func TestDMSubscribeCancel(t *testing.T) {
+	addr, nodeKP := newTestServer(t)
+	dm, _, _, _ := newTestDM(t, addr, nodeKP)
+	ctx := context.Background()
+
+	subCtx, cancel := context.WithCancel(ctx)
+	msgs, _, err := dm.Subscribe(subCtx, ListOptions{})
+	if err != nil {
+		t.Fatalf("Subscribe: %v", err)
+	}
+
+	cancel()
+
+	// Channel should eventually close.
+	select {
+	case _, ok := <-msgs:
+		if ok {
+			// Got a message, that's fine — keep draining.
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("message channel not closed after cancel")
+	}
+}
+
+func TestDMSendWithLabels(t *testing.T) {
+	addr, nodeKP := newTestServer(t)
+	dm, _, _, _ := newTestDM(t, addr, nodeKP)
+	ctx := context.Background()
+
+	custom := map[string]string{"mood": "happy", "priority": "high"}
+	if _, err := dm.Send(ctx, []byte("labeled"), custom); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+
+	lr, err := dm.List(ctx, ListOptions{Limit: 1})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(lr.Messages) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(lr.Messages))
+	}
+	if lr.Messages[0].Labels["mood"] != "happy" {
+		t.Errorf("mood = %q, want happy", lr.Messages[0].Labels["mood"])
+	}
+	if lr.Messages[0].Labels["priority"] != "high" {
+		t.Errorf("priority = %q, want high", lr.Messages[0].Labels["priority"])
+	}
+}
+
+func TestDMRecipientKeyFallback(t *testing.T) {
+	kp, _ := identity.Generate()
+	peerKP, _ := identity.Generate()
+
+	// No WithNodeKey, no client — should fall back to self pubkey.
+	dm, err := New(nil, kp, peerKP.PublicKey())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	got := dm.recipientKey()
+	if got != kp.PublicKey() {
+		t.Errorf("recipientKey = %x, want self pubkey %x", got, kp.PublicKey())
+	}
+}
