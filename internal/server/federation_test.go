@@ -11,7 +11,6 @@ import (
 	blobphysical "github.com/gezibash/arc-node/internal/blobstore/physical"
 	_ "github.com/gezibash/arc-node/internal/blobstore/physical/memory"
 	"github.com/gezibash/arc-node/internal/indexstore"
-	"github.com/gezibash/arc-node/internal/indexstore/physical"
 	idxphysical "github.com/gezibash/arc-node/internal/indexstore/physical"
 	_ "github.com/gezibash/arc-node/internal/indexstore/physical/memory"
 	"github.com/gezibash/arc-node/internal/observability"
@@ -299,7 +298,7 @@ func TestFederationPolicyPrivateAccepted(t *testing.T) {
 }
 
 func TestEntriesToProtoDimensionsAllFields(t *testing.T) {
-	entries := []*physical.Entry{{
+	entries := []*idxphysical.Entry{{
 		Ref:              reference.Compute([]byte("all-dims")),
 		Labels:           map[string]string{"k": "v"},
 		Timestamp:        1000,
@@ -492,7 +491,7 @@ func TestFederationPolicyNilDimensions(t *testing.T) {
 
 func TestVisibilityFederated(t *testing.T) {
 	vc := newTestVisibilityChecker()
-	entry := &physical.Entry{
+	entry := &idxphysical.Entry{
 		Visibility: 3, // VISIBILITY_FEDERATED
 		Labels:     map[string]string{},
 	}
@@ -503,7 +502,7 @@ func TestVisibilityFederated(t *testing.T) {
 
 func TestVisibilityLabelScopedInvalidHex(t *testing.T) {
 	vc := newTestVisibilityChecker()
-	entry := &physical.Entry{
+	entry := &idxphysical.Entry{
 		Visibility: 2, // VISIBILITY_LABEL_SCOPED
 		Labels:     map[string]string{"scope": "not-valid-hex"},
 	}
@@ -514,7 +513,7 @@ func TestVisibilityLabelScopedInvalidHex(t *testing.T) {
 
 func TestVisibilityLabelScopedWrongLength(t *testing.T) {
 	vc := newTestVisibilityChecker()
-	entry := &physical.Entry{
+	entry := &idxphysical.Entry{
 		Visibility: 2,
 		Labels:     map[string]string{"scope": "aabb"},
 	}
@@ -524,7 +523,7 @@ func TestVisibilityLabelScopedWrongLength(t *testing.T) {
 }
 
 func TestEntriesToProtoDimensions(t *testing.T) {
-	entries := []*physical.Entry{
+	entries := []*idxphysical.Entry{
 		{
 			Ref:          reference.Compute([]byte("test")),
 			Labels:       map[string]string{"k": "v"},
@@ -666,7 +665,7 @@ func TestReplicateEntryAlreadyExists(t *testing.T) {
 	// Index an entry first.
 	ref := reference.Compute([]byte("existing"))
 	contentRef := reference.Compute([]byte("content-data"))
-	existingEntry := &physical.Entry{
+	existingEntry := &idxphysical.Entry{
 		Ref:         ref,
 		Labels:      map[string]string{"content": fmt.Sprintf("%x", contentRef)},
 		Timestamp:   time.Now().UnixMilli(),

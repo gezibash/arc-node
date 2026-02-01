@@ -22,7 +22,7 @@ func newTestBackend(t *testing.T) physical.Backend {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { be.Close() })
+	t.Cleanup(func() { _ = be.Close() })
 	return be
 }
 
@@ -75,7 +75,7 @@ func TestDelete(t *testing.T) {
 	ctx := context.Background()
 
 	ref := reference.Compute([]byte("delete-me"))
-	be.Put(ctx, &physical.Entry{
+	_ = be.Put(ctx, &physical.Entry{
 		Ref:       ref,
 		Labels:    map[string]string{"k": "v"},
 		Timestamp: time.Now().UnixMilli(),
@@ -102,7 +102,7 @@ func TestQueryWithLabels(t *testing.T) {
 		}
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], uint64(i))
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"group": label},
 			Timestamp: int64(1000 + i),
@@ -128,7 +128,7 @@ func TestQueryPagination(t *testing.T) {
 	for i := range 10 {
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], uint64(i))
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"x": "y"},
 			Timestamp: int64(1000 + i),
@@ -166,7 +166,7 @@ func TestDeleteExpired(t *testing.T) {
 		if i < 3 {
 			exp = now.Add(-time.Hour).UnixMilli()
 		}
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"i": "v"},
 			Timestamp: int64(1000 + i),
@@ -325,7 +325,7 @@ func newTestBackendInMemory(t *testing.T) *Backend {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { be.Close() })
+	t.Cleanup(func() { _ = be.Close() })
 	return be
 }
 
@@ -376,7 +376,7 @@ func TestNewFactoryInMemoryConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewFactory in-memory: %v", err)
 	}
-	t.Cleanup(func() { be.Close() })
+	t.Cleanup(func() { _ = be.Close() })
 
 	ref := reference.Compute([]byte("factory-inmem"))
 	if err := be.Put(context.Background(), &physical.Entry{
@@ -447,8 +447,8 @@ func TestCompositeIndexes(t *testing.T) {
 		t.Errorf("expected 0 composite indexes, got %d", len(got))
 	}
 
-	be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "idx1", Keys: []string{"a", "b"}})
-	be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "idx2", Keys: []string{"c"}})
+	_ = be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "idx1", Keys: []string{"a", "b"}})
+	_ = be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "idx2", Keys: []string{"c"}})
 
 	got := be.CompositeIndexes()
 	if len(got) != 2 {
@@ -608,7 +608,7 @@ func TestPutWithCompositeIndex(t *testing.T) {
 	be := newTestBackendInMemory(t)
 	ctx := context.Background()
 
-	be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "type_env", Keys: []string{"type", "env"}})
+	_ = be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "type_env", Keys: []string{"type", "env"}})
 
 	for i := range 10 {
 		var buf [8]byte
@@ -617,7 +617,7 @@ func TestPutWithCompositeIndex(t *testing.T) {
 		if i%2 == 0 {
 			env = "dev"
 		}
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"type": "text", "env": env},
 			Timestamp: int64(1000 + i),
@@ -641,12 +641,12 @@ func TestQueryByCompositeDescending(t *testing.T) {
 	be := newTestBackendInMemory(t)
 	ctx := context.Background()
 
-	be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "type_env", Keys: []string{"type", "env"}})
+	_ = be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "type_env", Keys: []string{"type", "env"}})
 
 	for i := range 5 {
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], uint64(i))
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"type": "text", "env": "prod"},
 			Timestamp: int64(1000 + i),
@@ -676,12 +676,12 @@ func TestQueryByCompositeWithTimeRange(t *testing.T) {
 	be := newTestBackendInMemory(t)
 	ctx := context.Background()
 
-	be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "type_env", Keys: []string{"type", "env"}})
+	_ = be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "type_env", Keys: []string{"type", "env"}})
 
 	for i := range 10 {
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], uint64(i))
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"type": "text", "env": "prod"},
 			Timestamp: int64(1000 + i),
@@ -708,12 +708,12 @@ func TestQueryByCompositePagination(t *testing.T) {
 	be := newTestBackendInMemory(t)
 	ctx := context.Background()
 
-	be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "type_env", Keys: []string{"type", "env"}})
+	_ = be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "type_env", Keys: []string{"type", "env"}})
 
 	for i := range 10 {
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], uint64(i))
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"type": "text", "env": "prod"},
 			Timestamp: int64(1000 + i),
@@ -750,7 +750,7 @@ func TestBackfillCompositeIndex(t *testing.T) {
 	for i := range 10 {
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], uint64(i))
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"type": "text", "env": "prod"},
 			Timestamp: int64(1000 + i),
@@ -758,7 +758,7 @@ func TestBackfillCompositeIndex(t *testing.T) {
 	}
 
 	def := physical.CompositeIndexDef{Name: "type_env", Keys: []string{"type", "env"}}
-	be.RegisterCompositeIndex(def)
+	_ = be.RegisterCompositeIndex(def)
 
 	n, err := be.BackfillCompositeIndex(ctx, def)
 	if err != nil {
@@ -801,7 +801,7 @@ func TestBackfillCompositeIndexCancelled(t *testing.T) {
 	for i := range 5 {
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], uint64(i))
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"type": "text"},
 			Timestamp: int64(1000 + i),
@@ -810,7 +810,7 @@ func TestBackfillCompositeIndexCancelled(t *testing.T) {
 
 	cancel()
 	def := physical.CompositeIndexDef{Name: "type_only", Keys: []string{"type"}}
-	be.RegisterCompositeIndex(def)
+	_ = be.RegisterCompositeIndex(def)
 
 	_, err := be.BackfillCompositeIndex(ctx, def)
 	if err == nil {
@@ -830,7 +830,7 @@ func TestBackfillPartialMatch(t *testing.T) {
 		if i%2 == 0 {
 			labels["env"] = "prod"
 		}
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    labels,
 			Timestamp: int64(1000 + i),
@@ -838,7 +838,7 @@ func TestBackfillPartialMatch(t *testing.T) {
 	}
 
 	def := physical.CompositeIndexDef{Name: "type_env", Keys: []string{"type", "env"}}
-	be.RegisterCompositeIndex(def)
+	_ = be.RegisterCompositeIndex(def)
 
 	n, err := be.BackfillCompositeIndex(ctx, def)
 	if err != nil {
@@ -862,7 +862,7 @@ func TestPickDrivingLabel(t *testing.T) {
 		if i < 2 {
 			labels["env"] = "rare"
 		}
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    labels,
 			Timestamp: int64(1000 + i),
@@ -905,7 +905,7 @@ func TestCount(t *testing.T) {
 		if i%2 == 0 {
 			label = "b"
 		}
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"group": label},
 			Timestamp: int64(1000 + i),
@@ -951,7 +951,7 @@ func TestCountMultiLabel(t *testing.T) {
 		if i%2 == 0 {
 			env = "dev"
 		}
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"type": "text", "env": env},
 			Timestamp: int64(1000 + i),
@@ -973,7 +973,7 @@ func TestCountByComposite(t *testing.T) {
 	be := newTestBackendInMemory(t)
 	ctx := context.Background()
 
-	be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "type_env", Keys: []string{"type", "env"}})
+	_ = be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "type_env", Keys: []string{"type", "env"}})
 
 	for i := range 10 {
 		var buf [8]byte
@@ -982,7 +982,7 @@ func TestCountByComposite(t *testing.T) {
 		if i%2 == 0 {
 			env = "dev"
 		}
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"type": "text", "env": env},
 			Timestamp: int64(1000 + i),
@@ -1017,7 +1017,7 @@ func TestStatsValues(t *testing.T) {
 	be := newTestBackendInMemory(t)
 	ctx := context.Background()
 
-	be.Put(ctx, &physical.Entry{
+	_ = be.Put(ctx, &physical.Entry{
 		Ref: reference.Compute([]byte("stats-test")), Labels: map[string]string{"a": "b"}, Timestamp: 1000,
 	})
 
@@ -1122,7 +1122,7 @@ func TestRunGC(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { be.Close() })
+	t.Cleanup(func() { _ = be.Close() })
 	// On-disk DB with no data: GC should return nil (ErrNoRewrite is swallowed).
 	if err := be.(*Backend).RunGC(0.5); err != nil {
 		t.Fatalf("RunGC: %v", err)
@@ -1144,7 +1144,7 @@ func TestScanPrefix(t *testing.T) {
 	ctx := context.Background()
 
 	ref := reference.Compute([]byte("scan-test"))
-	be.Put(ctx, &physical.Entry{
+	_ = be.Put(ctx, &physical.Entry{
 		Ref: ref, Labels: map[string]string{"a": "b"}, Timestamp: 1000,
 	})
 
@@ -1183,12 +1183,12 @@ func TestPutReplacesEntry(t *testing.T) {
 	ctx := context.Background()
 
 	ref := reference.Compute([]byte("replace-me"))
-	be.Put(ctx, &physical.Entry{
+	_ = be.Put(ctx, &physical.Entry{
 		Ref: ref, Labels: map[string]string{"v": "1"}, Timestamp: 1000,
 	})
 
 	// Replace with different labels and timestamp.
-	be.Put(ctx, &physical.Entry{
+	_ = be.Put(ctx, &physical.Entry{
 		Ref: ref, Labels: map[string]string{"v": "2"}, Timestamp: 2000,
 	})
 
@@ -1217,13 +1217,13 @@ func TestPutReplacesWithComposite(t *testing.T) {
 	be := newTestBackendInMemory(t)
 	ctx := context.Background()
 
-	be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "v_k", Keys: []string{"v", "k"}})
+	_ = be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "v_k", Keys: []string{"v", "k"}})
 
 	ref := reference.Compute([]byte("replace-composite"))
-	be.Put(ctx, &physical.Entry{
+	_ = be.Put(ctx, &physical.Entry{
 		Ref: ref, Labels: map[string]string{"v": "1", "k": "a"}, Timestamp: 1000,
 	})
-	be.Put(ctx, &physical.Entry{
+	_ = be.Put(ctx, &physical.Entry{
 		Ref: ref, Labels: map[string]string{"v": "2", "k": "a"}, Timestamp: 2000,
 	})
 
@@ -1254,14 +1254,14 @@ func TestDeleteWithComposite(t *testing.T) {
 	be := newTestBackendInMemory(t)
 	ctx := context.Background()
 
-	be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "type_env", Keys: []string{"type", "env"}})
+	_ = be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "type_env", Keys: []string{"type", "env"}})
 
 	ref := reference.Compute([]byte("delete-composite"))
-	be.Put(ctx, &physical.Entry{
+	_ = be.Put(ctx, &physical.Entry{
 		Ref: ref, Labels: map[string]string{"type": "text", "env": "prod"}, Timestamp: 1000,
 	})
 
-	be.Delete(ctx, ref)
+	_ = be.Delete(ctx, ref)
 
 	res, err := be.Query(ctx, &physical.QueryOptions{
 		Labels: map[string]string{"type": "text", "env": "prod"}, Limit: 10,
@@ -1287,7 +1287,7 @@ func TestQueryNilOpts(t *testing.T) {
 	be := newTestBackendInMemory(t)
 	ctx := context.Background()
 
-	be.Put(ctx, &physical.Entry{
+	_ = be.Put(ctx, &physical.Entry{
 		Ref: reference.Compute([]byte("nil-opts")), Labels: map[string]string{"a": "b"}, Timestamp: 1000,
 	})
 
@@ -1307,7 +1307,7 @@ func TestQueryDescendingNoFilter(t *testing.T) {
 	for i := range 5 {
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], uint64(i))
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"a": "b"},
 			Timestamp: int64(1000 + i),
@@ -1335,7 +1335,7 @@ func TestQueryWithBeforeNoFilter(t *testing.T) {
 	for i := range 10 {
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], uint64(i))
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"a": "b"},
 			Timestamp: int64(1000 + i),
@@ -1358,7 +1358,7 @@ func TestQueryDescendingWithBeforeNoFilter(t *testing.T) {
 	for i := range 10 {
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], uint64(i))
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"a": "b"},
 			Timestamp: int64(1000 + i),
@@ -1382,7 +1382,7 @@ func TestQueryDescendingWithAfterLabel(t *testing.T) {
 	for i := range 10 {
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], uint64(i))
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"type": "text"},
 			Timestamp: int64(1000 + i),
@@ -1415,7 +1415,7 @@ func TestQueryLabelFilter(t *testing.T) {
 		if i%2 == 0 {
 			label = "b"
 		}
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"group": label},
 			Timestamp: int64(1000 + i),
@@ -1450,7 +1450,7 @@ func TestQueryLabelFilterDescending(t *testing.T) {
 		if i%2 == 0 {
 			label = "b"
 		}
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"group": label},
 			Timestamp: int64(1000 + i),
@@ -1487,7 +1487,7 @@ func TestQueryLabelFilterPagination(t *testing.T) {
 	for i := range 10 {
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], uint64(i))
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"group": "a"},
 			Timestamp: int64(1000 + i),
@@ -1522,14 +1522,14 @@ func TestQueryWithExpiredExcluded(t *testing.T) {
 
 	now := time.Now().UnixMilli()
 	// Entry that expires in the past (already expired by application logic).
-	be.Put(ctx, &physical.Entry{
+	_ = be.Put(ctx, &physical.Entry{
 		Ref:       reference.Compute([]byte("expired")),
 		Labels:    map[string]string{"a": "b"},
 		Timestamp: now - 2000,
 		ExpiresAt: now - 1000,
 	})
 	// Entry that's still valid.
-	be.Put(ctx, &physical.Entry{
+	_ = be.Put(ctx, &physical.Entry{
 		Ref:       reference.Compute([]byte("valid")),
 		Labels:    map[string]string{"a": "b"},
 		Timestamp: now,
@@ -1557,7 +1557,7 @@ func TestPutWithTTL(t *testing.T) {
 	ctx := context.Background()
 
 	ref := reference.Compute([]byte("ttl-test"))
-	be.Put(ctx, &physical.Entry{
+	_ = be.Put(ctx, &physical.Entry{
 		Ref:       ref,
 		Labels:    map[string]string{"a": "b"},
 		Timestamp: time.Now().UnixMilli(),
@@ -1578,7 +1578,7 @@ func TestBackfillWithTTL(t *testing.T) {
 	ctx := context.Background()
 
 	ref := reference.Compute([]byte("backfill-ttl"))
-	be.Put(ctx, &physical.Entry{
+	_ = be.Put(ctx, &physical.Entry{
 		Ref:       ref,
 		Labels:    map[string]string{"type": "text", "env": "prod"},
 		Timestamp: time.Now().UnixMilli(),
@@ -1586,7 +1586,7 @@ func TestBackfillWithTTL(t *testing.T) {
 	})
 
 	def := physical.CompositeIndexDef{Name: "type_env", Keys: []string{"type", "env"}}
-	be.RegisterCompositeIndex(def)
+	_ = be.RegisterCompositeIndex(def)
 
 	n, err := be.BackfillCompositeIndex(ctx, def)
 	if err != nil {
@@ -1604,7 +1604,7 @@ func TestQueryByLabelDescendingWithBefore(t *testing.T) {
 	for i := range 10 {
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], uint64(i))
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"type": "text"},
 			Timestamp: int64(1000 + i),
@@ -1633,7 +1633,7 @@ func TestCountByLabelWithTimeRange(t *testing.T) {
 	for i := range 10 {
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], uint64(i))
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"type": "text"},
 			Timestamp: int64(1000 + i),
@@ -1656,8 +1656,8 @@ func TestCountByLabelWithTimeRange(t *testing.T) {
 func TestFindCompositeIndexPicksBest(t *testing.T) {
 	be := newTestBackendInMemory(t)
 
-	be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "single", Keys: []string{"a"}})
-	be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "double", Keys: []string{"a", "b"}})
+	_ = be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "single", Keys: []string{"a"}})
+	_ = be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "double", Keys: []string{"a", "b"}})
 
 	def, vals, ok := be.findCompositeIndex(map[string]string{"a": "x", "b": "y"})
 	if !ok {
@@ -1674,7 +1674,7 @@ func TestFindCompositeIndexPicksBest(t *testing.T) {
 func TestFindCompositeIndexNoMatch(t *testing.T) {
 	be := newTestBackendInMemory(t)
 
-	be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "ab", Keys: []string{"a", "b"}})
+	_ = be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "ab", Keys: []string{"a", "b"}})
 
 	_, _, ok := be.findCompositeIndex(map[string]string{"c": "x"})
 	if ok {
@@ -1710,7 +1710,7 @@ func TestCountByCompositeWithExtraLabels(t *testing.T) {
 	be := newTestBackendInMemory(t)
 	ctx := context.Background()
 
-	be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "type_env", Keys: []string{"type", "env"}})
+	_ = be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "type_env", Keys: []string{"type", "env"}})
 
 	for i := range 10 {
 		var buf [8]byte
@@ -1719,7 +1719,7 @@ func TestCountByCompositeWithExtraLabels(t *testing.T) {
 		if i%2 == 0 {
 			user = "bob"
 		}
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"type": "text", "env": "prod", "user": user},
 			Timestamp: int64(1000 + i),
@@ -1742,18 +1742,18 @@ func TestQueryByCompositeWithExpiryExcluded(t *testing.T) {
 	be := newTestBackendInMemory(t)
 	ctx := context.Background()
 
-	be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "type_env", Keys: []string{"type", "env"}})
+	_ = be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "type_env", Keys: []string{"type", "env"}})
 
 	now := time.Now().UnixMilli()
 	// Expired entry.
-	be.Put(ctx, &physical.Entry{
+	_ = be.Put(ctx, &physical.Entry{
 		Ref:       reference.Compute([]byte("expired-composite")),
 		Labels:    map[string]string{"type": "text", "env": "prod"},
 		Timestamp: now - 2000,
 		ExpiresAt: now - 1000,
 	})
 	// Valid entry.
-	be.Put(ctx, &physical.Entry{
+	_ = be.Put(ctx, &physical.Entry{
 		Ref:       reference.Compute([]byte("valid-composite")),
 		Labels:    map[string]string{"type": "text", "env": "prod"},
 		Timestamp: now,
@@ -1781,7 +1781,7 @@ func TestScanPrefixLimit(t *testing.T) {
 	for i := range 10 {
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], uint64(i))
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"a": "b"},
 			Timestamp: int64(1000 + i),
@@ -1804,7 +1804,7 @@ func TestQueryByEntryCursor(t *testing.T) {
 	for i := range 5 {
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], uint64(i))
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"a": "b"},
 			Timestamp: int64(1000 + i),
@@ -1837,7 +1837,7 @@ func TestQueryByEntryDescendingCursor(t *testing.T) {
 	for i := range 5 {
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], uint64(i))
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"a": "b"},
 			Timestamp: int64(1000 + i),
@@ -1868,7 +1868,7 @@ func TestQueryByEntryDescendingWithAfter(t *testing.T) {
 	for i := range 10 {
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], uint64(i))
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"a": "b"},
 			Timestamp: int64(1000 + i),
@@ -1893,7 +1893,7 @@ func TestQueryByLabelCursor(t *testing.T) {
 	for i := range 5 {
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], uint64(i))
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"type": "text"},
 			Timestamp: int64(1000 + i),
@@ -1928,7 +1928,7 @@ func TestQueryByLabelDescendingCursor(t *testing.T) {
 	for i := range 5 {
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], uint64(i))
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"type": "text"},
 			Timestamp: int64(1000 + i),
@@ -1960,12 +1960,12 @@ func TestQueryByCompositeDescendingCursor(t *testing.T) {
 	be := newTestBackendInMemory(t)
 	ctx := context.Background()
 
-	be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "type_env", Keys: []string{"type", "env"}})
+	_ = be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "type_env", Keys: []string{"type", "env"}})
 
 	for i := range 5 {
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], uint64(i))
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"type": "text", "env": "prod"},
 			Timestamp: int64(1000 + i),
@@ -1997,12 +1997,12 @@ func TestQueryByCompositeDescendingWithAfter(t *testing.T) {
 	be := newTestBackendInMemory(t)
 	ctx := context.Background()
 
-	be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "type_env", Keys: []string{"type", "env"}})
+	_ = be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "type_env", Keys: []string{"type", "env"}})
 
 	for i := range 10 {
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], uint64(i))
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"type": "text", "env": "prod"},
 			Timestamp: int64(1000 + i),
@@ -2030,7 +2030,7 @@ func TestQueryByLabelAfterAscending(t *testing.T) {
 	for i := range 10 {
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], uint64(i))
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"type": "text"},
 			Timestamp: int64(1000 + i),
@@ -2057,7 +2057,7 @@ func TestQueryByLabelBeforeAscending(t *testing.T) {
 	for i := range 10 {
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], uint64(i))
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"type": "text"},
 			Timestamp: int64(1000 + i),
@@ -2081,12 +2081,12 @@ func TestQueryByCompositeBeforeAscending(t *testing.T) {
 	be := newTestBackendInMemory(t)
 	ctx := context.Background()
 
-	be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "type_env", Keys: []string{"type", "env"}})
+	_ = be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "type_env", Keys: []string{"type", "env"}})
 
 	for i := range 10 {
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], uint64(i))
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"type": "text", "env": "prod"},
 			Timestamp: int64(1000 + i),
@@ -2110,12 +2110,12 @@ func TestQueryByCompositeAfterAscending(t *testing.T) {
 	be := newTestBackendInMemory(t)
 	ctx := context.Background()
 
-	be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "type_env", Keys: []string{"type", "env"}})
+	_ = be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "type_env", Keys: []string{"type", "env"}})
 
 	for i := range 10 {
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], uint64(i))
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"type": "text", "env": "prod"},
 			Timestamp: int64(1000 + i),
@@ -2139,12 +2139,12 @@ func TestQueryByCompositeDescendingWithBefore(t *testing.T) {
 	be := newTestBackendInMemory(t)
 	ctx := context.Background()
 
-	be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "type_env", Keys: []string{"type", "env"}})
+	_ = be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "type_env", Keys: []string{"type", "env"}})
 
 	for i := range 10 {
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], uint64(i))
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"type": "text", "env": "prod"},
 			Timestamp: int64(1000 + i),
@@ -2171,7 +2171,7 @@ func TestQueryIncludeExpired(t *testing.T) {
 	ctx := context.Background()
 
 	now := time.Now().UnixMilli()
-	be.Put(ctx, &physical.Entry{
+	_ = be.Put(ctx, &physical.Entry{
 		Ref:       reference.Compute([]byte("soon-expired")),
 		Labels:    map[string]string{"a": "b"},
 		Timestamp: now,
@@ -2197,7 +2197,7 @@ func TestCountByEntryWithAfter(t *testing.T) {
 	for i := range 10 {
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], uint64(i))
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"a": "b"},
 			Timestamp: int64(1000 + i),
@@ -2220,7 +2220,7 @@ func TestCountByEntryWithBefore(t *testing.T) {
 	for i := range 10 {
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], uint64(i))
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"a": "b"},
 			Timestamp: int64(1000 + i),
@@ -2243,7 +2243,7 @@ func TestCountByLabelWithAfterOnly(t *testing.T) {
 	for i := range 10 {
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], uint64(i))
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"type": "text"},
 			Timestamp: int64(1000 + i),
@@ -2266,12 +2266,12 @@ func TestCountByCompositeWithAfterOnly(t *testing.T) {
 	be := newTestBackendInMemory(t)
 	ctx := context.Background()
 
-	be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "type_env", Keys: []string{"type", "env"}})
+	_ = be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "type_env", Keys: []string{"type", "env"}})
 
 	for i := range 10 {
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], uint64(i))
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"type": "text", "env": "prod"},
 			Timestamp: int64(1000 + i),
@@ -2326,7 +2326,7 @@ func TestCountByMultiLabelWithBefore(t *testing.T) {
 	for i := range 10 {
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], uint64(i))
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"type": "text", "env": "prod"},
 			Timestamp: int64(1000 + i),
@@ -2352,7 +2352,7 @@ func TestCountByMultiLabelWithAfterAndBefore(t *testing.T) {
 	for i := range 10 {
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], uint64(i))
-		be.Put(ctx, &physical.Entry{
+		_ = be.Put(ctx, &physical.Entry{
 			Ref:       reference.Reference(sha256.Sum256(buf[:])),
 			Labels:    map[string]string{"type": "text", "env": "prod"},
 			Timestamp: int64(1000 + i),
@@ -2380,7 +2380,7 @@ func TestPutReplacesEntryWithExpiry(t *testing.T) {
 	now := time.Now().UnixMilli()
 
 	// First put with TTL.
-	be.Put(ctx, &physical.Entry{
+	_ = be.Put(ctx, &physical.Entry{
 		Ref:       ref,
 		Labels:    map[string]string{"v": "1"},
 		Timestamp: 1000,
@@ -2388,7 +2388,7 @@ func TestPutReplacesEntryWithExpiry(t *testing.T) {
 	})
 
 	// Replace with different data and TTL.
-	be.Put(ctx, &physical.Entry{
+	_ = be.Put(ctx, &physical.Entry{
 		Ref:       ref,
 		Labels:    map[string]string{"v": "2"},
 		Timestamp: 2000,
@@ -2408,11 +2408,11 @@ func TestPutWithCompositeAndTTL(t *testing.T) {
 	be := newTestBackendInMemory(t)
 	ctx := context.Background()
 
-	be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "type_env", Keys: []string{"type", "env"}})
+	_ = be.RegisterCompositeIndex(physical.CompositeIndexDef{Name: "type_env", Keys: []string{"type", "env"}})
 
 	now := time.Now().UnixMilli()
 	ref := reference.Compute([]byte("composite-ttl"))
-	be.Put(ctx, &physical.Entry{
+	_ = be.Put(ctx, &physical.Entry{
 		Ref:       ref,
 		Labels:    map[string]string{"type": "text", "env": "prod"},
 		Timestamp: now,
@@ -2433,7 +2433,7 @@ func TestPutNoLabels(t *testing.T) {
 	ctx := context.Background()
 
 	ref := reference.Compute([]byte("no-labels"))
-	be.Put(ctx, &physical.Entry{
+	_ = be.Put(ctx, &physical.Entry{
 		Ref:       ref,
 		Labels:    map[string]string{},
 		Timestamp: 1000,
@@ -2450,7 +2450,7 @@ func TestPutNoLabels(t *testing.T) {
 
 func TestDecodeMetaErrors(t *testing.T) {
 	// Too short.
-	_, _, err := decodeMeta([]byte{1, 2, 3})
+	_, err := decodeMeta([]byte{1, 2, 3})
 	if err == nil {
 		t.Error("expected error for short data")
 	}
@@ -2458,7 +2458,7 @@ func TestDecodeMetaErrors(t *testing.T) {
 	// Truncated label.
 	data := make([]byte, 10)
 	binary.BigEndian.PutUint16(data[8:10], 1) // 1 label
-	_, _, err = decodeMeta(data)
+	_, err = decodeMeta(data)
 	if err == nil {
 		t.Error("expected error for truncated label")
 	}

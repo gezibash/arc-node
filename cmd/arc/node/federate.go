@@ -40,15 +40,15 @@ func newFederateCmd(n *nodeCmd) *cobra.Command {
 			}
 			if result != nil {
 				if result.Message != "" {
-					fmt.Fprintln(os.Stdout, result.Message)
+					_, _ = fmt.Fprintln(os.Stdout, result.Message)
 					return nil
 				}
 				if result.Status != "" {
-					fmt.Fprintln(os.Stdout, result.Status)
+					_, _ = fmt.Fprintln(os.Stdout, result.Status)
 					return nil
 				}
 			}
-			fmt.Fprintln(os.Stdout, "ok")
+			_, _ = fmt.Fprintln(os.Stdout, "ok")
 			return nil
 		},
 	}

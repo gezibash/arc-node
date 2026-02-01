@@ -106,7 +106,7 @@ func (d entryDelegate) Render(w io.Writer, m list.Model, index int, item list.It
 		}
 	}
 
-	fmt.Fprintf(w, "%s\n%s", titleLine, descLine)
+	_, _ = fmt.Fprintf(w, "%s\n%s", titleLine, descLine)
 }
 
 // listView owns only UI-local state. Domain data (entries, previews) lives
@@ -161,7 +161,7 @@ func newListView() listView {
 	}
 }
 
-func (v listView) update(msg tea.Msg, entries []journal.Entry) (listView, tea.Cmd) {
+func (v listView) update(msg tea.Msg, _ []journal.Entry) (listView, tea.Cmd) {
 	switch msg := msg.(type) {
 	case spinner.TickMsg:
 		var cmd tea.Cmd
@@ -240,12 +240,7 @@ func (v *listView) setItems(items []list.Item) {
 	v.model.SetItems(items)
 }
 
-func (v *listView) setSize(w, h int) {
-	v.model.SetSize(w-4, h)
-	v.ready = true
-}
-
-func (v listView) viewContent(entries []journal.Entry, previews map[reference.Reference]string, snippets map[reference.Reference]string, searchQuery string, hasMore bool, layout *tui.Layout) (string, string) {
+func (v listView) viewContent(_ []journal.Entry, _ map[reference.Reference]string, _ map[reference.Reference]string, searchQuery string, _ bool, layout *tui.Layout) (string, string) {
 	helpText := "↑/k up • ↓/j down • enter: read • n: new • /: search • r: refresh • tab: sync • esc: quit"
 
 	if !v.ready && layout != nil {

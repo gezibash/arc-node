@@ -25,8 +25,8 @@ type Server struct {
 	federator  *federationManager
 }
 
-func New(addr string, obs *observability.Observability, enableReflection bool, kp *identity.Keypair, blobs *blobstore.BlobStore, index *indexstore.IndexStore, opts ...grpc.ServerOption) (*Server, error) {
-	lis, err := net.Listen("tcp", addr)
+func New(ctx context.Context, addr string, obs *observability.Observability, enableReflection bool, kp *identity.Keypair, blobs *blobstore.BlobStore, index *indexstore.IndexStore, opts ...grpc.ServerOption) (*Server, error) {
+	lis, err := (&net.ListenConfig{}).Listen(ctx, "tcp", addr)
 	if err != nil {
 		return nil, err
 	}
@@ -43,9 +43,14 @@ func New(addr string, obs *observability.Observability, enableReflection bool, k
 		}
 	}
 
+	var metrics *observability.Metrics
+	if obs != nil {
+		metrics = obs.Metrics
+	}
+
 	serverOpts := []grpc.ServerOption{
 		grpc.ChainStreamInterceptor(
-			observability.StreamServerInterceptor(obs.Metrics),
+			observability.StreamServerInterceptor(metrics),
 			StreamServerInterceptor(kp, mw),
 		),
 	}

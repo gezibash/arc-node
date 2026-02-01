@@ -34,7 +34,7 @@ func newGetCmd(n *nodeCmd) *cobra.Command {
 					return fmt.Errorf("get content: %w", err)
 				}
 				if file != "" {
-					return os.WriteFile(file, data, 0644)
+					return os.WriteFile(file, data, 0600)
 				}
 				_, err = os.Stdout.Write(data)
 				return err
@@ -50,25 +50,25 @@ func newGetCmd(n *nodeCmd) *cobra.Command {
 			case client.GetKindBlob:
 				slog.DebugContext(cmd.Context(), "resolved to blob", "ref", reference.Hex(result.Ref))
 				if file != "" {
-					return os.WriteFile(file, result.Data, 0644)
+					return os.WriteFile(file, result.Data, 0600)
 				}
 				_, err = os.Stdout.Write(result.Data)
 				return err
 
 			case client.GetKindMessage:
 				slog.DebugContext(cmd.Context(), "resolved to message", "ref", reference.Hex(result.Ref))
-				fmt.Fprintf(os.Stdout, "ref:       %s\n", reference.Hex(result.Ref))
-				fmt.Fprintf(os.Stdout, "timestamp: %d (%s)\n", result.Timestamp, time.UnixMilli(result.Timestamp).UTC().Format(time.RFC3339))
+				_, _ = fmt.Fprintf(os.Stdout, "ref:       %s\n", reference.Hex(result.Ref))
+				_, _ = fmt.Fprintf(os.Stdout, "timestamp: %d (%s)\n", result.Timestamp, time.UnixMilli(result.Timestamp).UTC().Format(time.RFC3339))
 
 				if len(result.Labels) > 0 {
-					fmt.Fprintln(os.Stdout, "labels:")
+					_, _ = fmt.Fprintln(os.Stdout, "labels:")
 					keys := make([]string, 0, len(result.Labels))
 					for k := range result.Labels {
 						keys = append(keys, k)
 					}
 					sort.Strings(keys)
 					for _, k := range keys {
-						fmt.Fprintf(os.Stdout, "  %s: %s\n", k, result.Labels[k])
+						_, _ = fmt.Fprintf(os.Stdout, "  %s: %s\n", k, result.Labels[k])
 					}
 				}
 				return nil

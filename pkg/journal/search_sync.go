@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/gezibash/arc-node/pkg/client"
@@ -94,20 +95,20 @@ func (j *Journal) PullSearchIndex(ctx context.Context, destPath string) (*Search
 		return nil, fmt.Errorf("write search index: %w", err)
 	}
 
-	return OpenSearchIndex(destPath)
+	return OpenSearchIndex(ctx, destPath)
 }
 
 // PushSearchIndex encrypts and uploads the local search DB to the node.
 func (j *Journal) PushSearchIndex(ctx context.Context, idx *SearchIndex) (reference.Reference, error) {
-	ts, err := idx.LastIndexedTimestamp()
+	ts, err := idx.LastIndexedTimestamp(ctx)
 	if err != nil {
 		return reference.Reference{}, fmt.Errorf("last indexed timestamp: %w", err)
 	}
 
 	var count int
-	_ = idx.Count(&count)
+	_ = idx.Count(ctx, &count)
 
-	dbHash, err := idx.ContentHash()
+	dbHash, err := idx.ContentHash(ctx)
 	if err != nil {
 		return reference.Reference{}, fmt.Errorf("content hash: %w", err)
 	}
@@ -117,7 +118,7 @@ func (j *Journal) PushSearchIndex(ctx context.Context, idx *SearchIndex) (refere
 		return reference.Reference{}, fmt.Errorf("get db path: %w", err)
 	}
 
-	data, err := os.ReadFile(dbPath)
+	data, err := os.ReadFile(filepath.Clean(dbPath))
 	if err != nil {
 		return reference.Reference{}, fmt.Errorf("read search db: %w", err)
 	}

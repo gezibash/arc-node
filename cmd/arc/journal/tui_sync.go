@@ -33,17 +33,17 @@ const (
 )
 
 type syncView struct {
-	localHash       string
-	localCount      int
-	localLastUpdate int64
-	remoteHash      string
-	remoteCount     int
+	localHash        string
+	localCount       int
+	localLastUpdate  int64
+	remoteHash       string
+	remoteCount      int
 	remoteLastUpdate int64
-	status          syncStatus
-	confirm         confirmAction
-	message         string // last operation result
-	spinner         spinner.Model
-	state           *journal.SearchState
+	status           syncStatus
+	confirm          confirmAction
+	message          string // last operation result
+	spinner          spinner.Model
+	state            *journal.SearchState
 }
 
 func newSyncView(searchDir string) syncView {
@@ -134,7 +134,7 @@ func shortTime(ms int64) string {
 	return time.UnixMilli(ms).Format("Jan 2 15:04")
 }
 
-func (v syncView) viewContent(layout *tui.Layout) (string, string) {
+func (v syncView) viewContent(_ *tui.Layout) (string, string) {
 	helpText := "f: fetch • p: pull • P: push • r: reindex • tab: entries • esc: quit"
 
 	var b strings.Builder
@@ -227,21 +227,21 @@ func pullSyncCmd(ctx context.Context, sdk *journal.Journal, searchPath string) t
 	return func() tea.Msg {
 		idx := sdk.SearchIndex()
 		if idx != nil {
-			idx.Close()
+			_ = idx.Close()
 		}
 		pulled, err := sdk.PullSearchIndex(ctx, searchPath)
 		if err != nil {
 			// Reopen local.
-			reopened, _ := journal.OpenSearchIndex(searchPath)
+			reopened, _ := journal.OpenSearchIndex(ctx, searchPath)
 			sdk.SetSearchIndex(reopened)
 			return syncPulledMsg{err: err}
 		}
 		sdk.SetSearchIndex(pulled)
 
-		hash, _ := pulled.ContentHash()
+		hash, _ := pulled.ContentHash(context.Background())
 		var count int
-		_ = pulled.Count(&count)
-		ts, _ := pulled.LastIndexedTimestamp()
+		_ = pulled.Count(context.Background(), &count)
+		ts, _ := pulled.LastIndexedTimestamp(context.Background())
 
 		// Fetch remote hash for state tracking.
 		info, _ := sdk.FetchRemoteSearchInfo(ctx)
@@ -269,7 +269,7 @@ func pushSyncCmd(ctx context.Context, sdk *journal.Journal) tea.Cmd {
 		if err != nil {
 			return syncPushedMsg{err: err}
 		}
-		hash, _ := idx.ContentHash()
+		hash, _ := idx.ContentHash(context.Background())
 		return syncPushedMsg{
 			ref:  reference.Hex(ref)[:8],
 			hash: reference.Hex(hash),
@@ -283,10 +283,10 @@ func reindexSyncCmd(ctx context.Context, sdk *journal.Journal) tea.Cmd {
 			return syncReindexedMsg{err: err}
 		}
 		idx := sdk.SearchIndex()
-		hash, _ := idx.ContentHash()
+		hash, _ := idx.ContentHash(context.Background())
 		var count int
-		_ = idx.Count(&count)
-		ts, _ := idx.LastIndexedTimestamp()
+		_ = idx.Count(context.Background(), &count)
+		ts, _ := idx.LastIndexedTimestamp(context.Background())
 		return syncReindexedMsg{
 			hash:       reference.Hex(hash),
 			count:      count,

@@ -9,7 +9,6 @@ import (
 	"sync"
 
 	"github.com/google/cel-go/cel"
-	"github.com/google/cel-go/checker/decls"
 
 	"github.com/gezibash/arc/v2/pkg/reference"
 
@@ -30,12 +29,10 @@ type Evaluator struct {
 // NewEvaluator creates a new CEL evaluator with the index entry schema.
 func NewEvaluator() (*Evaluator, error) {
 	env, err := cel.NewEnv(
-		cel.Declarations(
-			decls.NewVar("labels", decls.NewMapType(decls.String, decls.String)),
-			decls.NewVar("timestamp", decls.Int),
-			decls.NewVar("ref", decls.String),
-			decls.NewVar("expires_at", decls.Int),
-		),
+		cel.Variable("labels", cel.MapType(cel.StringType, cel.StringType)),
+		cel.Variable("timestamp", cel.IntType),
+		cel.Variable("ref", cel.StringType),
+		cel.Variable("expires_at", cel.IntType),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create CEL env: %w", err)
@@ -54,12 +51,12 @@ func (e *Evaluator) Compile(_ context.Context, expression string) (cel.Program, 
 
 	ast, issues := e.env.Compile(expression)
 	if issues != nil && issues.Err() != nil {
-		return nil, fmt.Errorf("%w: %v", ErrInvalidExpression, issues.Err())
+		return nil, fmt.Errorf("%w: %w", ErrInvalidExpression, issues.Err())
 	}
 
 	prg, err := e.env.Program(ast)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrInvalidExpression, err)
+		return nil, fmt.Errorf("%w: %w", ErrInvalidExpression, err)
 	}
 
 	e.cache.Store(expression, prg)
@@ -86,7 +83,7 @@ func (e *Evaluator) Eval(_ context.Context, prg cel.Program, entry *physical.Ent
 
 	out, _, err := prg.Eval(activation)
 	if err != nil {
-		return false, fmt.Errorf("%w: %v", ErrEvaluationFailed, err)
+		return false, fmt.Errorf("%w: %w", ErrEvaluationFailed, err)
 	}
 
 	result, ok := out.Value().(bool)

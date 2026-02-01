@@ -57,7 +57,7 @@ func (m writeModel) update(msg tea.Msg) (writeModel, tea.Cmd) {
 		case writeDoneMsg:
 			m.saving = false
 			return m, func() tea.Msg {
-				return writeCompleteMsg{ref: msg.ref}
+				return writeCompleteMsg(msg)
 			}
 		case errMsg:
 			m.err = msg.err

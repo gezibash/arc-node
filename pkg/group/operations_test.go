@@ -2,6 +2,7 @@ package group
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 
 	"github.com/gezibash/arc/v2/pkg/identity"
@@ -93,7 +94,7 @@ func TestAddMemberDuplicate(t *testing.T) {
 	groupKP, m, _ := Create("test", admin)
 
 	_, err := AddMember(m, groupKP, admin.PublicKey(), RoleMember)
-	if err != ErrMemberExists {
+	if !errors.Is(err, ErrMemberExists) {
 		t.Errorf("expected ErrMemberExists, got %v", err)
 	}
 }
@@ -124,7 +125,7 @@ func TestRemoveMemberNotFound(t *testing.T) {
 
 	stranger, _ := identity.Generate()
 	_, err := RemoveMember(m, groupKP, stranger.PublicKey())
-	if err != ErrMemberNotFound {
+	if !errors.Is(err, ErrMemberNotFound) {
 		t.Errorf("expected ErrMemberNotFound, got %v", err)
 	}
 }

@@ -12,9 +12,9 @@ type ctxKey struct{}
 // Caller holds the authenticated identity extracted from an envelope.
 type Caller struct {
 	PublicKey  identity.PublicKey
-	Origin    identity.PublicKey
-	HopCount  int
-	Metadata  map[string]string
+	Origin     identity.PublicKey
+	HopCount   int
+	Metadata   map[string]string
 	Dimensions *nodev1.Dimensions
 }
 

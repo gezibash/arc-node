@@ -92,7 +92,7 @@ type subscription struct {
 
 	// FIFO ordering: tracks last delivered sequence per sender.
 	fifoMu      sync.Mutex
-	fifoLastSeq map[string]int64          // sender → last delivered sequence
+	fifoLastSeq map[string]int64             // sender → last delivered sequence
 	fifoHeld    map[string][]*physical.Entry // sender → held-back entries sorted by sequence
 }
 

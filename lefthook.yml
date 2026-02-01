@@ -14,9 +14,9 @@ commit-msg:
 pre-commit:
   parallel: true
   commands:
-    go-vet:
+    golangci-lint:
       glob: "*.go"
-      run: go vet ./...
+      run: golangci-lint run ./...
     go-build:
       glob: "*.go"
       run: go build ./...

@@ -19,7 +19,7 @@ func newTestStore(t *testing.T) *BlobStore {
 	if err != nil {
 		t.Fatalf("create memory backend: %v", err)
 	}
-	t.Cleanup(func() { backend.Close() })
+	t.Cleanup(func() { _ = backend.Close() })
 	return New(backend, metrics)
 }
 
@@ -258,12 +258,6 @@ func (m *mockBackend) Close() error {
 func (m *mockBackend) ScanPrefix(_ context.Context, _ string, _ int) ([]reference.Reference, error) {
 	return m.scanPrefixRefs, m.scanPrefixErr
 }
-
-// noPrefixBackend is a backend that does NOT implement PrefixScanner.
-type noPrefixBackend struct{ mockBackend }
-
-// Override to hide ScanPrefix from interface check.
-func (n *noPrefixBackend) ScanPrefix(_ context.Context, _ string, _ int) {}
 
 func TestStoreError(t *testing.T) {
 	m := &mockBackend{putErr: errors.New("disk full")}

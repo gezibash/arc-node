@@ -24,7 +24,7 @@ type SearchState struct {
 func LoadSearchState(dir string) *SearchState {
 	p := filepath.Join(dir, "search.state.json")
 	s := &SearchState{path: p}
-	data, err := os.ReadFile(p)
+	data, err := os.ReadFile(filepath.Clean(p))
 	if err != nil {
 		return s
 	}

@@ -4,8 +4,8 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/gezibash/arc/v2/pkg/identity"
 	"github.com/gezibash/arc-node/internal/indexstore/physical"
+	"github.com/gezibash/arc/v2/pkg/identity"
 )
 
 // visibilityChecker evaluates entry visibility using group membership

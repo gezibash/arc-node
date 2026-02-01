@@ -4,6 +4,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -92,7 +93,7 @@ CREATE TABLE IF NOT EXISTS cursors (
 `
 
 // NewFactory creates a new SQLite backend from a configuration map.
-func NewFactory(_ context.Context, config map[string]string) (physical.Backend, error) {
+func NewFactory(ctx context.Context, config map[string]string) (physical.Backend, error) {
 	path := storage.GetString(config, KeyPath, "")
 	if path == "" {
 		return nil, storage.NewConfigError("sqlite", KeyPath, "cannot be empty")
@@ -117,12 +118,12 @@ func NewFactory(_ context.Context, config map[string]string) (physical.Backend, 
 
 	db.SetMaxOpenConns(1)
 
-	if _, err := db.Exec(schema); err != nil {
-		db.Close()
+	if _, err := db.ExecContext(ctx, schema); err != nil {
+		_ = db.Close()
 		return nil, storage.NewConfigErrorWithCause("sqlite", KeyPath, "failed to initialize schema", err)
 	}
 
-	migrateSchema(db)
+	migrateSchema(ctx, db)
 
 	slog.Info("sqlite indexstore initialized", "path", path, "journal_mode", journalMode)
 	return &Backend{db: db}, nil
@@ -131,7 +132,7 @@ func NewFactory(_ context.Context, config map[string]string) (physical.Backend, 
 // migrateSchema adds columns that may be missing in existing databases.
 // Each ALTER TABLE is idempotent — SQLite returns an error for duplicates
 // which we silently ignore.
-func migrateSchema(db *sql.DB) {
+func migrateSchema(ctx context.Context, db *sql.DB) {
 	cols := []struct {
 		name string
 		def  string
@@ -153,7 +154,7 @@ func migrateSchema(db *sql.DB) {
 		{"correlation", "TEXT NOT NULL DEFAULT ''"},
 	}
 	for _, c := range cols {
-		_, _ = db.Exec("ALTER TABLE entries ADD COLUMN " + c.name + " " + c.def)
+		_, _ = db.ExecContext(ctx, "ALTER TABLE entries ADD COLUMN "+c.name+" "+c.def)
 	}
 }
 
@@ -228,7 +229,7 @@ func (b *Backend) putInTx(ctx context.Context, tx *sql.Tx, entry *physical.Entry
 		if err != nil {
 			return fmt.Errorf("sqlite put: prepare label insert: %w", err)
 		}
-		defer stmt.Close()
+		defer func() { _ = stmt.Close() }()
 
 		for k, v := range entry.Labels {
 			if _, err := stmt.ExecContext(ctx, refHex, k, v, entry.Timestamp); err != nil {
@@ -263,7 +264,7 @@ func (b *Backend) Get(ctx context.Context, r reference.Reference) (*physical.Ent
 		&entry.Ordering, &entry.DedupMode, &entry.IdempotencyKey, &entry.DeliveryComplete, &entry.CompleteN,
 		&entry.Priority, &entry.MaxRedelivery, &entry.AckTimeoutMs, &entry.Correlation,
 	)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, physical.ErrNotFound
 	}
 	if err != nil {
@@ -275,7 +276,7 @@ func (b *Backend) Get(ctx context.Context, r reference.Reference) (*physical.Ent
 	if err != nil {
 		return nil, fmt.Errorf("sqlite get labels: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var k, v string
@@ -330,7 +331,7 @@ func (b *Backend) Query(ctx context.Context, opts *physical.QueryOptions) (*phys
 	if opts.Cursor != "" {
 		parts := strings.SplitN(opts.Cursor, "/", 2)
 		if len(parts) == 2 {
-			fmt.Sscanf(parts[0], "%x", &cursorTS)
+			_, _ = fmt.Sscanf(parts[0], "%x", &cursorTS)
 			cursorRef = parts[1]
 		}
 	}
@@ -462,7 +463,7 @@ func (b *Backend) Query(ctx context.Context, opts *physical.QueryOptions) (*phys
 	if err != nil {
 		return nil, fmt.Errorf("sqlite query: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var entries []*physical.Entry
 	for rows.Next() {
@@ -576,24 +577,22 @@ func (b *Backend) queryByLabelFilter(ctx context.Context, opts *physical.QueryOp
 func (b *Backend) fetchLabels(ctx context.Context, entries []*physical.Entry) error {
 	// Build a map for quick lookup
 	byRef := make(map[string]*physical.Entry, len(entries))
-	placeholders := make([]string, len(entries))
 	args := make([]any, len(entries))
 	for i, e := range entries {
 		h := reference.Hex(e.Ref)
 		byRef[h] = e
 		e.Labels = make(map[string]string)
-		placeholders[i] = "?"
 		args[i] = h
 	}
 
-	q := fmt.Sprintf("SELECT ref_hex, key, value FROM labels WHERE ref_hex IN (%s)",
-		strings.Join(placeholders, ","))
+	q := "SELECT ref_hex, key, value FROM labels WHERE ref_hex IN (" +
+		strings.Repeat("?,", len(entries)-1) + "?)"
 
 	rows, err := b.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return fmt.Errorf("sqlite fetch labels: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var rh, k, v string
@@ -720,7 +719,7 @@ func (b *Backend) GetCursor(ctx context.Context, key string) (physical.Cursor, e
 	err := b.db.QueryRowContext(ctx,
 		`SELECT timestamp, sequence FROM cursors WHERE key = ?`, key,
 	).Scan(&cursor.Timestamp, &cursor.Sequence)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return physical.Cursor{}, physical.ErrCursorNotFound
 	}
 	if err != nil {

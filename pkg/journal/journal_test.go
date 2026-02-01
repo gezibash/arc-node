@@ -32,14 +32,14 @@ func newTestJournal(t *testing.T) *Journal {
 	if err != nil {
 		t.Fatalf("create blob backend: %v", err)
 	}
-	t.Cleanup(func() { blobBackend.Close() })
+	t.Cleanup(func() { _ = blobBackend.Close() })
 	blobs := blobstore.New(blobBackend, metrics)
 
 	idxBackend, err := idxphysical.New(ctx, "memory", nil, metrics)
 	if err != nil {
 		t.Fatalf("create index backend: %v", err)
 	}
-	t.Cleanup(func() { idxBackend.Close() })
+	t.Cleanup(func() { _ = idxBackend.Close() })
 	idx, err := indexstore.New(idxBackend, metrics)
 	if err != nil {
 		t.Fatalf("create index store: %v", err)
@@ -49,14 +49,14 @@ func newTestJournal(t *testing.T) *Journal {
 	if err != nil {
 		t.Fatalf("create observability: %v", err)
 	}
-	t.Cleanup(func() { obs.Close(ctx) })
+	t.Cleanup(func() { _ = obs.Close(ctx) })
 
 	nodeKP, err := identity.Generate()
 	if err != nil {
 		t.Fatalf("generate node keypair: %v", err)
 	}
 
-	srv, err := server.New(":0", obs, false, nodeKP, blobs, idx)
+	srv, err := server.New(context.Background(), ":0", obs, false, nodeKP, blobs, idx)
 	if err != nil {
 		t.Fatalf("create server: %v", err)
 	}
@@ -76,7 +76,7 @@ func newTestJournal(t *testing.T) *Journal {
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	t.Cleanup(func() { c.Close() })
+	t.Cleanup(func() { _ = c.Close() })
 
 	return New(c, callerKP, WithNodeKey(nodePub))
 }
@@ -308,11 +308,11 @@ func TestSearchIndexIntegration(t *testing.T) {
 	ctx := context.Background()
 
 	dir := t.TempDir()
-	idx, err := OpenSearchIndex(dir + "/search.db")
+	idx, err := OpenSearchIndex(ctx, dir+"/search.db")
 	if err != nil {
 		t.Fatalf("OpenSearchIndex: %v", err)
 	}
-	t.Cleanup(func() { idx.Close() })
+	t.Cleanup(func() { _ = idx.Close() })
 	j.SetSearchIndex(idx)
 
 	if _, err := j.Write(ctx, []byte("the quick brown fox"), nil); err != nil {
@@ -473,11 +473,11 @@ func TestEditWithSearchIndex(t *testing.T) {
 	ctx := context.Background()
 
 	dir := t.TempDir()
-	idx, err := OpenSearchIndex(dir + "/search.db")
+	idx, err := OpenSearchIndex(ctx, dir+"/search.db")
 	if err != nil {
 		t.Fatalf("OpenSearchIndex: %v", err)
 	}
-	t.Cleanup(func() { idx.Close() })
+	t.Cleanup(func() { _ = idx.Close() })
 	j.SetSearchIndex(idx)
 
 	orig, err := j.Write(ctx, []byte("original searchable"), nil)
@@ -528,11 +528,11 @@ func TestReindex(t *testing.T) {
 	ctx := context.Background()
 
 	dir := t.TempDir()
-	idx, err := OpenSearchIndex(dir + "/search.db")
+	idx, err := OpenSearchIndex(ctx, dir+"/search.db")
 	if err != nil {
 		t.Fatalf("OpenSearchIndex: %v", err)
 	}
-	t.Cleanup(func() { idx.Close() })
+	t.Cleanup(func() { _ = idx.Close() })
 	j.SetSearchIndex(idx)
 
 	// Write 3 entries.
@@ -570,7 +570,7 @@ func TestReindex(t *testing.T) {
 
 	// Should find beta, gamma, alpha-v2 but not original alpha.
 	var count int
-	if err := idx.Count(&count); err != nil {
+	if err := idx.Count(ctx, &count); err != nil {
 		t.Fatalf("Count: %v", err)
 	}
 	if count != 3 {
@@ -650,11 +650,11 @@ func TestPushAndPullSearchIndex(t *testing.T) {
 	ctx := context.Background()
 
 	dir := t.TempDir()
-	idx, err := OpenSearchIndex(dir + "/search.db")
+	idx, err := OpenSearchIndex(ctx, dir+"/search.db")
 	if err != nil {
 		t.Fatalf("OpenSearchIndex: %v", err)
 	}
-	t.Cleanup(func() { idx.Close() })
+	t.Cleanup(func() { _ = idx.Close() })
 	j.SetSearchIndex(idx)
 
 	// Write entries to build search index.
@@ -680,7 +680,7 @@ func TestPushAndPullSearchIndex(t *testing.T) {
 	t.Cleanup(func() { pulled.Close() })
 
 	// Verify search works on pulled DB.
-	resp, err := pulled.Search("alpha", SearchOptions{})
+	resp, err := pulled.Search(ctx, "alpha", SearchOptions{})
 	if err != nil {
 		t.Fatalf("Search on pulled: %v", err)
 	}
@@ -694,11 +694,11 @@ func TestFetchRemoteSearchInfo(t *testing.T) {
 	ctx := context.Background()
 
 	dir := t.TempDir()
-	idx, err := OpenSearchIndex(dir + "/search.db")
+	idx, err := OpenSearchIndex(ctx, dir+"/search.db")
 	if err != nil {
 		t.Fatalf("OpenSearchIndex: %v", err)
 	}
-	t.Cleanup(func() { idx.Close() })
+	t.Cleanup(func() { _ = idx.Close() })
 	j.SetSearchIndex(idx)
 
 	if _, err := j.Write(ctx, []byte("info test"), nil); err != nil {

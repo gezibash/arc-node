@@ -34,7 +34,7 @@ func truncateHexValue(v string) string {
 }
 
 func formatTextHeader(w io.Writer) {
-	fmt.Fprintf(w, "%-10s %-14s %s\n", "REF", "AGE", "LABELS")
+	_, _ = fmt.Fprintf(w, "%-10s %-14s %s\n", "REF", "AGE", "LABELS")
 }
 
 func formatEntryText(w io.Writer, e *client.Entry, preview bool, ctx context.Context, loader ContentLoader) error {
@@ -49,18 +49,18 @@ func formatEntryText(w io.Writer, e *client.Entry, preview bool, ctx context.Con
 	}
 	slices.Sort(parts)
 
-	fmt.Fprintf(w, "%-10s %-14s %s\n", short, formatDuration(age)+" ago", strings.Join(parts, " "))
+	_, _ = fmt.Fprintf(w, "%-10s %-14s %s\n", short, formatDuration(age)+" ago", strings.Join(parts, " "))
 
 	if preview && loader != nil {
 		text, err := loadPreview(ctx, e.Labels, loader)
 		if err == nil && text != "" {
 			for _, line := range strings.Split(text, "\n") {
-				fmt.Fprintf(w, "%-10s %-14s %s\n", "", "", line)
+				_, _ = fmt.Fprintf(w, "%-10s %-14s %s\n", "", "", line)
 			}
 		}
 	}
 
-	fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w)
 	return nil
 }
 

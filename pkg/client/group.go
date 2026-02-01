@@ -5,9 +5,9 @@ import (
 	"encoding/hex"
 	"fmt"
 
+	"github.com/gezibash/arc-node/pkg/group"
 	"github.com/gezibash/arc/v2/pkg/identity"
 	"github.com/gezibash/arc/v2/pkg/reference"
-	"github.com/gezibash/arc-node/pkg/group"
 )
 
 // CreateGroup generates a new group keypair, builds the initial manifest,

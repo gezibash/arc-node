@@ -1,7 +1,6 @@
 package dm
 
 import (
-	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
@@ -166,7 +165,7 @@ func (v chatView) update(msg tea.Msg) (chatView, tea.Cmd) {
 	return v, taCmd
 }
 
-func (v chatView) viewContent(msgs []dm.Message, previews map[reference.Reference]string, self identity.PublicKey, layout *tui.Layout) (string, string) {
+func (v chatView) viewContent(_ []dm.Message, _ map[reference.Reference]string, _ identity.PublicKey, layout *tui.Layout) (string, string) {
 	helpText := "enter: send • esc: back • scroll: ↑/↓"
 
 	var b strings.Builder
@@ -195,8 +194,4 @@ func (v chatView) viewContent(msgs []dm.Message, previews map[reference.Referenc
 	b.WriteString("\n")
 
 	return b.String(), helpText
-}
-
-func peerShortHex(pub identity.PublicKey) string {
-	return hex.EncodeToString(pub[:4])
 }

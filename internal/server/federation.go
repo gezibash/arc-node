@@ -200,7 +200,7 @@ func (f *federationManager) run(ctx context.Context, fed *federation) {
 		slog.Error("federation dial failed", "peer", fed.peerAddr, "error", err)
 		return
 	}
-	defer peerClient.Close()
+	defer func() { _ = peerClient.Close() }()
 
 	if _, err := peerClient.Ping(ctx); err != nil {
 		slog.Error("federation ping failed", "peer", fed.peerAddr, "error", err)

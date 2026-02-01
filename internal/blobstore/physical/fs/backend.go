@@ -113,21 +113,21 @@ func (b *Backend) Put(_ context.Context, r reference.Reference, data []byte) err
 	_, writeErr := tmp.Write(data)
 	closeErr := tmp.Close()
 	if writeErr != nil {
-		os.Remove(tmpName)
+		_ = os.Remove(tmpName)
 		return fmt.Errorf("fs put: %w", writeErr)
 	}
 	if closeErr != nil {
-		os.Remove(tmpName)
+		_ = os.Remove(tmpName)
 		return fmt.Errorf("fs put: %w", closeErr)
 	}
 
 	if err := os.Chmod(tmpName, b.filePerms); err != nil {
-		os.Remove(tmpName)
+		_ = os.Remove(tmpName)
 		return fmt.Errorf("fs put: %w", err)
 	}
 
 	if err := os.Rename(tmpName, path); err != nil {
-		os.Remove(tmpName)
+		_ = os.Remove(tmpName)
 		return fmt.Errorf("fs put: %w", err)
 	}
 

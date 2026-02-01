@@ -699,12 +699,13 @@ func TestSubscriptionMetricsAggregation(t *testing.T) {
 
 	// Drain both.
 	timeout := time.After(2 * time.Second)
+drain:
 	for i := 0; i < 6; i++ {
 		select {
 		case <-sub1.Entries():
 		case <-sub2.Entries():
 		case <-timeout:
-			break
+			break drain
 		}
 	}
 

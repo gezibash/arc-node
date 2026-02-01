@@ -42,38 +42,55 @@ func MarkdownWithFrontmatter(w io.Writer, meta Metadata, contentFn func(io.Write
 		meta.NextActions = BuildNextActions(meta)
 	}
 
-	fmt.Fprintln(w, "---")
-	fmt.Fprintf(w, "command: %q\n", meta.Command)
-	if meta.Query != "" {
-		fmt.Fprintf(w, "query: %q\n", meta.Query)
+	var werr error
+	p := func(format string, args ...any) {
+		if werr != nil {
+			return
+		}
+		_, werr = fmt.Fprintf(w, format, args...)
 	}
-	fmt.Fprintf(w, "total_count: %d\n", meta.TotalCount)
-	fmt.Fprintf(w, "showing: %d\n", meta.ShowingCount)
+	pl := func(args ...any) {
+		if werr != nil {
+			return
+		}
+		_, werr = fmt.Fprintln(w, args...)
+	}
+
+	pl("---")
+	p("command: %q\n", meta.Command)
+	if meta.Query != "" {
+		p("query: %q\n", meta.Query)
+	}
+	p("total_count: %d\n", meta.TotalCount)
+	p("showing: %d\n", meta.ShowingCount)
 	if meta.Limit > 0 {
-		fmt.Fprintf(w, "limit: %d\n", meta.Limit)
+		p("limit: %d\n", meta.Limit)
 	}
 	if meta.Offset > 0 {
-		fmt.Fprintf(w, "offset: %d\n", meta.Offset)
+		p("offset: %d\n", meta.Offset)
 	}
-	fmt.Fprintf(w, "has_more: %t\n", meta.HasMore)
+	p("has_more: %t\n", meta.HasMore)
 	if meta.NextCursor != "" {
-		fmt.Fprintf(w, "next_cursor: %q\n", meta.NextCursor)
+		p("next_cursor: %q\n", meta.NextCursor)
 	}
 	if meta.TimeRange != nil {
-		fmt.Fprintln(w, "time_range:")
-		fmt.Fprintf(w, "  oldest: %d\n", meta.TimeRange.Oldest)
-		fmt.Fprintf(w, "  newest: %d\n", meta.TimeRange.Newest)
+		pl("time_range:")
+		p("  oldest: %d\n", meta.TimeRange.Oldest)
+		p("  newest: %d\n", meta.TimeRange.Newest)
 	}
 	if len(meta.NextActions) > 0 {
-		fmt.Fprintln(w, "next_actions:")
+		pl("next_actions:")
 		for _, a := range meta.NextActions {
-			fmt.Fprintf(w, "  - description: %q\n", a.Description)
-			fmt.Fprintf(w, "    command: %q\n", a.Command)
+			p("  - description: %q\n", a.Description)
+			p("    command: %q\n", a.Command)
 		}
 	}
-	fmt.Fprintf(w, "generated_at: %d\n", meta.GeneratedAt)
-	fmt.Fprintln(w, "---")
-	fmt.Fprintln(w)
+	p("generated_at: %d\n", meta.GeneratedAt)
+	pl("---")
+	pl()
+	if werr != nil {
+		return werr
+	}
 	return contentFn(w)
 }
 

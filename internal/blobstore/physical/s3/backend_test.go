@@ -3,6 +3,7 @@ package s3
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -94,7 +95,7 @@ func (m *mockStore) del(key string) {
 	delete(m.blobs, key)
 }
 
-func newTestBackend(t *testing.T) (*Backend, *httptest.Server) {
+func newTestBackend(t *testing.T) *Backend {
 	t.Helper()
 	srv, _ := mockS3Server()
 	t.Cleanup(srv.Close)
@@ -110,11 +111,11 @@ func newTestBackend(t *testing.T) (*Backend, *httptest.Server) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return b.(*Backend), srv
+	return b.(*Backend)
 }
 
 func TestPutGetRoundTrip(t *testing.T) {
-	b, _ := newTestBackend(t)
+	b := newTestBackend(t)
 	ctx := context.Background()
 	data := []byte("hello s3")
 	ref := testRef(data)
@@ -133,17 +134,17 @@ func TestPutGetRoundTrip(t *testing.T) {
 }
 
 func TestGetNotFound(t *testing.T) {
-	b, _ := newTestBackend(t)
+	b := newTestBackend(t)
 	ref := testRef([]byte("missing"))
 
 	_, err := b.Get(context.Background(), ref)
-	if err != physical.ErrNotFound {
+	if !errors.Is(err, physical.ErrNotFound) {
 		t.Fatalf("got %v, want ErrNotFound", err)
 	}
 }
 
 func TestExistsHeadObject(t *testing.T) {
-	b, _ := newTestBackend(t)
+	b := newTestBackend(t)
 	ctx := context.Background()
 	data := []byte("exists test")
 	ref := testRef(data)
@@ -170,7 +171,7 @@ func TestExistsHeadObject(t *testing.T) {
 }
 
 func TestDeleteIdempotent(t *testing.T) {
-	b, _ := newTestBackend(t)
+	b := newTestBackend(t)
 	ctx := context.Background()
 	ref := testRef([]byte("delete me"))
 
@@ -181,7 +182,7 @@ func TestDeleteIdempotent(t *testing.T) {
 }
 
 func TestStats(t *testing.T) {
-	b, _ := newTestBackend(t)
+	b := newTestBackend(t)
 	stats, err := b.Stats(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -192,16 +193,16 @@ func TestStats(t *testing.T) {
 }
 
 func TestClosedBackend(t *testing.T) {
-	b, _ := newTestBackend(t)
+	b := newTestBackend(t)
 	b.Close()
 
 	ref := testRef([]byte("closed"))
 	ctx := context.Background()
 
-	if err := b.Put(ctx, ref, []byte("closed")); err != physical.ErrClosed {
+	if err := b.Put(ctx, ref, []byte("closed")); !errors.Is(err, physical.ErrClosed) {
 		t.Fatalf("Put after close: got %v, want ErrClosed", err)
 	}
-	if _, err := b.Get(ctx, ref); err != physical.ErrClosed {
+	if _, err := b.Get(ctx, ref); !errors.Is(err, physical.ErrClosed) {
 		t.Fatalf("Get after close: got %v, want ErrClosed", err)
 	}
 }

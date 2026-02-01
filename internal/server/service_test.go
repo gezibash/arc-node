@@ -64,7 +64,7 @@ func newTestServer(t *testing.T) (*Server, *identity.Keypair, string) {
 		t.Fatalf("generate keypair: %v", err)
 	}
 
-	srv, err := New(":0", obs, false, kp, blobs, idx)
+	srv, err := New(context.Background(), ":0", obs, false, kp, blobs, idx)
 	if err != nil {
 		t.Fatalf("create server: %v", err)
 	}
@@ -140,7 +140,7 @@ func newTestServerWithBackend(t *testing.T, blobBackend, idxBackend string) (*Se
 		t.Fatalf("generate keypair: %v", err)
 	}
 
-	srv, err := New(":0", obs, false, kp, blobs, idx)
+	srv, err := New(context.Background(), ":0", obs, false, kp, blobs, idx)
 	if err != nil {
 		t.Fatalf("create server: %v", err)
 	}
@@ -548,10 +548,8 @@ func TestSubscribeMessagesCancelContext(t *testing.T) {
 	cancel()
 
 	select {
-	case _, ok := <-entries:
-		if ok {
-			// Got an entry before close, that's fine, drain
-		}
+	case <-entries:
+		// Got an entry or channel closed, both acceptable.
 	case <-time.After(3 * time.Second):
 		t.Fatal("entries channel did not close after context cancel")
 	}

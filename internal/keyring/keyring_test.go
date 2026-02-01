@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/gezibash/arc/v2/pkg/identity"
 	"github.com/gezibash/arc-node/pkg/group"
+	"github.com/gezibash/arc/v2/pkg/identity"
 )
 
 func newTestKeyring(t *testing.T) *Keyring {
@@ -677,7 +677,7 @@ func TestLoadKeyMissingMetadata(t *testing.T) {
 	key := generateKey(t, kr, "")
 
 	// Remove the metadata file but keep the key file.
-	os.Remove(kr.metaPath(key.PublicKey))
+	_ = os.Remove(kr.metaPath(key.PublicKey))
 
 	loaded, err := kr.Load(context.Background(), key.PublicKey)
 	if err != nil {
@@ -928,7 +928,7 @@ func TestSaveKeyWriteKeyFileFailure(t *testing.T) {
 	if err := os.Chmod(keysDir, 0o500); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { os.Chmod(keysDir, 0o700) })
+	t.Cleanup(func() { _ = os.Chmod(keysDir, 0o700) })
 
 	_, err := kr.Generate(context.Background(), "")
 	if err == nil {
@@ -1021,7 +1021,7 @@ func TestDeleteKeyFilesNonExistError(t *testing.T) {
 	if err := os.Chmod(keysDir, 0o500); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { os.Chmod(keysDir, 0o700) })
+	t.Cleanup(func() { _ = os.Chmod(keysDir, 0o700) })
 
 	err := kr.deleteKeyFiles(fakeHex)
 	if err == nil {
@@ -1148,7 +1148,7 @@ func TestDeleteSaveKeyringFileFailure(t *testing.T) {
 
 	// Make keyring.json a directory so saveKeyringFile fails when trying
 	// to persist alias removal.
-	os.Remove(kr.keyringFilePath())
+	_ = os.Remove(kr.keyringFilePath())
 	if err := os.MkdirAll(kr.keyringFilePath(), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -1164,7 +1164,7 @@ func TestLoadKeyReadErrorNotErrNotExist(t *testing.T) {
 	key := generateKey(t, kr, "")
 
 	// Replace the key file with a directory to cause a non-ErrNotExist read error.
-	os.Remove(kr.keyPath(key.PublicKey))
+	_ = os.Remove(kr.keyPath(key.PublicKey))
 	if err := os.MkdirAll(kr.keyPath(key.PublicKey), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -1183,7 +1183,7 @@ func TestLoadKeyMetadataReadErrorNotErrNotExist(t *testing.T) {
 	key := generateKey(t, kr, "")
 
 	// Replace metadata file with a directory.
-	os.Remove(kr.metaPath(key.PublicKey))
+	_ = os.Remove(kr.metaPath(key.PublicKey))
 	if err := os.MkdirAll(kr.metaPath(key.PublicKey), 0o700); err != nil {
 		t.Fatal(err)
 	}

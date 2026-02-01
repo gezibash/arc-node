@@ -3,8 +3,8 @@ package server
 import (
 	"testing"
 
-	"github.com/gezibash/arc/v2/pkg/identity"
 	"github.com/gezibash/arc-node/pkg/group"
+	"github.com/gezibash/arc/v2/pkg/identity"
 )
 
 func TestGroupCacheIsMember(t *testing.T) {

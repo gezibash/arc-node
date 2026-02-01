@@ -2,6 +2,7 @@ package envelope
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"testing"
 
@@ -157,7 +158,7 @@ func TestOpenInvalidSignature(t *testing.T) {
 	badSig[0] ^= 0xFF
 
 	_, err = Open(env.Message.From, env.Message.To, payload, "text/plain", env.Message.Timestamp, badSig, kp.PublicKey(), 0, nil, nil)
-	if err != ErrInvalidSignature {
+	if !errors.Is(err, ErrInvalidSignature) {
 		t.Fatalf("expected ErrInvalidSignature, got %v", err)
 	}
 }
@@ -173,7 +174,7 @@ func TestOpenWrongPayload(t *testing.T) {
 	}
 
 	_, err = Open(env.Message.From, env.Message.To, []byte("different payload"), "text/plain", env.Message.Timestamp, *env.Message.Signature, kp.PublicKey(), 0, nil, nil)
-	if err != ErrInvalidSignature {
+	if !errors.Is(err, ErrInvalidSignature) {
 		t.Fatalf("expected ErrInvalidSignature, got %v", err)
 	}
 }

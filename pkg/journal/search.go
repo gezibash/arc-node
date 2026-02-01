@@ -1,6 +1,7 @@
 package journal
 
 import (
+	"context"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/binary"
@@ -28,7 +29,7 @@ type SearchResult struct {
 }
 
 // OpenSearchIndex opens (or creates) a search index at the given path.
-func OpenSearchIndex(path string) (*SearchIndex, error) {
+func OpenSearchIndex(ctx context.Context, path string) (*SearchIndex, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return nil, fmt.Errorf("create search index dir: %w", err)
 	}
@@ -43,19 +44,19 @@ func OpenSearchIndex(path string) (*SearchIndex, error) {
 	// triggers a full drop-and-recreate + reindex.
 	const currentSchemaVersion = 5
 	var version int
-	_ = db.QueryRow(`SELECT version FROM search_schema_version LIMIT 1`).Scan(&version)
+	_ = db.QueryRowContext(ctx, `SELECT version FROM search_schema_version LIMIT 1`).Scan(&version)
 	if version != currentSchemaVersion {
-		db.Exec(`DROP TABLE IF EXISTS entries_fts`)
-		db.Exec(`DROP TRIGGER IF EXISTS entries_ai`)
-		db.Exec(`DROP TRIGGER IF EXISTS entries_ad`)
-		db.Exec(`DROP TRIGGER IF EXISTS entries_au`)
-		db.Exec(`DROP TABLE IF EXISTS entries`)
-		db.Exec(`DROP TABLE IF EXISTS search_schema_version`)
-		db.Exec(`CREATE TABLE search_schema_version (version INTEGER)`)
-		db.Exec(`INSERT INTO search_schema_version (version) VALUES (?)`, currentSchemaVersion)
+		_, _ = db.ExecContext(ctx, `DROP TABLE IF EXISTS entries_fts`)
+		_, _ = db.ExecContext(ctx, `DROP TRIGGER IF EXISTS entries_ai`)
+		_, _ = db.ExecContext(ctx, `DROP TRIGGER IF EXISTS entries_ad`)
+		_, _ = db.ExecContext(ctx, `DROP TRIGGER IF EXISTS entries_au`)
+		_, _ = db.ExecContext(ctx, `DROP TABLE IF EXISTS entries`)
+		_, _ = db.ExecContext(ctx, `DROP TABLE IF EXISTS search_schema_version`)
+		_, _ = db.ExecContext(ctx, `CREATE TABLE search_schema_version (version INTEGER)`)
+		_, _ = db.ExecContext(ctx, `INSERT INTO search_schema_version (version) VALUES (?)`, currentSchemaVersion)
 	}
 
-	if _, err := db.Exec(`
+	if _, err := db.ExecContext(ctx, `
 		CREATE VIRTUAL TABLE IF NOT EXISTS entries_fts USING fts5(
 			content_ref UNINDEXED,
 			entry_ref UNINDEXED,
@@ -63,7 +64,7 @@ func OpenSearchIndex(path string) (*SearchIndex, error) {
 			timestamp UNINDEXED
 		);
 	`); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("init search schema: %w", err)
 	}
 
@@ -73,18 +74,18 @@ func OpenSearchIndex(path string) (*SearchIndex, error) {
 // Index adds or replaces an entry in the search index. The index is keyed on
 // entryRef (deterministic journal-level ID) so each journal entry is unique.
 // contentRef is stored for lookup and debugging.
-func (s *SearchIndex) Index(contentRef, entryRef reference.Reference, plaintext string, timestamp int64) error {
+func (s *SearchIndex) Index(ctx context.Context, contentRef, entryRef reference.Reference, plaintext string, timestamp int64) error {
 	contentHex := reference.Hex(contentRef)
 	entryHex := reference.Hex(entryRef)
-	tx, err := s.db.Begin()
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
-	if _, err := tx.Exec(`DELETE FROM entries_fts WHERE entry_ref = ?`, entryHex); err != nil {
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, `DELETE FROM entries_fts WHERE entry_ref = ?`, entryHex); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(
+	if _, err := tx.ExecContext(ctx,
 		`INSERT INTO entries_fts (content_ref, entry_ref, content, timestamp) VALUES (?, ?, ?, ?)`,
 		contentHex, entryHex, plaintext, timestamp,
 	); err != nil {
@@ -94,8 +95,8 @@ func (s *SearchIndex) Index(contentRef, entryRef reference.Reference, plaintext 
 }
 
 // DeleteByEntryRef removes an entry from the search index by entry reference.
-func (s *SearchIndex) DeleteByEntryRef(entryRef reference.Reference) error {
-	_, err := s.db.Exec(`DELETE FROM entries_fts WHERE entry_ref = ?`, reference.Hex(entryRef))
+func (s *SearchIndex) DeleteByEntryRef(ctx context.Context, entryRef reference.Reference) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM entries_fts WHERE entry_ref = ?`, reference.Hex(entryRef))
 	return err
 }
 
@@ -113,12 +114,12 @@ type SearchResponse struct {
 
 // Search performs a full-text search and returns matching entries with snippets.
 // Query terms are automatically prefix-matched (e.g. "hel" matches "hello").
-func (s *SearchIndex) Search(query string, opts SearchOptions) (*SearchResponse, error) {
+func (s *SearchIndex) Search(ctx context.Context, query string, opts SearchOptions) (*SearchResponse, error) {
 	ftsQuery := prefixQuery(query)
 
 	// Get total count.
 	var totalCount int
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM entries_fts WHERE entries_fts MATCH ?`, ftsQuery).Scan(&totalCount); err != nil {
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM entries_fts WHERE entries_fts MATCH ?`, ftsQuery).Scan(&totalCount); err != nil {
 		return nil, fmt.Errorf("search count: %w", err)
 	}
 
@@ -138,11 +139,11 @@ func (s *SearchIndex) Search(query string, opts SearchOptions) (*SearchResponse,
 		}
 	}
 
-	rows, err := s.db.Query(q, args...)
+	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("search: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var results []SearchResult
 	for rows.Next() {
@@ -168,9 +169,9 @@ func (s *SearchIndex) Search(query string, opts SearchOptions) (*SearchResponse,
 }
 
 // LastIndexedTimestamp returns the maximum timestamp in the index, or 0 if empty.
-func (s *SearchIndex) LastIndexedTimestamp() (int64, error) {
+func (s *SearchIndex) LastIndexedTimestamp(ctx context.Context) (int64, error) {
 	var ts sql.NullInt64
-	err := s.db.QueryRow(`SELECT MAX(timestamp) FROM entries_fts`).Scan(&ts)
+	err := s.db.QueryRowContext(ctx, `SELECT MAX(timestamp) FROM entries_fts`).Scan(&ts)
 	if err != nil {
 		return 0, err
 	}
@@ -183,12 +184,12 @@ func (s *SearchIndex) LastIndexedTimestamp() (int64, error) {
 // ContentHash computes a deterministic SHA-256 over all indexed entries,
 // ordered by message ref. This is stable across SQLite file rewrites — same
 // logical content always produces the same hash.
-func (s *SearchIndex) ContentHash() (reference.Reference, error) {
-	rows, err := s.db.Query(`SELECT entry_ref, timestamp FROM entries_fts ORDER BY entry_ref`)
+func (s *SearchIndex) ContentHash(ctx context.Context) (reference.Reference, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT entry_ref, timestamp FROM entries_fts ORDER BY entry_ref`)
 	if err != nil {
 		return reference.Reference{}, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	h := sha256.New()
 	var buf [8]byte
@@ -211,24 +212,24 @@ func (s *SearchIndex) ContentHash() (reference.Reference, error) {
 }
 
 // Count stores the number of indexed entries into n.
-func (s *SearchIndex) Count(n *int) error {
-	return s.db.QueryRow(`SELECT COUNT(*) FROM entries_fts`).Scan(n)
+func (s *SearchIndex) Count(ctx context.Context, n *int) error {
+	return s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM entries_fts`).Scan(n)
 }
 
 // Clear removes all entries from the search index.
-func (s *SearchIndex) Clear() error {
-	_, err := s.db.Exec(`DELETE FROM entries_fts`)
+func (s *SearchIndex) Clear(ctx context.Context) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM entries_fts`)
 	return err
 }
 
 // ResolvePrefix finds an entry by entry_ref prefix. Returns an error if zero
 // or more than one entry matches.
-func (s *SearchIndex) ResolvePrefix(prefix string) (reference.Reference, error) {
-	rows, err := s.db.Query(`SELECT entry_ref FROM entries_fts WHERE entry_ref LIKE ?`, prefix+"%")
+func (s *SearchIndex) ResolvePrefix(ctx context.Context, prefix string) (reference.Reference, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT entry_ref FROM entries_fts WHERE entry_ref LIKE ?`, prefix+"%")
 	if err != nil {
 		return reference.Reference{}, fmt.Errorf("resolve prefix: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var matches []string
 	for rows.Next() {
@@ -259,7 +260,7 @@ func (s *SearchIndex) Close() error {
 // DBPath returns the filesystem path of the underlying database.
 func (s *SearchIndex) DBPath() (string, error) {
 	var path string
-	err := s.db.QueryRow(`PRAGMA database_list`).Scan(new(int), new(string), &path)
+	err := s.db.QueryRowContext(context.Background(), `PRAGMA database_list`).Scan(new(int), new(string), &path)
 	return path, err
 }
 

@@ -2,6 +2,7 @@ package indexstore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"sync"
@@ -142,7 +143,7 @@ func (pb *PartitionedBackend) Get(ctx context.Context, r reference.Reference) (*
 		if err == nil {
 			return entry, nil
 		}
-		if err != physical.ErrNotFound {
+		if !errors.Is(err, physical.ErrNotFound) {
 			return nil, err
 		}
 	}
@@ -155,7 +156,7 @@ func (pb *PartitionedBackend) Delete(ctx context.Context, r reference.Reference)
 
 	for _, id := range pb.sorted {
 		p := pb.partitions[id]
-		if err := p.backend.Delete(ctx, r); err != nil && err != physical.ErrNotFound {
+		if err := p.backend.Delete(ctx, r); err != nil && !errors.Is(err, physical.ErrNotFound) {
 			return err
 		}
 	}
@@ -326,7 +327,7 @@ func (pb *PartitionedBackend) evictOldestLocked() {
 	}
 
 	if oldestID != "" {
-		pb.partitions[oldestID].backend.Close()
+		_ = pb.partitions[oldestID].backend.Close()
 		delete(pb.partitions, oldestID)
 		newSorted := make([]string, 0, len(pb.partitions))
 		for id := range pb.partitions {

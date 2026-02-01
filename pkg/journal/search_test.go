@@ -1,6 +1,7 @@
 package journal
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"testing"
@@ -9,8 +10,9 @@ import (
 )
 
 func TestSearchIndex(t *testing.T) {
+	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "search.db")
-	idx, err := OpenSearchIndex(dbPath)
+	idx, err := OpenSearchIndex(ctx, dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -21,15 +23,15 @@ func TestSearchIndex(t *testing.T) {
 	entryRef1 := reference.Compute([]byte("entry one"))
 	entryRef2 := reference.Compute([]byte("entry two"))
 
-	if err := idx.Index(contentRef1, entryRef1, "hello world this is a test entry", 1000); err != nil {
+	if err := idx.Index(ctx, contentRef1, entryRef1, "hello world this is a test entry", 1000); err != nil {
 		t.Fatal(err)
 	}
-	if err := idx.Index(contentRef2, entryRef2, "goodbye world another entry here", 2000); err != nil {
+	if err := idx.Index(ctx, contentRef2, entryRef2, "goodbye world another entry here", 2000); err != nil {
 		t.Fatal(err)
 	}
 
 	// Search for "hello"
-	resp, err := idx.Search("hello", SearchOptions{})
+	resp, err := idx.Search(ctx, "hello", SearchOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +43,7 @@ func TestSearchIndex(t *testing.T) {
 	}
 
 	// Search for "world" should match both
-	resp, err = idx.Search("world", SearchOptions{})
+	resp, err = idx.Search(ctx, "world", SearchOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +52,7 @@ func TestSearchIndex(t *testing.T) {
 	}
 
 	// LastIndexedTimestamp
-	ts, err := idx.LastIndexedTimestamp()
+	ts, err := idx.LastIndexedTimestamp(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +61,7 @@ func TestSearchIndex(t *testing.T) {
 	}
 
 	// Prefix search: "hel" should match "hello"
-	resp, err = idx.Search("hel", SearchOptions{})
+	resp, err = idx.Search(ctx, "hel", SearchOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,10 +73,10 @@ func TestSearchIndex(t *testing.T) {
 	}
 
 	// Idempotent re-index (same msg ref, updated content)
-	if err := idx.Index(contentRef1, entryRef1, "hello world updated content", 1500); err != nil {
+	if err := idx.Index(ctx, contentRef1, entryRef1, "hello world updated content", 1500); err != nil {
 		t.Fatal(err)
 	}
-	resp, err = idx.Search("updated", SearchOptions{})
+	resp, err = idx.Search(ctx, "updated", SearchOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +85,7 @@ func TestSearchIndex(t *testing.T) {
 	}
 
 	// Old content should no longer match
-	resp, err = idx.Search("test", SearchOptions{})
+	resp, err = idx.Search(ctx, "test", SearchOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,14 +95,15 @@ func TestSearchIndex(t *testing.T) {
 }
 
 func TestSearchIndexEmpty(t *testing.T) {
+	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "search.db")
-	idx, err := OpenSearchIndex(dbPath)
+	idx, err := OpenSearchIndex(ctx, dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { idx.Close() })
 
-	ts, err := idx.LastIndexedTimestamp()
+	ts, err := idx.LastIndexedTimestamp(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +111,7 @@ func TestSearchIndexEmpty(t *testing.T) {
 		t.Fatalf("expected 0, got %d", ts)
 	}
 
-	resp, err := idx.Search("anything", SearchOptions{})
+	resp, err := idx.Search(ctx, "anything", SearchOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,8 +121,9 @@ func TestSearchIndexEmpty(t *testing.T) {
 }
 
 func TestSearchIndexDuplicateContentDifferentMessages(t *testing.T) {
+	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "search.db")
-	idx, err := OpenSearchIndex(dbPath)
+	idx, err := OpenSearchIndex(ctx, dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,14 +133,14 @@ func TestSearchIndexDuplicateContentDifferentMessages(t *testing.T) {
 	entryRef1 := reference.Compute([]byte("msg one"))
 	entryRef2 := reference.Compute([]byte("msg two"))
 
-	if err := idx.Index(contentRef, entryRef1, "hello there", 1000); err != nil {
+	if err := idx.Index(ctx, contentRef, entryRef1, "hello there", 1000); err != nil {
 		t.Fatal(err)
 	}
-	if err := idx.Index(contentRef, entryRef2, "hello there", 2000); err != nil {
+	if err := idx.Index(ctx, contentRef, entryRef2, "hello there", 2000); err != nil {
 		t.Fatal(err)
 	}
 
-	resp, err := idx.Search("hello", SearchOptions{})
+	resp, err := idx.Search(ctx, "hello", SearchOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,8 +157,9 @@ func TestSearchIndexDuplicateContentDifferentMessages(t *testing.T) {
 }
 
 func TestSearchPagination(t *testing.T) {
+	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "search.db")
-	idx, err := OpenSearchIndex(dbPath)
+	idx, err := OpenSearchIndex(ctx, dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,13 +169,13 @@ func TestSearchPagination(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		cRef := reference.Compute([]byte(fmt.Sprintf("content-%d", i)))
 		eRef := reference.Compute([]byte(fmt.Sprintf("entry-%d", i)))
-		if err := idx.Index(cRef, eRef, fmt.Sprintf("test entry number %d", i), int64(1000+i)); err != nil {
+		if err := idx.Index(ctx, cRef, eRef, fmt.Sprintf("test entry number %d", i), int64(1000+i)); err != nil {
 			t.Fatal(err)
 		}
 	}
 
 	// Unlimited.
-	resp, err := idx.Search("test", SearchOptions{})
+	resp, err := idx.Search(ctx, "test", SearchOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +187,7 @@ func TestSearchPagination(t *testing.T) {
 	}
 
 	// Limit 2.
-	resp, err = idx.Search("test", SearchOptions{Limit: 2})
+	resp, err = idx.Search(ctx, "test", SearchOptions{Limit: 2})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,7 +199,7 @@ func TestSearchPagination(t *testing.T) {
 	}
 
 	// Limit 2, offset 3.
-	resp, err = idx.Search("test", SearchOptions{Limit: 2, Offset: 3})
+	resp, err = idx.Search(ctx, "test", SearchOptions{Limit: 2, Offset: 3})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,8 +212,9 @@ func TestSearchPagination(t *testing.T) {
 }
 
 func TestSearchIndexDeleteByEntryRef(t *testing.T) {
+	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "search.db")
-	idx, err := OpenSearchIndex(dbPath)
+	idx, err := OpenSearchIndex(ctx, dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -216,28 +222,29 @@ func TestSearchIndexDeleteByEntryRef(t *testing.T) {
 
 	contentRef := reference.Compute([]byte("content"))
 	entryRef := reference.Compute([]byte("entry"))
-	if err := idx.Index(contentRef, entryRef, "deletable content", 1000); err != nil {
+	if err := idx.Index(ctx, contentRef, entryRef, "deletable content", 1000); err != nil {
 		t.Fatal(err)
 	}
 
-	resp, _ := idx.Search("deletable", SearchOptions{})
+	resp, _ := idx.Search(ctx, "deletable", SearchOptions{})
 	if resp.TotalCount != 1 {
 		t.Fatalf("expected 1 before delete, got %d", resp.TotalCount)
 	}
 
-	if err := idx.DeleteByEntryRef(entryRef); err != nil {
+	if err := idx.DeleteByEntryRef(ctx, entryRef); err != nil {
 		t.Fatal(err)
 	}
 
-	resp, _ = idx.Search("deletable", SearchOptions{})
+	resp, _ = idx.Search(ctx, "deletable", SearchOptions{})
 	if resp.TotalCount != 0 {
 		t.Fatalf("expected 0 after delete, got %d", resp.TotalCount)
 	}
 }
 
 func TestSearchIndexContentHash(t *testing.T) {
+	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "search.db")
-	idx, err := OpenSearchIndex(dbPath)
+	idx, err := OpenSearchIndex(ctx, dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -245,13 +252,13 @@ func TestSearchIndexContentHash(t *testing.T) {
 
 	cRef := reference.Compute([]byte("c"))
 	eRef := reference.Compute([]byte("e"))
-	idx.Index(cRef, eRef, "hash test", 1000)
+	idx.Index(ctx, cRef, eRef, "hash test", 1000)
 
-	h1, err := idx.ContentHash()
+	h1, err := idx.ContentHash(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	h2, err := idx.ContentHash()
+	h2, err := idx.ContentHash(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,8 +271,9 @@ func TestSearchIndexContentHash(t *testing.T) {
 }
 
 func TestSearchIndexCount(t *testing.T) {
+	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "search.db")
-	idx, err := OpenSearchIndex(dbPath)
+	idx, err := OpenSearchIndex(ctx, dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -274,11 +282,11 @@ func TestSearchIndexCount(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		cRef := reference.Compute([]byte(fmt.Sprintf("c-%d", i)))
 		eRef := reference.Compute([]byte(fmt.Sprintf("e-%d", i)))
-		idx.Index(cRef, eRef, fmt.Sprintf("count test %d", i), int64(1000+i))
+		idx.Index(ctx, cRef, eRef, fmt.Sprintf("count test %d", i), int64(1000+i))
 	}
 
 	var n int
-	if err := idx.Count(&n); err != nil {
+	if err := idx.Count(ctx, &n); err != nil {
 		t.Fatal(err)
 	}
 	if n != 3 {
@@ -287,8 +295,9 @@ func TestSearchIndexCount(t *testing.T) {
 }
 
 func TestSearchIndexClear(t *testing.T) {
+	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "search.db")
-	idx, err := OpenSearchIndex(dbPath)
+	idx, err := OpenSearchIndex(ctx, dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -296,22 +305,23 @@ func TestSearchIndexClear(t *testing.T) {
 
 	cRef := reference.Compute([]byte("c"))
 	eRef := reference.Compute([]byte("e"))
-	idx.Index(cRef, eRef, "clear test", 1000)
+	idx.Index(ctx, cRef, eRef, "clear test", 1000)
 
-	if err := idx.Clear(); err != nil {
+	if err := idx.Clear(ctx); err != nil {
 		t.Fatal(err)
 	}
 
 	var n int
-	idx.Count(&n)
+	idx.Count(ctx, &n)
 	if n != 0 {
 		t.Fatalf("expected 0 after clear, got %d", n)
 	}
 }
 
 func TestSearchIndexResolvePrefix(t *testing.T) {
+	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "search.db")
-	idx, err := OpenSearchIndex(dbPath)
+	idx, err := OpenSearchIndex(ctx, dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -320,12 +330,12 @@ func TestSearchIndexResolvePrefix(t *testing.T) {
 	cRef := reference.Compute([]byte("c1"))
 	eRef1 := reference.Compute([]byte("entry-1"))
 	eRef2 := reference.Compute([]byte("entry-2"))
-	idx.Index(cRef, eRef1, "prefix one", 1000)
-	idx.Index(cRef, eRef2, "prefix two", 2000)
+	idx.Index(ctx, cRef, eRef1, "prefix one", 1000)
+	idx.Index(ctx, cRef, eRef2, "prefix two", 2000)
 
 	// Unique prefix.
 	hex1 := reference.Hex(eRef1)
-	resolved, err := idx.ResolvePrefix(hex1[:16])
+	resolved, err := idx.ResolvePrefix(ctx, hex1[:16])
 	if err != nil {
 		t.Fatalf("ResolvePrefix unique: %v", err)
 	}
@@ -334,15 +344,16 @@ func TestSearchIndexResolvePrefix(t *testing.T) {
 	}
 
 	// No match.
-	_, err = idx.ResolvePrefix("0000000000000000")
+	_, err = idx.ResolvePrefix(ctx, "0000000000000000")
 	if err == nil {
 		t.Error("expected error for no match")
 	}
 }
 
 func TestSearchIndexDBPath(t *testing.T) {
+	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "search.db")
-	idx, err := OpenSearchIndex(dbPath)
+	idx, err := OpenSearchIndex(ctx, dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -358,53 +369,55 @@ func TestSearchIndexDBPath(t *testing.T) {
 }
 
 func TestSearchIndexLastIndexedTimestamp(t *testing.T) {
+	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "search.db")
-	idx, err := OpenSearchIndex(dbPath)
+	idx, err := OpenSearchIndex(ctx, dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { idx.Close() })
 
-	ts, _ := idx.LastIndexedTimestamp()
+	ts, _ := idx.LastIndexedTimestamp(ctx)
 	if ts != 0 {
 		t.Fatalf("empty index: expected 0, got %d", ts)
 	}
 
 	cRef := reference.Compute([]byte("c"))
 	eRef := reference.Compute([]byte("e"))
-	idx.Index(cRef, eRef, "ts test", 42000)
+	idx.Index(ctx, cRef, eRef, "ts test", 42000)
 
-	ts, _ = idx.LastIndexedTimestamp()
+	ts, _ = idx.LastIndexedTimestamp(ctx)
 	if ts != 42000 {
 		t.Fatalf("expected 42000, got %d", ts)
 	}
 }
 
 func TestSearchIndexSchemaMigration(t *testing.T) {
+	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "search.db")
 
 	// Open and index something.
-	idx, err := OpenSearchIndex(dbPath)
+	idx, err := OpenSearchIndex(ctx, dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 	cRef := reference.Compute([]byte("c"))
 	eRef := reference.Compute([]byte("e"))
-	idx.Index(cRef, eRef, "migration test", 1000)
+	idx.Index(ctx, cRef, eRef, "migration test", 1000)
 	idx.Close()
 
 	// Tamper with schema version to simulate old version.
-	db, _ := OpenSearchIndex(dbPath)
+	db, _ := OpenSearchIndex(ctx, dbPath)
 	db.Close()
 
 	// Reopen should still work (schema version matches current).
-	idx2, err := OpenSearchIndex(dbPath)
+	idx2, err := OpenSearchIndex(ctx, dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { idx2.Close() })
 
-	resp, err := idx2.Search("migration", SearchOptions{})
+	resp, err := idx2.Search(ctx, "migration", SearchOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

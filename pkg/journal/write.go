@@ -41,7 +41,7 @@ func (j *Journal) Write(ctx context.Context, plaintext []byte, labels map[string
 		return nil, fmt.Errorf("send message: %w", err)
 	}
 
-	j.IndexEntry(contentRef, entryRef, string(plaintext), msg.Timestamp)
+	j.IndexEntry(ctx, contentRef, entryRef, string(plaintext), msg.Timestamp)
 
 	return &WriteResult{Ref: ref, EntryRef: entryRef}, nil
 }

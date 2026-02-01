@@ -31,14 +31,14 @@ func newTestServer(t *testing.T) (string, *identity.Keypair) {
 	if err != nil {
 		t.Fatalf("create blob backend: %v", err)
 	}
-	t.Cleanup(func() { blobBackend.Close() })
+	t.Cleanup(func() { _ = blobBackend.Close() })
 	blobs := blobstore.New(blobBackend, metrics)
 
 	idxBackend, err := idxphysical.New(ctx, "memory", nil, metrics)
 	if err != nil {
 		t.Fatalf("create index backend: %v", err)
 	}
-	t.Cleanup(func() { idxBackend.Close() })
+	t.Cleanup(func() { _ = idxBackend.Close() })
 	idx, err := indexstore.New(idxBackend, metrics)
 	if err != nil {
 		t.Fatalf("create index store: %v", err)
@@ -48,14 +48,14 @@ func newTestServer(t *testing.T) (string, *identity.Keypair) {
 	if err != nil {
 		t.Fatalf("create observability: %v", err)
 	}
-	t.Cleanup(func() { obs.Close(ctx) })
+	t.Cleanup(func() { _ = obs.Close(ctx) })
 
 	kp, err := identity.Generate()
 	if err != nil {
 		t.Fatalf("generate keypair: %v", err)
 	}
 
-	srv, err := server.New(":0", obs, false, kp, blobs, idx)
+	srv, err := server.New(context.Background(), ":0", obs, false, kp, blobs, idx)
 	if err != nil {
 		t.Fatalf("create server: %v", err)
 	}
@@ -76,7 +76,7 @@ func newTestClient(t *testing.T, addr string, nodeKP *identity.Keypair) (*client
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	t.Cleanup(func() { c.Close() })
+	t.Cleanup(func() { _ = c.Close() })
 	return c, kp
 }
 
@@ -89,7 +89,7 @@ func newAdminClient(t *testing.T, addr string, nodeKP *identity.Keypair) *client
 	if err != nil {
 		t.Fatalf("dial admin: %v", err)
 	}
-	t.Cleanup(func() { c.Close() })
+	t.Cleanup(func() { _ = c.Close() })
 	return c
 }
 
@@ -386,7 +386,7 @@ func TestSeek(t *testing.T) {
 
 	ref, _ := c.PutContent(ctx, []byte("seek"))
 	msg := makeMessage(t, kp, ref, "test/seek")
-	c.SendMessage(ctx, msg, map[string]string{"app": "seek-test"})
+	_, _ = c.SendMessage(ctx, msg, map[string]string{"app": "seek-test"})
 
 	err = c.Seek(ctx, "default", time.Now().UnixMilli())
 	if err != nil {

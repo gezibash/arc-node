@@ -66,22 +66,22 @@ func (d *dmCmd) init(cmd *cobra.Command) error {
 }
 
 // openConversation parses a peer pubkey hex string and creates a DM instance.
-func (d *dmCmd) openConversation(peerHex string) (*dm.DM, identity.PublicKey, error) {
+func (d *dmCmd) openConversation(peerHex string) (*dm.DM, error) {
 	peerBytes, err := hex.DecodeString(peerHex)
 	if err != nil {
-		return nil, identity.PublicKey{}, fmt.Errorf("invalid peer public key: %w", err)
+		return nil, fmt.Errorf("invalid peer public key: %w", err)
 	}
 	if len(peerBytes) != 32 {
-		return nil, identity.PublicKey{}, fmt.Errorf("peer public key must be 32 bytes (64 hex chars)")
+		return nil, fmt.Errorf("peer public key must be 32 bytes (64 hex chars)")
 	}
 	var peerPub identity.PublicKey
 	copy(peerPub[:], peerBytes)
 
 	sdk, err := d.threads.OpenConversation(peerPub)
 	if err != nil {
-		return nil, identity.PublicKey{}, fmt.Errorf("init dm: %w", err)
+		return nil, fmt.Errorf("init dm: %w", err)
 	}
-	return sdk, peerPub, nil
+	return sdk, nil
 }
 
 func dialNode(cmd *cobra.Command, v *viper.Viper) (*client.Client, *identity.Keypair, error) {

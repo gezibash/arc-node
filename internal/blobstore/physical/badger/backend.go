@@ -3,6 +3,7 @@ package badger
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -156,7 +157,7 @@ func (b *Backend) Get(_ context.Context, r reference.Reference) ([]byte, error) 
 		data, err = item.ValueCopy(nil)
 		return err
 	})
-	if err == badger.ErrKeyNotFound {
+	if errors.Is(err, badger.ErrKeyNotFound) {
 		return nil, physical.ErrNotFound
 	}
 	if err != nil {
@@ -176,7 +177,7 @@ func (b *Backend) Exists(_ context.Context, r reference.Reference) (bool, error)
 
 	err := b.db.View(func(txn *badger.Txn) error {
 		_, err := txn.Get([]byte(key))
-		if err == badger.ErrKeyNotFound {
+		if errors.Is(err, badger.ErrKeyNotFound) {
 			exists = false
 			return nil
 		}
@@ -201,7 +202,7 @@ func (b *Backend) Delete(_ context.Context, r reference.Reference) error {
 	key := keyPrefix + reference.Hex(r)
 	err := b.db.Update(func(txn *badger.Txn) error {
 		_, err := txn.Get([]byte(key))
-		if err == badger.ErrKeyNotFound {
+		if errors.Is(err, badger.ErrKeyNotFound) {
 			return nil
 		}
 		if err != nil {

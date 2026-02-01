@@ -296,7 +296,7 @@ type mockServerStream struct {
 
 func (m *mockServerStream) Context() context.Context { return m.ctx }
 func (m *mockServerStream) SendMsg(msg any) error    { return m.sendErr }
-func (m *mockServerStream) RecvMsg(msg any) error     { return m.recvErr }
+func (m *mockServerStream) RecvMsg(msg any) error    { return m.recvErr }
 
 func TestStreamServerInterceptor(t *testing.T) {
 	m := NewMetrics()
@@ -347,7 +347,8 @@ func TestStreamServerInterceptorError(t *testing.T) {
 // --- wrappedStream ---
 
 func TestWrappedStreamContext(t *testing.T) {
-	ctx := context.WithValue(context.Background(), struct{}{}, "test")
+	type testCtxKey struct{}
+	ctx := context.WithValue(context.Background(), testCtxKey{}, "test")
 	ss := &mockServerStream{ctx: context.Background()}
 	w := &wrappedStream{ServerStream: ss, ctx: ctx}
 
@@ -686,12 +687,12 @@ func TestServeMetricsEndpoints(t *testing.T) {
 	}
 
 	// Use a listener to get an actual port
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
 	addr := ln.Addr().String()
-	ln.Close()
+	_ = ln.Close()
 
 	srv := obs.ServeMetrics(context.Background(), addr)
 	t.Cleanup(func() { _ = srv.Shutdown(context.Background()) })
@@ -699,11 +700,15 @@ func TestServeMetricsEndpoints(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Test /health
-	resp, err := http.Get("http://" + addr + "/health")
+	healthReq, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://"+addr+"/health", nil)
+	if err != nil {
+		t.Fatalf("create health request: %v", err)
+	}
+	resp, err := http.DefaultClient.Do(healthReq)
 	if err != nil {
 		t.Fatalf("health request failed: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
 	}
@@ -713,11 +718,15 @@ func TestServeMetricsEndpoints(t *testing.T) {
 	}
 
 	// Test /metrics
-	resp2, err := http.Get("http://" + addr + "/metrics")
+	metricsReq, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://"+addr+"/metrics", nil)
+	if err != nil {
+		t.Fatalf("create metrics request: %v", err)
+	}
+	resp2, err := http.DefaultClient.Do(metricsReq)
 	if err != nil {
 		t.Fatalf("metrics request failed: %v", err)
 	}
-	defer resp2.Body.Close()
+	defer func() { _ = resp2.Body.Close() }()
 	if resp2.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", resp2.StatusCode)
 	}

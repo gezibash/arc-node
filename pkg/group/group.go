@@ -21,7 +21,7 @@ const (
 // optionally an encrypted copy of the group seed (admin only).
 type Member struct {
 	PublicKey  identity.PublicKey
-	Role      Role
+	Role       Role
 	SealedSeed []byte // encrypted group seed, admin-only
 }
 
@@ -33,7 +33,7 @@ type Policy struct {
 // Manifest describes the current state of a group: its identity,
 // members, policy, and chain link to the previous manifest.
 type Manifest struct {
-	ID      identity.PublicKey   // group public key
+	ID      identity.PublicKey // group public key
 	Name    string
 	Members []Member
 	Policy  Policy

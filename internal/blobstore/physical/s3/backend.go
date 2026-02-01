@@ -156,7 +156,7 @@ func (b *Backend) Get(ctx context.Context, r reference.Reference) ([]byte, error
 		}
 		return nil, fmt.Errorf("s3 get: %w", err)
 	}
-	defer out.Body.Close()
+	defer func() { _ = out.Body.Close() }()
 
 	data, err := io.ReadAll(out.Body)
 	if err != nil {

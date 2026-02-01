@@ -12,9 +12,9 @@ import (
 	"time"
 
 	nodev1 "github.com/gezibash/arc-node/api/arc/node/v1"
-	"github.com/gezibash/arc-node/pkg/envelope"
 	"github.com/gezibash/arc-node/internal/indexstore"
 	"github.com/gezibash/arc-node/internal/indexstore/physical"
+	"github.com/gezibash/arc-node/pkg/envelope"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -78,7 +78,7 @@ func (s *nodeService) Channel(stream nodev1.NodeService_ChannelServer) error {
 	for {
 		frame, err := stream.Recv()
 		if err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				return nil
 			}
 			return err
@@ -102,7 +102,7 @@ func (s *nodeService) Channel(stream nodev1.NodeService_ChannelServer) error {
 		case *nodev1.ClientFrame_Ack:
 			s.handleAck(ctx, writer, reqID, f.Ack)
 		case *nodev1.ClientFrame_Seek:
-			s.handleSeek(ctx, writer, reqID, f.Seek, subs)
+			s.handleSeek(ctx, writer, reqID, f.Seek)
 		case *nodev1.ClientFrame_Federate:
 			s.handleFederate(ctx, writer, reqID, f.Federate)
 		case *nodev1.ClientFrame_ListPeers:
@@ -121,7 +121,7 @@ func (s *nodeService) handlePut(ctx context.Context, w *streamWriter, reqID uint
 		sendErr(w, reqID, codes.Internal, err.Error())
 		return
 	}
-	w.send(&nodev1.ServerFrame{
+	_ = w.send(&nodev1.ServerFrame{
 		RequestId: reqID,
 		Frame:     &nodev1.ServerFrame_Receipt{Receipt: &nodev1.ReceiptFrame{Reference: ref[:], Ok: true}},
 	})
@@ -138,7 +138,7 @@ func (s *nodeService) handleGet(ctx context.Context, w *streamWriter, reqID uint
 		sendErr(w, reqID, codes.NotFound, err.Error())
 		return
 	}
-	w.send(&nodev1.ServerFrame{
+	_ = w.send(&nodev1.ServerFrame{
 		RequestId: reqID,
 		Frame:     &nodev1.ServerFrame_Response{Response: &nodev1.ResponseFrame{Data: data}},
 	})
@@ -155,7 +155,7 @@ func (s *nodeService) handlePublish(ctx context.Context, w *streamWriter, reqID 
 		}
 		return
 	}
-	w.send(&nodev1.ServerFrame{
+	_ = w.send(&nodev1.ServerFrame{
 		RequestId: reqID,
 		Frame:     &nodev1.ServerFrame_Receipt{Receipt: &nodev1.ReceiptFrame{Reference: ref[:], Ok: true}},
 	})
@@ -174,7 +174,7 @@ func (s *nodeService) handleQuery(ctx context.Context, w *streamWriter, reqID ui
 		sendErr(w, reqID, codes.Internal, err.Error())
 		return
 	}
-	w.send(&nodev1.ServerFrame{
+	_ = w.send(&nodev1.ServerFrame{
 		RequestId: reqID,
 		Frame: &nodev1.ServerFrame_Response{Response: &nodev1.ResponseFrame{
 			Entries:    entriesToProto(result.Entries),
@@ -240,7 +240,7 @@ func (s *nodeService) handleSubscribe(ctx context.Context, w *streamWriter, reqI
 	}
 
 	// Ack the subscribe.
-	w.send(&nodev1.ServerFrame{
+	_ = w.send(&nodev1.ServerFrame{
 		RequestId: reqID,
 		Frame:     &nodev1.ServerFrame_Receipt{Receipt: &nodev1.ReceiptFrame{Ok: true}},
 	})
@@ -304,7 +304,7 @@ func (s *nodeService) replayFromCursor(ctx context.Context, w *streamWriter, cha
 
 	if providedCursor != "" {
 		// Parse cursor as timestamp.
-		fmt.Sscanf(providedCursor, "%d", &afterTS)
+		_, _ = fmt.Sscanf(providedCursor, "%d", &afterTS)
 	} else {
 		// Load cursor from backend.
 		cursor, err := s.index.GetCursor(ctx, cursorKey)
@@ -411,7 +411,7 @@ func (s *nodeService) redeliveryLoop(ctx context.Context, w *streamWriter, chann
 
 				newID := dt.Redeliver(d)
 				if d.Entry != nil {
-					w.send(&nodev1.ServerFrame{
+					_ = w.send(&nodev1.ServerFrame{
 						RequestId: 0,
 						Frame: &nodev1.ServerFrame_Delivery{Delivery: &nodev1.DeliveryFrame{
 							Channel:    channel,
@@ -431,7 +431,7 @@ func (s *nodeService) handleUnsubscribe(w *streamWriter, reqID uint64, f *nodev1
 		channel = "default"
 	}
 	cs.remove(channel)
-	w.send(&nodev1.ServerFrame{
+	_ = w.send(&nodev1.ServerFrame{
 		RequestId: reqID,
 		Frame:     &nodev1.ServerFrame_Receipt{Receipt: &nodev1.ReceiptFrame{Ok: true}},
 	})
@@ -451,7 +451,7 @@ func (s *nodeService) handleAck(ctx context.Context, w *streamWriter, reqID uint
 			_ = entry
 		}
 
-		w.send(&nodev1.ServerFrame{
+		_ = w.send(&nodev1.ServerFrame{
 			RequestId: reqID,
 			Frame:     &nodev1.ServerFrame_Receipt{Receipt: &nodev1.ReceiptFrame{Ok: true}},
 		})
@@ -464,13 +464,13 @@ func (s *nodeService) handleAck(ctx context.Context, w *streamWriter, reqID uint
 		return
 	}
 	// No-op for legacy acks since delivery tracking is now ID-based.
-	w.send(&nodev1.ServerFrame{
+	_ = w.send(&nodev1.ServerFrame{
 		RequestId: reqID,
 		Frame:     &nodev1.ServerFrame_Receipt{Receipt: &nodev1.ReceiptFrame{Ok: true}},
 	})
 }
 
-func (s *nodeService) handleSeek(ctx context.Context, w *streamWriter, reqID uint64, f *nodev1.SeekFrame, cs *channelSubs) {
+func (s *nodeService) handleSeek(ctx context.Context, w *streamWriter, reqID uint64, f *nodev1.SeekFrame) {
 	channel := f.Channel
 	if channel == "" {
 		channel = "default"
@@ -479,7 +479,7 @@ func (s *nodeService) handleSeek(ctx context.Context, w *streamWriter, reqID uin
 	// Determine the seek position.
 	var afterTS int64
 	if f.Cursor != "" {
-		fmt.Sscanf(f.Cursor, "%d", &afterTS)
+		_, _ = fmt.Sscanf(f.Cursor, "%d", &afterTS)
 	} else if f.Timestamp > 0 {
 		afterTS = f.Timestamp
 	}
@@ -490,7 +490,7 @@ func (s *nodeService) handleSeek(ctx context.Context, w *streamWriter, reqID uin
 	}
 
 	// Ack the seek.
-	w.send(&nodev1.ServerFrame{
+	_ = w.send(&nodev1.ServerFrame{
 		RequestId: reqID,
 		Frame:     &nodev1.ServerFrame_Receipt{Receipt: &nodev1.ReceiptFrame{Ok: true}},
 	})
@@ -528,7 +528,7 @@ func (s *nodeService) handleFederate(ctx context.Context, w *streamWriter, reqID
 		msg = fmt.Sprintf("already federating with %s", peer)
 	}
 
-	w.send(&nodev1.ServerFrame{
+	_ = w.send(&nodev1.ServerFrame{
 		RequestId: reqID,
 		Frame: &nodev1.ServerFrame_FederateResponse{FederateResponse: &nodev1.FederateResponseFrame{
 			Status:  st,
@@ -572,7 +572,7 @@ func (s *nodeService) handleListPeers(ctx context.Context, w *streamWriter, reqI
 		}
 	}
 
-	w.send(&nodev1.ServerFrame{
+	_ = w.send(&nodev1.ServerFrame{
 		RequestId: reqID,
 		Frame: &nodev1.ServerFrame_ListPeersResponse{ListPeersResponse: &nodev1.ListPeersResponseFrame{
 			Peers: peers,
@@ -590,14 +590,14 @@ func (s *nodeService) handleResolveGet(ctx context.Context, w *streamWriter, req
 		}
 		return
 	}
-	w.send(&nodev1.ServerFrame{
+	_ = w.send(&nodev1.ServerFrame{
 		RequestId: reqID,
 		Frame:     &nodev1.ServerFrame_ResolveGetResponse{ResolveGetResponse: resp},
 	})
 }
 
 func sendErr(w *streamWriter, reqID uint64, code codes.Code, msg string) {
-	w.send(&nodev1.ServerFrame{
+	_ = w.send(&nodev1.ServerFrame{
 		RequestId: reqID,
 		Frame: &nodev1.ServerFrame_Error{Error: &nodev1.ErrorFrame{
 			Code:    int32(code),

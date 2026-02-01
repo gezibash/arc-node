@@ -19,13 +19,13 @@ import (
 
 func formatListText(w io.Writer, result *dm.ListResult, preview bool, sdk *dm.DM, self identity.PublicKey) error {
 	if len(result.Messages) > 0 {
-		fmt.Fprintf(w, "%-10s %-8s %-14s %s\n", "REF", "FROM", "AGE", "LABELS")
+		_, _ = fmt.Fprintf(w, "%-10s %-8s %-14s %s\n", "REF", "FROM", "AGE", "LABELS")
 	}
 	for _, m := range result.Messages {
 		formatMessageText(w, m, preview, sdk, self)
 	}
 	if result.HasMore {
-		fmt.Fprintf(w, "next cursor: %s\n", result.NextCursor)
+		_, _ = fmt.Fprintf(w, "next cursor: %s\n", result.NextCursor)
 	}
 	return nil
 }
@@ -45,13 +45,13 @@ func formatMessageText(w io.Writer, m dm.Message, preview bool, sdk *dm.DM, self
 	}
 	slices.Sort(parts)
 
-	fmt.Fprintf(w, "%-10s %-8s %-14s %s\n", short, sender, formatDuration(age)+" ago", strings.Join(parts, " "))
+	_, _ = fmt.Fprintf(w, "%-10s %-8s %-14s %s\n", short, sender, formatDuration(age)+" ago", strings.Join(parts, " "))
 
 	if preview && sdk != nil {
 		text, err := sdk.Preview(context.Background(), m)
 		if err == nil && text != "" {
 			for _, line := range strings.Split(text, "\n") {
-				fmt.Fprintf(w, "%-10s %-8s %-14s %s\n", "", "", "", line)
+				_, _ = fmt.Fprintf(w, "%-10s %-8s %-14s %s\n", "", "", "", line)
 			}
 		}
 	}
@@ -96,30 +96,30 @@ func formatListJSON(w io.Writer, result *dm.ListResult, preview bool, sdk *dm.DM
 func formatListMarkdown(w io.Writer, result *dm.ListResult, preview bool, sdk *dm.DM, self identity.PublicKey) error {
 	meta := buildDMMeta("arc dm list", result)
 	return render.MarkdownWithFrontmatter(w, meta, func(w io.Writer) error {
-		fmt.Fprintln(w, "## Conversation")
-		fmt.Fprintln(w)
+		_, _ = fmt.Fprintln(w, "## Conversation")
+		_, _ = fmt.Fprintln(w)
 
 		for _, m := range result.Messages {
 			ts := time.UnixMilli(m.Timestamp)
 			short := reference.Hex(m.Ref)[:8]
 			sender := senderLabel(m.From, self)
-			fmt.Fprintf(w, "### %s — %s [%s]\n", sender, ts.Format("2006-01-02 15:04"), short)
+			_, _ = fmt.Fprintf(w, "### %s — %s [%s]\n", sender, ts.Format("2006-01-02 15:04"), short)
 
 			if preview && sdk != nil {
 				text, err := sdk.Preview(context.Background(), m)
 				if err == nil && text != "" {
-					fmt.Fprintln(w)
-					fmt.Fprintln(w, text)
+					_, _ = fmt.Fprintln(w)
+					_, _ = fmt.Fprintln(w, text)
 				}
 			}
 
-			fmt.Fprintln(w)
-			fmt.Fprintln(w, "---")
-			fmt.Fprintln(w)
+			_, _ = fmt.Fprintln(w)
+			_, _ = fmt.Fprintln(w, "---")
+			_, _ = fmt.Fprintln(w)
 		}
 
 		if result.HasMore {
-			fmt.Fprintf(w, "_More messages available (cursor: %s)_\n", result.NextCursor)
+			_, _ = fmt.Fprintf(w, "_More messages available (cursor: %s)_\n", result.NextCursor)
 		}
 		return nil
 	})
@@ -133,11 +133,11 @@ func runThreadsMarkdown(ctx context.Context, threads *dm.Threads, kp *identity.K
 		return err
 	}
 
-	fmt.Fprintln(w, "## Conversations")
-	fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w, "## Conversations")
+	_, _ = fmt.Fprintln(w)
 
 	if len(items) == 0 {
-		fmt.Fprintln(w, "No conversations yet.")
+		_, _ = fmt.Fprintln(w, "No conversations yet.")
 		return nil
 	}
 
@@ -146,9 +146,9 @@ func runThreadsMarkdown(ctx context.Context, threads *dm.Threads, kp *identity.K
 		peerShort := peerHex[:8]
 		ts := time.UnixMilli(th.LastMsg.Timestamp)
 		sender := senderLabel(th.LastMsg.From, self)
-		fmt.Fprintf(w, "- **%s** — last: %s (%s) `%s`\n", peerShort, sender, ts.Format("2006-01-02 15:04"), peerHex)
+		_, _ = fmt.Fprintf(w, "- **%s** — last: %s (%s) `%s`\n", peerShort, sender, ts.Format("2006-01-02 15:04"), peerHex)
 	}
-	fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w)
 	return nil
 }
 

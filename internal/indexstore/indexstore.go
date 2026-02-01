@@ -67,7 +67,7 @@ func (s *IndexStore) Index(ctx context.Context, entry *physical.Entry) (err erro
 	slog.DebugContext(ctx, "indexing entry", "ref", reference.Hex(entry.Ref), "label_count", len(entry.Labels))
 
 	// Dedup check before any storage or notification.
-	if dup, _ := s.checkDedup(ctx, entry); dup {
+	if s.checkDedup(ctx, entry) {
 		slog.DebugContext(ctx, "duplicate entry skipped", "ref", reference.Hex(entry.Ref), "dedup_mode", entry.DedupMode)
 		return nil
 	}
@@ -120,21 +120,21 @@ func (s *IndexStore) Index(ctx context.Context, entry *physical.Entry) (err erro
 }
 
 // checkDedup returns true if the entry is a duplicate that should be skipped.
-func (s *IndexStore) checkDedup(ctx context.Context, entry *physical.Entry) (bool, error) {
+func (s *IndexStore) checkDedup(ctx context.Context, entry *physical.Entry) bool {
 	switch entry.DedupMode {
 	case 1: // DEDUP_REF
 		if _, err := s.backend.Get(ctx, entry.Ref); err == nil {
-			return true, nil
+			return true
 		}
 	case 2: // DEDUP_IDEMPOTENCY_KEY
 		if entry.IdempotencyKey != "" {
 			if s.idempotencyCache.Contains(entry.IdempotencyKey) {
-				return true, nil
+				return true
 			}
 			// Will be cached after successful store.
 		}
 	}
-	return false, nil
+	return false
 }
 
 // cacheIdempotencyKey records the key after a successful index.
@@ -292,7 +292,7 @@ func (s *IndexStore) Query(ctx context.Context, opts *QueryOptions) (result *Que
 		if !analysis.FullyPushed {
 			residualPrg, err = s.eval.Compile(ctx, analysis.Residual)
 			if err != nil {
-				return nil, fmt.Errorf("%w: %v", ErrInvalidExpression, err)
+				return nil, fmt.Errorf("%w: %w", ErrInvalidExpression, err)
 			}
 			// Over-fetch for residual filtering
 			if physOpts.Limit > 0 {
@@ -392,7 +392,7 @@ func (s *IndexStore) Subscribe(ctx context.Context, expression string, callerKey
 
 	sub, err = s.subs.Subscribe(ctx, expression, callerKey, subOpts)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrInvalidExpression, err)
+		return nil, fmt.Errorf("%w: %w", ErrInvalidExpression, err)
 	}
 
 	slog.InfoContext(ctx, "subscription created",

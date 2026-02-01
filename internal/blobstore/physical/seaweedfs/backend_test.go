@@ -3,6 +3,7 @@ package seaweedfs
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -21,7 +22,7 @@ func testRef(data []byte) reference.Reference {
 }
 
 // mockFiler creates an httptest server that emulates a SeaweedFS filer.
-func mockFiler() (*httptest.Server, *mockStore) {
+func mockFiler() *httptest.Server {
 	store := &mockStore{blobs: make(map[string][]byte)}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		key := r.URL.Path
@@ -36,7 +37,7 @@ func mockFiler() (*httptest.Server, *mockStore) {
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
-			w.Write(data)
+			_, _ = w.Write(data)
 		case http.MethodHead:
 			if !store.exists(key) {
 				w.WriteHeader(http.StatusNotFound)
@@ -54,7 +55,7 @@ func mockFiler() (*httptest.Server, *mockStore) {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
 	}))
-	return srv, store
+	return srv
 }
 
 type mockStore struct {
@@ -88,9 +89,9 @@ func (m *mockStore) del(key string) {
 	delete(m.blobs, key)
 }
 
-func newTestBackend(t *testing.T) (*Backend, *httptest.Server) {
+func newTestBackend(t *testing.T) *Backend {
 	t.Helper()
-	srv, _ := mockFiler()
+	srv := mockFiler()
 	t.Cleanup(srv.Close)
 
 	b, err := NewFactory(context.Background(), map[string]string{
@@ -101,11 +102,11 @@ func newTestBackend(t *testing.T) (*Backend, *httptest.Server) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return b.(*Backend), srv
+	return b.(*Backend)
 }
 
 func TestPutGetRoundTrip(t *testing.T) {
-	b, _ := newTestBackend(t)
+	b := newTestBackend(t)
 	ctx := context.Background()
 	data := []byte("hello seaweedfs")
 	ref := testRef(data)
@@ -124,17 +125,17 @@ func TestPutGetRoundTrip(t *testing.T) {
 }
 
 func TestGetNotFound(t *testing.T) {
-	b, _ := newTestBackend(t)
+	b := newTestBackend(t)
 	ref := testRef([]byte("missing"))
 
 	_, err := b.Get(context.Background(), ref)
-	if err != physical.ErrNotFound {
+	if !errors.Is(err, physical.ErrNotFound) {
 		t.Fatalf("got %v, want ErrNotFound", err)
 	}
 }
 
 func TestExists(t *testing.T) {
-	b, _ := newTestBackend(t)
+	b := newTestBackend(t)
 	ctx := context.Background()
 	data := []byte("exists test")
 	ref := testRef(data)
@@ -161,7 +162,7 @@ func TestExists(t *testing.T) {
 }
 
 func TestDeleteIdempotent(t *testing.T) {
-	b, _ := newTestBackend(t)
+	b := newTestBackend(t)
 	ctx := context.Background()
 	ref := testRef([]byte("delete me"))
 
@@ -179,13 +180,13 @@ func TestDeleteIdempotent(t *testing.T) {
 	}
 
 	_, err := b.Get(ctx, ref)
-	if err != physical.ErrNotFound {
+	if !errors.Is(err, physical.ErrNotFound) {
 		t.Fatalf("got %v, want ErrNotFound after delete", err)
 	}
 }
 
 func TestStats(t *testing.T) {
-	b, _ := newTestBackend(t)
+	b := newTestBackend(t)
 	stats, err := b.Stats(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -196,22 +197,22 @@ func TestStats(t *testing.T) {
 }
 
 func TestClosedBackend(t *testing.T) {
-	b, _ := newTestBackend(t)
-	b.Close()
+	b := newTestBackend(t)
+	_ = b.Close()
 
 	ref := testRef([]byte("closed"))
 	ctx := context.Background()
 
-	if err := b.Put(ctx, ref, []byte("closed")); err != physical.ErrClosed {
+	if err := b.Put(ctx, ref, []byte("closed")); !errors.Is(err, physical.ErrClosed) {
 		t.Fatalf("Put after close: got %v, want ErrClosed", err)
 	}
-	if _, err := b.Get(ctx, ref); err != physical.ErrClosed {
+	if _, err := b.Get(ctx, ref); !errors.Is(err, physical.ErrClosed) {
 		t.Fatalf("Get after close: got %v, want ErrClosed", err)
 	}
 }
 
 func TestCloseIdempotent(t *testing.T) {
-	b, _ := newTestBackend(t)
+	b := newTestBackend(t)
 	if err := b.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -221,7 +222,7 @@ func TestCloseIdempotent(t *testing.T) {
 }
 
 func TestPrefixValidation(t *testing.T) {
-	srv, _ := mockFiler()
+	srv := mockFiler()
 	defer srv.Close()
 
 	_, err := NewFactory(context.Background(), map[string]string{
@@ -249,7 +250,7 @@ func TestIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer b.Close()
+	defer func() { _ = b.Close() }()
 
 	ctx := context.Background()
 	data := []byte("integration test")

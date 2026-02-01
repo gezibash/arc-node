@@ -96,7 +96,7 @@ func runStart(cmd *cobra.Command, v *viper.Viper) error {
 
 	slog.Info("node identity", "public_key", key.PublicKey)
 
-	srv, err := server.New(cfg.GRPC.Addr, obs, cfg.GRPC.EnableReflection, key.Keypair, blobStore, indexStore)
+	srv, err := server.New(cmd.Context(), cfg.GRPC.Addr, obs, cfg.GRPC.EnableReflection, key.Keypair, blobStore, indexStore)
 	if err != nil {
 		return fmt.Errorf("create server: %w", err)
 	}

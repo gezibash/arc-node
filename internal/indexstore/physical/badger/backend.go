@@ -213,7 +213,7 @@ func (b *Backend) putInTxn(txn *badger.Txn, entry *physical.Entry) error {
 		oldMetaItem, oldMetaErr := txn.Get(oldMetaKey)
 		if oldMetaErr == nil {
 			if metaErr := oldMetaItem.Value(func(val []byte) error {
-				_, oldLabels, decErr := decodeMeta(val)
+				oldLabels, decErr := decodeMeta(val)
 				if decErr != nil {
 					return decErr
 				}
@@ -229,14 +229,14 @@ func (b *Backend) putInTxn(txn *badger.Txn, entry *physical.Entry) error {
 			}); metaErr != nil {
 				return metaErr
 			}
-		} else if oldMetaErr != badger.ErrKeyNotFound {
+		} else if !errors.Is(oldMetaErr, badger.ErrKeyNotFound) {
 			return oldMetaErr
 		}
 
-		if delErr := txn.Delete(oldMetaKey); delErr != nil && delErr != badger.ErrKeyNotFound {
+		if delErr := txn.Delete(oldMetaKey); delErr != nil && !errors.Is(delErr, badger.ErrKeyNotFound) {
 			return delErr
 		}
-	} else if getErr != badger.ErrKeyNotFound {
+	} else if !errors.Is(getErr, badger.ErrKeyNotFound) {
 		return getErr
 	}
 
@@ -384,7 +384,7 @@ func (b *Backend) BackfillCompositeIndex(ctx context.Context, def physical.Compo
 			}
 
 			if err := item.Value(func(val []byte) error {
-				_, labels, decErr := decodeMeta(val)
+				labels, decErr := decodeMeta(val)
 				if decErr != nil {
 					return nil // skip corrupt entries
 				}
@@ -474,7 +474,7 @@ func (b *Backend) Get(_ context.Context, r reference.Reference) (*physical.Entry
 	err := b.db.View(func(txn *badger.Txn) error {
 		refKey := []byte(prefixRef + refHex)
 		item, getErr := txn.Get(refKey)
-		if getErr == badger.ErrKeyNotFound {
+		if errors.Is(getErr, badger.ErrKeyNotFound) {
 			return physical.ErrNotFound
 		}
 		if getErr != nil {
@@ -505,7 +505,7 @@ func (b *Backend) Get(_ context.Context, r reference.Reference) (*physical.Entry
 			return nil
 		})
 	})
-	if err == physical.ErrNotFound {
+	if errors.Is(err, physical.ErrNotFound) {
 		return nil, err
 	}
 	if err != nil {
@@ -529,7 +529,7 @@ func (b *Backend) deleteInTxn(txn *badger.Txn, r reference.Reference) error {
 	refHex := reference.Hex(r)
 	refKey := []byte(prefixRef + refHex)
 	item, getErr := txn.Get(refKey)
-	if getErr == badger.ErrKeyNotFound {
+	if errors.Is(getErr, badger.ErrKeyNotFound) {
 		return nil
 	}
 	if getErr != nil {
@@ -550,7 +550,7 @@ func (b *Backend) deleteInTxn(txn *badger.Txn, r reference.Reference) error {
 	metaItem, metaErr := txn.Get(metaKey)
 	if metaErr == nil {
 		if valErr := metaItem.Value(func(val []byte) error {
-			_, labels, decErr := decodeMeta(val)
+			labels, decErr := decodeMeta(val)
 			if decErr != nil {
 				return decErr
 			}
@@ -565,11 +565,11 @@ func (b *Backend) deleteInTxn(txn *badger.Txn, r reference.Reference) error {
 		}); valErr != nil {
 			return valErr
 		}
-	} else if metaErr != badger.ErrKeyNotFound {
+	} else if !errors.Is(metaErr, badger.ErrKeyNotFound) {
 		return metaErr
 	}
 
-	if delErr := txn.Delete(metaKey); delErr != nil && delErr != badger.ErrKeyNotFound {
+	if delErr := txn.Delete(metaKey); delErr != nil && !errors.Is(delErr, badger.ErrKeyNotFound) {
 		return delErr
 	}
 
@@ -1306,7 +1306,7 @@ func (b *Backend) countByLabel(txn *badger.Txn, opts *physical.QueryOptions, _ i
 			}
 			var skip bool
 			if err := metaItem.Value(func(val []byte) error {
-				_, labels, decErr := decodeMeta(val)
+				labels, decErr := decodeMeta(val)
 				if decErr != nil {
 					return decErr
 				}
@@ -1396,7 +1396,7 @@ func (b *Backend) countByComposite(def physical.CompositeIndexDef, vals []string
 				}
 				var skip bool
 				if err := metaItem.Value(func(val []byte) error {
-					_, labels, decErr := decodeMeta(val)
+					labels, decErr := decodeMeta(val)
 					if decErr != nil {
 						return decErr
 					}
@@ -1506,7 +1506,7 @@ func (b *Backend) GetCursor(_ context.Context, key string) (physical.Cursor, err
 	var cursor physical.Cursor
 	err := b.db.View(func(txn *badger.Txn) error {
 		item, err := txn.Get(k)
-		if err == badger.ErrKeyNotFound {
+		if errors.Is(err, badger.ErrKeyNotFound) {
 			return physical.ErrCursorNotFound
 		}
 		if err != nil {
@@ -1532,7 +1532,7 @@ func (b *Backend) DeleteCursor(_ context.Context, key string) error {
 	k := []byte(prefixCursor + key)
 	return b.db.Update(func(txn *badger.Txn) error {
 		err := txn.Delete(k)
-		if err == badger.ErrKeyNotFound {
+		if errors.Is(err, badger.ErrKeyNotFound) {
 			return nil
 		}
 		return err
@@ -1632,12 +1632,12 @@ type decodedMeta struct {
 	Correlation      string
 }
 
-func decodeMeta(data []byte) (expiresAt int64, labels map[string]string, err error) {
+func decodeMeta(data []byte) (labels map[string]string, err error) {
 	dm, err := decodeMetaFull(data)
 	if err != nil {
-		return 0, nil, err
+		return nil, err
 	}
-	return dm.ExpiresAt, dm.Labels, nil
+	return dm.Labels, nil
 }
 
 func decodeMetaFull(data []byte) (*decodedMeta, error) {

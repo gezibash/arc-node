@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/gezibash/arc/v2/pkg/identity"
 	"github.com/gezibash/arc-node/internal/indexstore/physical"
 	"github.com/gezibash/arc-node/pkg/group"
+	"github.com/gezibash/arc/v2/pkg/identity"
 )
 
 func newTestVisibilityChecker() *visibilityChecker {

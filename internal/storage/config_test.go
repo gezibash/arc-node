@@ -188,7 +188,7 @@ func TestNewConfigErrorWithValue(t *testing.T) {
 func TestNewConfigErrorWithCause(t *testing.T) {
 	cause := errors.New("parse error")
 	ce := NewConfigErrorWithCause("sqlite", "path", "open failed", cause)
-	if ce.Backend != "sqlite" || ce.Field != "path" || ce.Cause != cause {
+	if ce.Backend != "sqlite" || ce.Field != "path" || !errors.Is(ce.Cause, cause) {
 		t.Errorf("NewConfigErrorWithCause = %+v", ce)
 	}
 	if !errors.Is(ce, cause) {

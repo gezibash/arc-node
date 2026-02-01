@@ -99,8 +99,8 @@ func (b *Backend) Put(ctx context.Context, r reference.Reference, data []byte) e
 	if err != nil {
 		return fmt.Errorf("seaweedfs put: %w", err)
 	}
-	defer resp.Body.Close()
-	io.Copy(io.Discard, resp.Body)
+	defer func() { _ = resp.Body.Close() }()
+	_, _ = io.Copy(io.Discard, resp.Body)
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		return fmt.Errorf("seaweedfs put: unexpected status %d", resp.StatusCode)
@@ -123,10 +123,10 @@ func (b *Backend) Get(ctx context.Context, r reference.Reference) ([]byte, error
 	if err != nil {
 		return nil, fmt.Errorf("seaweedfs get: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
-		io.Copy(io.Discard, resp.Body)
+		_, _ = io.Copy(io.Discard, resp.Body)
 		return nil, physical.ErrNotFound
 	}
 	if resp.StatusCode != http.StatusOK {
@@ -156,8 +156,8 @@ func (b *Backend) Exists(ctx context.Context, r reference.Reference) (bool, erro
 	if err != nil {
 		return false, fmt.Errorf("seaweedfs exists: %w", err)
 	}
-	defer resp.Body.Close()
-	io.Copy(io.Discard, resp.Body)
+	defer func() { _ = resp.Body.Close() }()
+	_, _ = io.Copy(io.Discard, resp.Body)
 
 	if resp.StatusCode == http.StatusNotFound {
 		return false, nil
@@ -183,8 +183,8 @@ func (b *Backend) Delete(ctx context.Context, r reference.Reference) error {
 	if err != nil {
 		return fmt.Errorf("seaweedfs delete: %w", err)
 	}
-	defer resp.Body.Close()
-	io.Copy(io.Discard, resp.Body)
+	defer func() { _ = resp.Body.Close() }()
+	_, _ = io.Copy(io.Discard, resp.Body)
 
 	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusNoContent || resp.StatusCode == http.StatusNotFound {
 		return nil

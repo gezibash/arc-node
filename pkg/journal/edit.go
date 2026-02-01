@@ -83,8 +83,8 @@ func (j *Journal) Edit(ctx context.Context, oldEntryRef reference.Reference, new
 	}
 
 	if j.search != nil {
-		_ = j.search.DeleteByEntryRef(oldEntryRef)
-		_ = j.search.Index(newContentRef, newEntryRef, string(newPlaintext), msg.Timestamp)
+		_ = j.search.DeleteByEntryRef(ctx, oldEntryRef)
+		_ = j.search.Index(ctx, newContentRef, newEntryRef, string(newPlaintext), msg.Timestamp)
 	}
 
 	return &EditResult{Ref: ref, EntryRef: newEntryRef}, nil

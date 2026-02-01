@@ -2,6 +2,7 @@ package indexstore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -12,17 +13,6 @@ import (
 	_ "github.com/gezibash/arc-node/internal/indexstore/physical/memory"
 	"github.com/gezibash/arc-node/internal/observability"
 )
-
-func newMemoryBackend(t *testing.T) physical.Backend {
-	t.Helper()
-	metrics := observability.NewMetrics()
-	be, err := physical.New(context.Background(), "memory", nil, metrics)
-	if err != nil {
-		t.Fatalf("create memory backend: %v", err)
-	}
-	t.Cleanup(func() { be.Close() })
-	return be
-}
 
 func newTestPartitioned(t *testing.T, window time.Duration, maxOpen int) *PartitionedBackend {
 	t.Helper()
@@ -75,7 +65,7 @@ func TestPartitionedGetNotFound(t *testing.T) {
 	})
 
 	_, err := pb.Get(ctx, reference.Compute([]byte("nope")))
-	if err != physical.ErrNotFound {
+	if !errors.Is(err, physical.ErrNotFound) {
 		t.Errorf("expected ErrNotFound, got: %v", err)
 	}
 }
@@ -96,7 +86,7 @@ func TestPartitionedDelete(t *testing.T) {
 	}
 
 	_, err := pb.Get(ctx, ref)
-	if err != physical.ErrNotFound {
+	if !errors.Is(err, physical.ErrNotFound) {
 		t.Errorf("expected ErrNotFound after delete, got: %v", err)
 	}
 }
@@ -361,7 +351,7 @@ func TestPartitionedGetNoPartitions(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := pb.Get(ctx, reference.Compute([]byte("nope")))
-	if err != physical.ErrNotFound {
+	if !errors.Is(err, physical.ErrNotFound) {
 		t.Errorf("expected ErrNotFound, got: %v", err)
 	}
 }

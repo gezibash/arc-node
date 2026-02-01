@@ -826,7 +826,7 @@ func TestCloseStopsSubscriptions(t *testing.T) {
 	select {
 	case _, ok := <-sub.Entries():
 		if ok {
-			// Got a buffered entry, drain more.
+			t.Fatal("expected subscription channel to be closed")
 		}
 	case <-time.After(time.Second):
 		t.Fatal("subscription channel not closed after store.Close()")
@@ -834,10 +834,6 @@ func TestCloseStopsSubscriptions(t *testing.T) {
 
 	// Subscribe after close should fail.
 	_, err = store.Subscribe(ctx, "true", [32]byte{})
-	if !errors.Is(err, ErrInvalidExpression) && err == nil {
-		// After close, the subscription manager is closed.
-		// The error wraps ErrSubscriptionClosed via ErrInvalidExpression wrapping.
-	}
 	if err == nil {
 		t.Error("Subscribe after Close should return error")
 	}

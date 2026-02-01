@@ -64,12 +64,12 @@ func runTUI(ctx context.Context, c *client.Client, sdk *journal.Journal, searchD
 	sv := newSyncView(searchDir)
 	// Seed local hash from current search index.
 	if idx := sdk.SearchIndex(); idx != nil {
-		h, _ := idx.ContentHash()
+		h, _ := idx.ContentHash(context.Background())
 		sv.localHash = reference.Hex(h)
 		var n int
-		_ = idx.Count(&n)
+		_ = idx.Count(context.Background(), &n)
 		sv.localCount = n
-		ts, _ := idx.LastIndexedTimestamp()
+		ts, _ := idx.LastIndexedTimestamp(context.Background())
 		sv.localLastUpdate = ts
 		// Don't seed remoteHash from persisted state — let a real
 		// fetch populate it so we never show stale/wrong-key data.
@@ -327,12 +327,12 @@ func (a *journalApp) Update(msg tea.Msg) (tui.App, tea.Cmd) {
 			a.tab = tabSync
 			// Refresh local stats from the current index.
 			if idx := a.sdk.SearchIndex(); idx != nil {
-				h, _ := idx.ContentHash()
+				h, _ := idx.ContentHash(context.Background())
 				a.sync.localHash = reference.Hex(h)
 				var n int
-				_ = idx.Count(&n)
+				_ = idx.Count(context.Background(), &n)
 				a.sync.localCount = n
-				ts, _ := idx.LastIndexedTimestamp()
+				ts, _ := idx.LastIndexedTimestamp(context.Background())
 				a.sync.localLastUpdate = ts
 			}
 			// Auto-fetch remote info if we haven't yet.

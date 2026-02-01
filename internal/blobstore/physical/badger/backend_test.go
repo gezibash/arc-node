@@ -38,7 +38,7 @@ func newBenchBackend(b *testing.B) physical.Backend {
 	if err != nil {
 		b.Fatal(err)
 	}
-	b.Cleanup(func() { be.Close() })
+	b.Cleanup(func() { _ = be.Close() })
 	return be
 }
 
@@ -131,7 +131,7 @@ func BenchmarkDelete(b *testing.B) {
 				}
 
 				b.StopTimer()
-				be.Close()
+				_ = be.Close()
 				b.StartTimer()
 			}
 		})

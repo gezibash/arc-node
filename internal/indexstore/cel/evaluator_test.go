@@ -316,7 +316,7 @@ func TestCompileInvalidSyntax(t *testing.T) {
 		`labels[`,
 		`== ==`,
 		`func()`,
-		`labels["x"] + 42`,     // type error: comparison expected bool
+		`labels["x"] + 42`,      // type error: comparison expected bool
 		`undeclared_var == "x"`, // undeclared variable
 	}
 

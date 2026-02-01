@@ -115,7 +115,7 @@ func (v threadsView) updatePrompt(msg tea.Msg) (threadsView, tea.Cmd) {
 	return v, cmd
 }
 
-func (v threadsView) viewContent(threads []dm.Thread, self identity.PublicKey, connected bool, layout *tui.Layout) (string, string) {
+func (v threadsView) viewContent(threads []dm.Thread, self identity.PublicKey, _ bool, layout *tui.Layout) (string, string) {
 	if v.prompting {
 		var b strings.Builder
 		b.WriteString(tui.SubtitleStyle.Render("new conversation"))

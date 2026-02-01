@@ -1,6 +1,7 @@
 package journal
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"os"
@@ -36,7 +37,7 @@ func Entrypoint(v *viper.Viper) *cobra.Command {
 		},
 		PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
 			if j.search != nil {
-				j.search.Close()
+				_ = j.search.Close()
 			}
 			if j.client != nil {
 				return j.client.Close()
@@ -80,7 +81,7 @@ func (j *journalCmd) init(cmd *cobra.Command) error {
 	keyHex := hex.EncodeToString(pub[:])
 	j.searchDir = filepath.Join(dataDir, "journal", keyHex)
 	j.searchPath = filepath.Join(j.searchDir, "search.db")
-	idx, err := journal.OpenSearchIndex(j.searchPath)
+	idx, err := journal.OpenSearchIndex(context.Background(), j.searchPath)
 	if err != nil {
 		return fmt.Errorf("open search index: %w", err)
 	}

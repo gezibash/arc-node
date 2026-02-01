@@ -3,6 +3,7 @@ package node
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/gezibash/arc-node/internal/config"
 	"github.com/gezibash/arc-node/internal/keyring"
@@ -26,7 +27,7 @@ func Entrypoint(v *viper.Viper) *cobra.Command {
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			logFile, _ := cmd.Flags().GetString("log-file")
 			if logFile != "" {
-				f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+				f, err := os.OpenFile(filepath.Clean(logFile), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 				if err != nil {
 					return fmt.Errorf("open log file: %w", err)
 				}

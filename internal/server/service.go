@@ -9,10 +9,10 @@ import (
 
 	nodev1 "github.com/gezibash/arc-node/api/arc/node/v1"
 	"github.com/gezibash/arc-node/internal/blobstore"
-	"github.com/gezibash/arc-node/pkg/envelope"
 	"github.com/gezibash/arc-node/internal/indexstore"
 	"github.com/gezibash/arc-node/internal/indexstore/physical"
 	"github.com/gezibash/arc-node/internal/observability"
+	"github.com/gezibash/arc-node/pkg/envelope"
 	"github.com/gezibash/arc-node/pkg/group"
 	"github.com/gezibash/arc/v2/pkg/identity"
 	"github.com/gezibash/arc/v2/pkg/message"
@@ -108,8 +108,8 @@ func (s *nodeService) doPublish(ctx context.Context, msgBytes []byte, labels map
 		entry.IdempotencyKey = dims.IdempotencyKey
 		entry.DeliveryComplete = int32(dims.Complete)
 		entry.CompleteN = dims.CompleteN
-		entry.Priority = int32(dims.Priority)
-		entry.MaxRedelivery = int32(dims.MaxRedelivery)
+		entry.Priority = dims.Priority
+		entry.MaxRedelivery = dims.MaxRedelivery
 		entry.AckTimeoutMs = dims.AckTimeoutMs
 		entry.Correlation = dims.Correlation
 		if dims.TtlMs > 0 {
@@ -128,8 +128,8 @@ func (s *nodeService) doPublish(ctx context.Context, msgBytes []byte, labels map
 		entry.IdempotencyKey = d.IdempotencyKey
 		entry.DeliveryComplete = int32(d.Complete)
 		entry.CompleteN = d.CompleteN
-		entry.Priority = int32(d.Priority)
-		entry.MaxRedelivery = int32(d.MaxRedelivery)
+		entry.Priority = d.Priority
+		entry.MaxRedelivery = d.MaxRedelivery
 		entry.AckTimeoutMs = d.AckTimeoutMs
 		entry.Correlation = d.Correlation
 		if d.TtlMs > 0 {
@@ -252,8 +252,8 @@ func entryToProtoDims(e *physical.Entry) *nodev1.Dimensions {
 		IdempotencyKey: e.IdempotencyKey,
 		Complete:       nodev1.DeliveryComplete(e.DeliveryComplete),
 		CompleteN:      e.CompleteN,
-		Priority:       int32(e.Priority),
-		MaxRedelivery:  int32(e.MaxRedelivery),
+		Priority:       e.Priority,
+		MaxRedelivery:  e.MaxRedelivery,
 		AckTimeoutMs:   e.AckTimeoutMs,
 		Correlation:    e.Correlation,
 	}

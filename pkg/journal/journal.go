@@ -73,15 +73,15 @@ func (j *Journal) Search(ctx context.Context, query string, opts SearchOptions) 
 	if j.search == nil {
 		return nil, fmt.Errorf("no search index configured")
 	}
-	return j.search.Search(query, opts)
+	return j.search.Search(ctx, query, opts)
 }
 
 // IndexEntry indexes a single entry's plaintext in the search index. This is
 // called automatically after Write when a search index is attached. The index
 // is keyed on entryRef (deterministic journal-level ID) for dedup.
-func (j *Journal) IndexEntry(contentRef, entryRef reference.Reference, plaintext string, timestamp int64) {
+func (j *Journal) IndexEntry(ctx context.Context, contentRef, entryRef reference.Reference, plaintext string, timestamp int64) {
 	if j.search != nil {
-		_ = j.search.Index(contentRef, entryRef, plaintext, timestamp)
+		_ = j.search.Index(ctx, contentRef, entryRef, plaintext, timestamp)
 	}
 }
 
@@ -93,7 +93,7 @@ func (j *Journal) Reindex(ctx context.Context) error {
 		return fmt.Errorf("no search index configured")
 	}
 
-	if err := j.search.Clear(); err != nil {
+	if err := j.search.Clear(ctx); err != nil {
 		return fmt.Errorf("clear search index: %w", err)
 	}
 
@@ -167,7 +167,7 @@ func (j *Journal) Reindex(ctx context.Context) error {
 		if err != nil {
 			continue
 		}
-		_ = j.search.Index(contentRef, e.EntryRef, string(entry.Content), e.Timestamp)
+		_ = j.search.Index(ctx, contentRef, e.EntryRef, string(entry.Content), e.Timestamp)
 	}
 	return nil
 }

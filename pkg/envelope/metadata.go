@@ -151,4 +151,3 @@ func firstVal(md grpcmd.MD, key string) string {
 	}
 	return vals[0]
 }
-

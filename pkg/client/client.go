@@ -204,15 +204,18 @@ func (c *Client) ResolveGet(ctx context.Context, prefix string) (*GetResult, err
 	if err != nil {
 		return nil, err
 	}
-	rf := resp.Frame.(*nodev1.ServerFrame_ResolveGetResponse).ResolveGetResponse
+	rf, ok := resp.Frame.(*nodev1.ServerFrame_ResolveGetResponse)
+	if !ok {
+		return nil, fmt.Errorf("unexpected server frame type")
+	}
 	var ref reference.Reference
-	copy(ref[:], rf.Reference)
+	copy(ref[:], rf.ResolveGetResponse.Reference)
 	return &GetResult{
-		Kind:      GetKind(rf.Kind),
+		Kind:      GetKind(rf.ResolveGetResponse.Kind),
 		Ref:       ref,
-		Data:      rf.Data,
-		Labels:    rf.Labels,
-		Timestamp: rf.Timestamp,
+		Data:      rf.ResolveGetResponse.Data,
+		Labels:    rf.ResolveGetResponse.Labels,
+		Timestamp: rf.ResolveGetResponse.Timestamp,
 	}, nil
 }
 
@@ -227,9 +230,12 @@ func (c *Client) PutContent(ctx context.Context, data []byte) (reference.Referen
 	if err != nil {
 		return reference.Reference{}, err
 	}
-	receipt := resp.Frame.(*nodev1.ServerFrame_Receipt).Receipt
+	rc, ok := resp.Frame.(*nodev1.ServerFrame_Receipt)
+	if !ok {
+		return reference.Reference{}, fmt.Errorf("unexpected server frame type")
+	}
 	var ref reference.Reference
-	copy(ref[:], receipt.Reference)
+	copy(ref[:], rc.Receipt.Reference)
 	return ref, nil
 }
 
@@ -244,7 +250,11 @@ func (c *Client) GetContent(ctx context.Context, ref reference.Reference) ([]byt
 	if err != nil {
 		return nil, err
 	}
-	return resp.Frame.(*nodev1.ServerFrame_Response).Response.Data, nil
+	rf, ok := resp.Frame.(*nodev1.ServerFrame_Response)
+	if !ok {
+		return nil, fmt.Errorf("unexpected server frame type")
+	}
+	return rf.Response.Data, nil
 }
 
 func (c *Client) SendMessage(ctx context.Context, msg message.Message, labels map[string]string) (reference.Reference, error) {
@@ -265,9 +275,12 @@ func (c *Client) SendMessage(ctx context.Context, msg message.Message, labels ma
 	if err != nil {
 		return reference.Reference{}, err
 	}
-	receipt := resp.Frame.(*nodev1.ServerFrame_Receipt).Receipt
+	rc, ok := resp.Frame.(*nodev1.ServerFrame_Receipt)
+	if !ok {
+		return reference.Reference{}, fmt.Errorf("unexpected server frame type")
+	}
 	var ref reference.Reference
-	copy(ref[:], receipt.Reference)
+	copy(ref[:], rc.Receipt.Reference)
 	return ref, nil
 }
 
@@ -291,9 +304,12 @@ func (c *Client) SendMessageWithDimensions(ctx context.Context, msg message.Mess
 	if err != nil {
 		return reference.Reference{}, err
 	}
-	receipt := resp.Frame.(*nodev1.ServerFrame_Receipt).Receipt
+	rc2, ok := resp.Frame.(*nodev1.ServerFrame_Receipt)
+	if !ok {
+		return reference.Reference{}, fmt.Errorf("unexpected server frame type")
+	}
 	var ref reference.Reference
-	copy(ref[:], receipt.Reference)
+	copy(ref[:], rc2.Receipt.Reference)
 	return ref, nil
 }
 
@@ -359,8 +375,11 @@ func (c *Client) QueryMessages(ctx context.Context, opts *QueryOptions) (*QueryR
 	if err != nil {
 		return nil, err
 	}
-	rf := resp.Frame.(*nodev1.ServerFrame_Response).Response
-	return protoToQueryResult(rf.Entries, rf.NextCursor, rf.HasMore), nil
+	qrf, ok := resp.Frame.(*nodev1.ServerFrame_Response)
+	if !ok {
+		return nil, fmt.Errorf("unexpected server frame type")
+	}
+	return protoToQueryResult(qrf.Response.Entries, qrf.Response.NextCursor, qrf.Response.HasMore), nil
 }
 
 func protoToEntryDimensions(d *nodev1.Dimensions) *EntryDimensions {
@@ -380,8 +399,8 @@ func protoToEntryDimensions(d *nodev1.Dimensions) *EntryDimensions {
 		IdempotencyKey:   d.IdempotencyKey,
 		DeliveryComplete: int32(d.Complete),
 		CompleteN:        d.CompleteN,
-		Priority:         int32(d.Priority),
-		MaxRedelivery:    int32(d.MaxRedelivery),
+		Priority:         d.Priority,
+		MaxRedelivery:    d.MaxRedelivery,
 		AckTimeoutMs:     d.AckTimeoutMs,
 		Correlation:      d.Correlation,
 	}
@@ -455,7 +474,7 @@ func (c *Client) subscribeViaChannel(ctx context.Context, mux *channelMux, expre
 			select {
 			case <-ctx.Done():
 				// Send unsubscribe (best effort).
-				mux.roundTrip(context.Background(), &nodev1.ClientFrame{
+				_, _ = mux.roundTrip(context.Background(), &nodev1.ClientFrame{
 					Frame: &nodev1.ClientFrame_Unsubscribe{Unsubscribe: &nodev1.UnsubscribeFrame{Channel: channel}},
 				})
 				mux.unsubscribe(channel)
@@ -469,7 +488,7 @@ func (c *Client) subscribeViaChannel(ctx context.Context, mux *channelMux, expre
 				case entries <- entry:
 					// Auto-ack if delivery_id is set (at-least-once).
 					if df.DeliveryId > 0 {
-						mux.send(&nodev1.ClientFrame{
+						_ = mux.send(&nodev1.ClientFrame{
 							Frame: &nodev1.ClientFrame_Ack{Ack: &nodev1.AckFrame{
 								DeliveryId: df.DeliveryId,
 							}},
@@ -516,7 +535,11 @@ func (c *Client) ListPeers(ctx context.Context) ([]PeerInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	lpr := resp.Frame.(*nodev1.ServerFrame_ListPeersResponse).ListPeersResponse
+	lprf, ok := resp.Frame.(*nodev1.ServerFrame_ListPeersResponse)
+	if !ok {
+		return nil, fmt.Errorf("unexpected server frame type")
+	}
+	lpr := lprf.ListPeersResponse
 	peers := make([]PeerInfo, len(lpr.Peers))
 	for i, p := range lpr.Peers {
 		peers[i] = PeerInfo{
@@ -552,7 +575,11 @@ func (c *Client) Federate(ctx context.Context, peer string, labels map[string]st
 	if err != nil {
 		return nil, err
 	}
-	fr := resp.Frame.(*nodev1.ServerFrame_FederateResponse).FederateResponse
+	frf, ok := resp.Frame.(*nodev1.ServerFrame_FederateResponse)
+	if !ok {
+		return nil, fmt.Errorf("unexpected server frame type")
+	}
+	fr := frf.FederateResponse
 	return &FederateResult{
 		Status:  fr.Status,
 		Message: fr.Message,

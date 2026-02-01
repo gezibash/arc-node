@@ -3,6 +3,7 @@ package fs
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -54,7 +55,7 @@ func TestGetNotFound(t *testing.T) {
 	ref := testRef([]byte("missing"))
 
 	_, err := b.Get(context.Background(), ref)
-	if err != physical.ErrNotFound {
+	if !errors.Is(err, physical.ErrNotFound) {
 		t.Fatalf("got %v, want ErrNotFound", err)
 	}
 }
@@ -105,7 +106,7 @@ func TestDeleteIdempotent(t *testing.T) {
 	}
 
 	_, err := b.Get(ctx, ref)
-	if err != physical.ErrNotFound {
+	if !errors.Is(err, physical.ErrNotFound) {
 		t.Fatalf("got %v, want ErrNotFound after delete", err)
 	}
 }
@@ -205,24 +206,24 @@ func TestStats(t *testing.T) {
 
 func TestClosedBackend(t *testing.T) {
 	b := newTestBackend(t)
-	b.Close()
+	_ = b.Close()
 
 	ref := testRef([]byte("closed"))
 	ctx := context.Background()
 
-	if err := b.Put(ctx, ref, []byte("closed")); err != physical.ErrClosed {
+	if err := b.Put(ctx, ref, []byte("closed")); !errors.Is(err, physical.ErrClosed) {
 		t.Fatalf("Put after close: got %v, want ErrClosed", err)
 	}
-	if _, err := b.Get(ctx, ref); err != physical.ErrClosed {
+	if _, err := b.Get(ctx, ref); !errors.Is(err, physical.ErrClosed) {
 		t.Fatalf("Get after close: got %v, want ErrClosed", err)
 	}
-	if _, err := b.Exists(ctx, ref); err != physical.ErrClosed {
+	if _, err := b.Exists(ctx, ref); !errors.Is(err, physical.ErrClosed) {
 		t.Fatalf("Exists after close: got %v, want ErrClosed", err)
 	}
-	if err := b.Delete(ctx, ref); err != physical.ErrClosed {
+	if err := b.Delete(ctx, ref); !errors.Is(err, physical.ErrClosed) {
 		t.Fatalf("Delete after close: got %v, want ErrClosed", err)
 	}
-	if _, err := b.Stats(ctx); err != physical.ErrClosed {
+	if _, err := b.Stats(ctx); !errors.Is(err, physical.ErrClosed) {
 		t.Fatalf("Stats after close: got %v, want ErrClosed", err)
 	}
 }

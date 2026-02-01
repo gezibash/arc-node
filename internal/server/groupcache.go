@@ -3,8 +3,8 @@ package server
 import (
 	"sync"
 
-	"github.com/gezibash/arc/v2/pkg/identity"
 	"github.com/gezibash/arc-node/pkg/group"
+	"github.com/gezibash/arc/v2/pkg/identity"
 )
 
 // groupCache maintains an in-memory mapping of group membership for

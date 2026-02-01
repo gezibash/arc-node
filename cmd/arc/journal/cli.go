@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -133,7 +134,7 @@ func newReadCmd(j *journalCmd) *cobra.Command {
 			}
 
 			if file != "" {
-				return os.WriteFile(file, entry.Content, 0644)
+				return os.WriteFile(file, entry.Content, 0600)
 			}
 
 			switch output {
@@ -156,7 +157,7 @@ func newReadCmd(j *journalCmd) *cobra.Command {
 				if entry.EntryRef != zeroRef {
 					short = reference.Hex(entry.EntryRef)[:8]
 				}
-				fmt.Fprintf(os.Stdout, "## %s [%s]\n", ts.Format("2006-01-02 15:04"), short)
+				_, _ = fmt.Fprintf(os.Stdout, "## %s [%s]\n", ts.Format("2006-01-02 15:04"), short)
 				if len(entry.Labels) > 0 {
 					var parts []string
 					for k, v := range entry.Labels {
@@ -166,12 +167,12 @@ func newReadCmd(j *journalCmd) *cobra.Command {
 						parts = append(parts, k+"="+v)
 					}
 					if len(parts) > 0 {
-						fmt.Fprintf(os.Stdout, "Labels: %s\n", strings.Join(parts, ", "))
+						_, _ = fmt.Fprintf(os.Stdout, "Labels: %s\n", strings.Join(parts, ", "))
 					}
 				}
-				fmt.Fprintln(os.Stdout)
+				_, _ = fmt.Fprintln(os.Stdout)
 				_, err = os.Stdout.Write(entry.Content)
-				fmt.Fprintln(os.Stdout)
+				_, _ = fmt.Fprintln(os.Stdout)
 				return err
 			default:
 				_, err = os.Stdout.Write(entry.Content)
@@ -212,7 +213,7 @@ func resolveAndRead(ctx context.Context, j *journalCmd, arg string) (*journal.En
 
 	// Try as short entryRef prefix via search index.
 	if len(arg) < 64 && len(arg) >= 8 && j.search != nil {
-		entryRef, err := j.search.ResolvePrefix(arg)
+		entryRef, err := j.search.ResolvePrefix(ctx, arg)
 		if err == nil {
 			entryHex := reference.Hex(entryRef)
 			result, err := j.sdk.List(ctx, journal.ListOptions{
@@ -321,28 +322,28 @@ func newSearchCmd(j *journalCmd) *cobra.Command {
 				return render.JSONEnvelope(os.Stdout, meta, jsonResults)
 			case "md", "markdown":
 				return render.MarkdownWithFrontmatter(os.Stdout, meta, func(w io.Writer) error {
-					fmt.Fprintf(w, "## Search: %q\n\n", args[0])
+					_, _ = fmt.Fprintf(w, "## Search: %q\n\n", args[0])
 					for _, r := range results {
 						short := reference.Hex(r.Ref)[:8]
 						ts := time.UnixMilli(r.Timestamp)
-						fmt.Fprintf(w, "### [%s] %s\n", short, ts.Format("Jan 2 15:04"))
-						fmt.Fprintln(w, r.Snippet)
+						_, _ = fmt.Fprintf(w, "### [%s] %s\n", short, ts.Format("Jan 2 15:04"))
+						_, _ = fmt.Fprintln(w, r.Snippet)
 						if readAll {
 							entry, err := resolveAndRead(cmd.Context(), j, reference.Hex(r.Ref))
 							if err == nil {
-								fmt.Fprintln(w)
-								fmt.Fprintln(w, string(entry.Content))
+								_, _ = fmt.Fprintln(w)
+								_, _ = fmt.Fprintln(w, string(entry.Content))
 							}
 						}
-						fmt.Fprintln(w, "---")
-						fmt.Fprintln(w)
+						_, _ = fmt.Fprintln(w, "---")
+						_, _ = fmt.Fprintln(w)
 					}
 					return nil
 				})
 			default:
 				for _, r := range results {
 					short := reference.Hex(r.Ref)[:8]
-					fmt.Fprintf(os.Stdout, "%-10s %s\n", short, r.Snippet)
+					_, _ = fmt.Fprintf(os.Stdout, "%-10s %s\n", short, r.Snippet)
 				}
 			}
 			return nil
@@ -362,7 +363,8 @@ func newFetchCmd(j *journalCmd) *cobra.Command {
 		Use:   "fetch",
 		Short: "Check the remote search index status",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			info, err := j.sdk.FetchRemoteSearchInfo(cmd.Context())
+			ctx := cmd.Context()
+			info, err := j.sdk.FetchRemoteSearchInfo(ctx)
 			if err != nil {
 				return err
 			}
@@ -381,11 +383,11 @@ func newFetchCmd(j *journalCmd) *cobra.Command {
 				return fmt.Errorf("save state: %w", err)
 			}
 
-			localHash, _ := j.search.ContentHash()
+			localHash, _ := j.search.ContentHash(ctx)
 			localHex := reference.Hex(localHash)
 
-			localTS, _ := j.search.LastIndexedTimestamp()
-			localCount := entryCount(j.search)
+			localTS, _ := j.search.LastIndexedTimestamp(ctx)
+			localCount := entryCount(ctx, j.search)
 
 			if output == "json" {
 				return writeJSON(os.Stdout, map[string]any{
@@ -433,7 +435,7 @@ func newPullCmd(j *journalCmd) *cobra.Command {
 			}
 
 			// Compare hashes.
-			localHash, _ := j.search.ContentHash()
+			localHash, _ := j.search.ContentHash(ctx)
 			localHex := reference.Hex(localHash)
 			if localHex == info.DBHash {
 				fmt.Fprintln(os.Stderr, "already up to date")
@@ -442,9 +444,9 @@ func newPullCmd(j *journalCmd) *cobra.Command {
 			}
 
 			// Safety check: warn if local is newer than remote.
-			localTS, _ := j.search.LastIndexedTimestamp()
+			localTS, _ := j.search.LastIndexedTimestamp(ctx)
 			if !force && localTS > 0 && info.LastUpdate > 0 && localTS > info.LastUpdate {
-				localCount := entryCount(j.search)
+				localCount := entryCount(ctx, j.search)
 				fmt.Fprintf(os.Stderr, "warning: local index appears newer than remote\n")
 				fmt.Fprintf(os.Stderr, "  local:  %d entries, last-update %s\n", localCount, formatTimestamp(localTS))
 				fmt.Fprintf(os.Stderr, "  remote: %d entries, last-update %s\n", info.EntryCount, formatTimestamp(info.LastUpdate))
@@ -454,26 +456,26 @@ func newPullCmd(j *journalCmd) *cobra.Command {
 
 			// Download and replace.
 			fmt.Fprintln(os.Stderr, "pulling remote search index...")
-			j.search.Close()
+			_ = j.search.Close()
 			pulled, err := j.sdk.PullSearchIndex(ctx, j.searchPath)
 			if err != nil {
 				// Reopen local on failure.
-				j.search, _ = journal.OpenSearchIndex(j.searchPath)
+				j.search, _ = journal.OpenSearchIndex(ctx, j.searchPath)
 				j.sdk.SetSearchIndex(j.search)
 				return err
 			}
 			j.search = pulled
 			j.sdk.SetSearchIndex(pulled)
 
-			pulledHash, _ := pulled.ContentHash()
+			pulledHash, _ := pulled.ContentHash(ctx)
 			state.LocalHash = reference.Hex(pulledHash)
 			state.RemoteHash = info.DBHash
 			if err := state.Save(); err != nil {
 				return fmt.Errorf("save state: %w", err)
 			}
 
-			ts, _ := pulled.LastIndexedTimestamp()
-			fmt.Fprintf(os.Stderr, "pulled (%d entries, last-update: %s)\n", entryCount(pulled), formatTimestamp(ts))
+			ts, _ := pulled.LastIndexedTimestamp(ctx)
+			fmt.Fprintf(os.Stderr, "pulled (%d entries, last-update: %s)\n", entryCount(ctx, pulled), formatTimestamp(ts))
 			return nil
 		},
 	}
@@ -490,7 +492,7 @@ func newPushCmd(j *journalCmd) *cobra.Command {
 			ctx := cmd.Context()
 			state := journal.LoadSearchState(j.searchDir)
 
-			localHash, err := j.search.ContentHash()
+			localHash, err := j.search.ContentHash(ctx)
 			if err != nil {
 				return err
 			}
@@ -514,9 +516,9 @@ func newPushCmd(j *journalCmd) *cobra.Command {
 
 			// Safety check: warn if remote is newer than local.
 			if !force && info != nil && info.LastUpdate > 0 {
-				localTS, _ := j.search.LastIndexedTimestamp()
+				localTS, _ := j.search.LastIndexedTimestamp(ctx)
 				if localTS > 0 && info.LastUpdate > localTS {
-					localCount := entryCount(j.search)
+					localCount := entryCount(ctx, j.search)
 					fmt.Fprintf(os.Stderr, "warning: remote index appears newer than local\n")
 					fmt.Fprintf(os.Stderr, "  local:  %d entries, last-update %s\n", localCount, formatTimestamp(localTS))
 					fmt.Fprintf(os.Stderr, "  remote: %d entries, last-update %s\n", info.EntryCount, formatTimestamp(info.LastUpdate))
@@ -554,20 +556,21 @@ func newReindexCmd(j *journalCmd) *cobra.Command {
 			if err := j.sdk.Reindex(cmd.Context()); err != nil {
 				return err
 			}
-			n := entryCount(j.search)
-			ts, _ := j.search.LastIndexedTimestamp()
+			ctx := cmd.Context()
+			n := entryCount(ctx, j.search)
+			ts, _ := j.search.LastIndexedTimestamp(ctx)
 			fmt.Fprintf(os.Stderr, "reindex complete (%d entries, last-update: %d)\n", n, ts)
 			return nil
 		},
 	}
 }
 
-func entryCount(idx *journal.SearchIndex) int {
+func entryCount(ctx context.Context, idx *journal.SearchIndex) int {
 	if idx == nil {
 		return 0
 	}
 	var n int
-	_ = idx.Count(&n)
+	_ = idx.Count(ctx, &n)
 	return n
 }
 
@@ -615,19 +618,23 @@ func newEditCmd(j *journalCmd) *cobra.Command {
 				return fmt.Errorf("create temp file: %w", err)
 			}
 			tmpPath := tmpFile.Name()
-			defer os.Remove(tmpPath)
+			defer func() { _ = os.Remove(tmpPath) }()
 
 			if _, err := tmpFile.Write(plaintext); err != nil {
-				tmpFile.Close()
+				_ = tmpFile.Close()
 				return fmt.Errorf("write temp file: %w", err)
 			}
-			tmpFile.Close()
+			_ = tmpFile.Close()
 
 			editor := os.Getenv("EDITOR")
 			if editor == "" {
 				editor = "vi"
 			}
-			editorCmd := exec.CommandContext(cmd.Context(), editor, tmpPath)
+			editorPath, err := exec.LookPath(editor)
+			if err != nil {
+				return fmt.Errorf("editor %q not found: %w", editor, err)
+			}
+			editorCmd := exec.CommandContext(cmd.Context(), editorPath, tmpPath)
 			editorCmd.Stdin = os.Stdin
 			editorCmd.Stdout = os.Stdout
 			editorCmd.Stderr = os.Stderr
@@ -635,7 +642,7 @@ func newEditCmd(j *journalCmd) *cobra.Command {
 				return fmt.Errorf("editor: %w", err)
 			}
 
-			edited, err := os.ReadFile(tmpPath)
+			edited, err := os.ReadFile(filepath.Clean(tmpPath))
 			if err != nil {
 				return fmt.Errorf("read edited file: %w", err)
 			}

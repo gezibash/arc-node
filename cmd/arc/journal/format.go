@@ -18,7 +18,7 @@ import (
 
 func formatListText(w io.Writer, result *journal.ListResult, preview, content bool, sdk *journal.Journal) error {
 	if len(result.Entries) > 0 {
-		fmt.Fprintf(w, "%-10s %-14s %s\n", "REF", "AGE", "LABELS")
+		_, _ = fmt.Fprintf(w, "%-10s %-14s %s\n", "REF", "AGE", "LABELS")
 	}
 	for _, e := range result.Entries {
 		formatEntryText(w, e, preview || content, sdk)
@@ -30,13 +30,13 @@ func formatListText(w io.Writer, result *journal.ListResult, preview, content bo
 					truncated = truncated[:500] + "..."
 				}
 				for _, line := range strings.Split(truncated, "\n") {
-					fmt.Fprintf(w, "%-10s %-14s %s\n", "", "", line)
+					_, _ = fmt.Fprintf(w, "%-10s %-14s %s\n", "", "", line)
 				}
 			}
 		}
 	}
 	if result.HasMore {
-		fmt.Fprintf(w, "next cursor: %s\n", result.NextCursor)
+		_, _ = fmt.Fprintf(w, "next cursor: %s\n", result.NextCursor)
 	}
 	return nil
 }
@@ -60,13 +60,13 @@ func formatEntryText(w io.Writer, e journal.Entry, preview bool, sdk *journal.Jo
 	}
 	slices.Sort(parts)
 
-	fmt.Fprintf(w, "%-10s %-14s %s\n", short, formatDuration(age)+" ago", strings.Join(parts, " "))
+	_, _ = fmt.Fprintf(w, "%-10s %-14s %s\n", short, formatDuration(age)+" ago", strings.Join(parts, " "))
 
 	if preview && sdk != nil {
 		text, err := sdk.Preview(context.Background(), e)
 		if err == nil && text != "" {
 			for _, line := range strings.Split(text, "\n") {
-				fmt.Fprintf(w, "%-10s %-14s %s\n", "", "", line)
+				_, _ = fmt.Fprintf(w, "%-10s %-14s %s\n", "", "", line)
 			}
 		}
 	}
@@ -121,13 +121,13 @@ func formatListJSON(w io.Writer, result *journal.ListResult, preview, content bo
 func formatListMarkdown(w io.Writer, result *journal.ListResult, preview, content bool, sdk *journal.Journal) error {
 	meta := buildListMeta("arc journal list", result)
 	return render.MarkdownWithFrontmatter(w, meta, func(w io.Writer) error {
-		fmt.Fprintln(w, "## Journal Entries")
-		fmt.Fprintln(w)
+		_, _ = fmt.Fprintln(w, "## Journal Entries")
+		_, _ = fmt.Fprintln(w)
 
 		for _, e := range result.Entries {
 			ts := time.UnixMilli(e.Timestamp)
 			short := entryShortRef(e)
-			fmt.Fprintf(w, "### %s [%s]\n", ts.Format("2006-01-02 15:04"), short)
+			_, _ = fmt.Fprintf(w, "### %s [%s]\n", ts.Format("2006-01-02 15:04"), short)
 
 			var labelParts []string
 			for k, v := range e.Labels {
@@ -138,30 +138,30 @@ func formatListMarkdown(w io.Writer, result *journal.ListResult, preview, conten
 			}
 			slices.Sort(labelParts)
 			if len(labelParts) > 0 {
-				fmt.Fprintf(w, "Labels: %s\n", strings.Join(labelParts, ", "))
+				_, _ = fmt.Fprintf(w, "Labels: %s\n", strings.Join(labelParts, ", "))
 			}
 
 			if content && sdk != nil {
 				text, err := readFullContent(sdk, e)
 				if err == nil && text != "" {
-					fmt.Fprintln(w)
-					fmt.Fprintln(w, text)
+					_, _ = fmt.Fprintln(w)
+					_, _ = fmt.Fprintln(w, text)
 				}
 			} else if preview && sdk != nil {
 				text, err := sdk.Preview(context.Background(), e)
 				if err == nil && text != "" {
-					fmt.Fprintln(w)
-					fmt.Fprintln(w, text)
+					_, _ = fmt.Fprintln(w)
+					_, _ = fmt.Fprintln(w, text)
 				}
 			}
 
-			fmt.Fprintln(w)
-			fmt.Fprintln(w, "---")
-			fmt.Fprintln(w)
+			_, _ = fmt.Fprintln(w)
+			_, _ = fmt.Fprintln(w, "---")
+			_, _ = fmt.Fprintln(w)
 		}
 
 		if result.HasMore {
-			fmt.Fprintf(w, "_More entries available (cursor: %s)_\n", result.NextCursor)
+			_, _ = fmt.Fprintf(w, "_More entries available (cursor: %s)_\n", result.NextCursor)
 		}
 		return nil
 	})

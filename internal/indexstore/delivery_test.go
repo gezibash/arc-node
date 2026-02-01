@@ -14,7 +14,6 @@ import (
 	"github.com/gezibash/arc-node/internal/observability"
 )
 
-
 func newTestBackend(t *testing.T) physical.Backend {
 	t.Helper()
 	metrics := observability.NewMetrics()
@@ -527,7 +526,7 @@ func TestDeliveryTracker_ConcurrentDeliverAck(t *testing.T) {
 		go func() {
 			defer ackWg.Done()
 			id := <-ids
-			tracker.Ack(ctx, id)
+			_, _ = tracker.Ack(ctx, id)
 		}()
 	}
 

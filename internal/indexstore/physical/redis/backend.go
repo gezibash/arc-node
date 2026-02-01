@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sort"
@@ -252,7 +253,7 @@ func (b *Backend) putInPipe(ctx context.Context, pipe redis.Pipeliner, entry *ph
 		if json.Unmarshal(oldData, &oldEntry) == nil {
 			b.cleanupOldEntry(ctx, pipe, refHex, &oldEntry)
 		}
-	} else if err != redis.Nil {
+	} else if !errors.Is(err, redis.Nil) {
 		return fmt.Errorf("check existing entry: %w", err)
 	}
 
@@ -306,7 +307,7 @@ func (b *Backend) Get(ctx context.Context, r reference.Reference) (*physical.Ent
 
 	refHex := reference.Hex(r)
 	data, err := b.client.Get(ctx, b.entryKey(refHex)).Bytes()
-	if err == redis.Nil {
+	if errors.Is(err, redis.Nil) {
 		return nil, physical.ErrNotFound
 	}
 	if err != nil {
@@ -328,7 +329,7 @@ func (b *Backend) Delete(ctx context.Context, r reference.Reference) error {
 	refHex := reference.Hex(r)
 
 	data, err := b.client.Get(ctx, b.entryKey(refHex)).Bytes()
-	if err == redis.Nil {
+	if errors.Is(err, redis.Nil) {
 		return nil
 	}
 	if err != nil {
@@ -824,7 +825,7 @@ func (b *Backend) GetCursor(ctx context.Context, key string) (physical.Cursor, e
 		return physical.Cursor{}, physical.ErrClosed
 	}
 	val, err := b.client.Get(ctx, b.prefix+"cursor:"+key).Result()
-	if err == redis.Nil {
+	if errors.Is(err, redis.Nil) {
 		return physical.Cursor{}, physical.ErrCursorNotFound
 	}
 	if err != nil {

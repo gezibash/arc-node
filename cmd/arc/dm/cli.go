@@ -20,7 +20,7 @@ func newSendCmd(d *dmCmd) *cobra.Command {
 		Short: "Encrypt and send a direct message",
 		Args:  cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sdk, _, err := d.openConversation(args[0])
+			sdk, err := d.openConversation(args[0])
 			if err != nil {
 				return err
 			}
@@ -68,7 +68,7 @@ func newListCmd(d *dmCmd) *cobra.Command {
 		Short: "Query conversation messages",
 		Args:  cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sdk, _, err := d.openConversation(args[0])
+			sdk, err := d.openConversation(args[0])
 			if err != nil {
 				return err
 			}
@@ -124,7 +124,7 @@ func newReadCmd(d *dmCmd) *cobra.Command {
 		Short: "Fetch, decrypt, and display a message",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sdk, _, err := d.openConversation(args[0])
+			sdk, err := d.openConversation(args[0])
 			if err != nil {
 				return err
 			}
@@ -140,7 +140,7 @@ func newReadCmd(d *dmCmd) *cobra.Command {
 			}
 
 			if file != "" {
-				return os.WriteFile(file, msg.Content, 0644)
+				return os.WriteFile(file, msg.Content, 0600)
 			}
 			_, err = os.Stdout.Write(msg.Content)
 			return err

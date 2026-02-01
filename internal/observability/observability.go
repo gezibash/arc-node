@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -80,7 +81,7 @@ func (o *Observability) ServeMetrics(ctx context.Context, addr string) *http.Ser
 		_, _ = w.Write([]byte("OK"))
 	})
 
-	srv := &http.Server{Addr: addr, Handler: mux}
+	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 
 	go func() {
 		slog.Info("metrics server starting", "addr", addr)

@@ -59,7 +59,7 @@ func AddMember(current *Manifest, groupKP *identity.Keypair, newMember identity.
 
 	mem := Member{
 		PublicKey: newMember,
-		Role:     role,
+		Role:      role,
 	}
 	if role == RoleAdmin {
 		sealed, err := SealSeed(groupKP.Seed(), newMember)

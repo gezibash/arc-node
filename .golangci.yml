@@ -1,0 +1,46 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - unused
+    - ineffassign
+    - gosec
+    - errorlint
+    - bodyclose
+    - noctx
+    - unconvert
+    - unparam
+    - misspell
+  settings:
+    govet:
+      enable:
+        - nilness
+    errcheck:
+      check-type-assertions: true
+    gosec:
+      excludes:
+        - G104
+        - G115
+        - G202
+        - G204
+  exclusions:
+    paths:
+      - api
+      - hack
+    rules:
+      - path: _test\.go
+        linters:
+          - gosec
+          - errcheck
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

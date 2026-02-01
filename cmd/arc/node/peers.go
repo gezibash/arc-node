@@ -62,11 +62,11 @@ func newPeersCmd(n *nodeCmd) *cobra.Command {
 			}
 
 			if len(filtered) == 0 {
-				fmt.Fprintln(os.Stdout, "no active peers")
+				_, _ = fmt.Fprintln(os.Stdout, "no active peers")
 				return nil
 			}
 
-			fmt.Fprintf(os.Stdout, "%-30s %-10s %-20s %10s %8s %8s %s\n",
+			_, _ = fmt.Fprintf(os.Stdout, "%-30s %-10s %-20s %10s %8s %8s %s\n",
 				"PEER", "OUTBOUND", "LABELS", "RECEIVED", "SENT", "ENTRIES", "UPTIME")
 
 			display := filtered
@@ -86,7 +86,7 @@ func newPeersCmd(n *nodeCmd) *cobra.Command {
 						peer = peer[:16]
 					}
 				}
-				fmt.Fprintf(os.Stdout, "%-30s %-10s %-20s %10s %8d %8d %s\n",
+				_, _ = fmt.Fprintf(os.Stdout, "%-30s %-10s %-20s %10s %8d %8d %s\n",
 					peer,
 					outbound,
 					formatLabels(p.Labels),
@@ -98,7 +98,7 @@ func newPeersCmd(n *nodeCmd) *cobra.Command {
 			}
 
 			if truncated > 0 {
-				fmt.Fprintf(os.Stdout, "... and %d more (use -o json for full list)\n", truncated)
+				_, _ = fmt.Fprintf(os.Stdout, "... and %d more (use -o json for full list)\n", truncated)
 			}
 
 			return nil

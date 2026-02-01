@@ -127,10 +127,8 @@ func TestChannelUnsubscribeStopsDelivery(t *testing.T) {
 	}
 
 	select {
-	case _, ok := <-entries:
-		if ok {
-			// Might get one in-flight, that's acceptable.
-		}
+	case <-entries:
+		// Might get one in-flight, that's acceptable.
 	case <-time.After(500 * time.Millisecond):
 		// Good — no delivery.
 	}
@@ -1370,14 +1368,14 @@ func TestRedeliveryLoopWithExpiredDelivery(t *testing.T) {
 	// Create an entry with at-least-once delivery and very short ack timeout.
 	ref := reference.Compute([]byte("redeliver-test"))
 	entry := &idxphysical.Entry{
-		Ref:            ref,
-		Labels:         map[string]string{"redeliver": "test"},
-		Timestamp:      time.Now().UnixMilli(),
-		Persistence:    1,
-		DeliveryMode:   1,
-		AckTimeoutMs:   100, // 100ms ack timeout
-		MaxRedelivery:  2,
-		Priority:       5,
+		Ref:           ref,
+		Labels:        map[string]string{"redeliver": "test"},
+		Timestamp:     time.Now().UnixMilli(),
+		Persistence:   1,
+		DeliveryMode:  1,
+		AckTimeoutMs:  100, // 100ms ack timeout
+		MaxRedelivery: 2,
+		Priority:      5,
 	}
 	if err := svc.index.Index(ctx, entry); err != nil {
 		t.Fatalf("Index: %v", err)

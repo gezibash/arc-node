@@ -2,10 +2,9 @@ version: "3"
 
 tasks:
   lint:
-    desc: Run formatting and vet checks
+    desc: Run golangci-lint
     cmds:
-      - test -z "$(gofmt -l .)"
-      - go vet ./...
+      - golangci-lint run ./...
   fmt:
     desc: Format Go files in-place
     cmds:

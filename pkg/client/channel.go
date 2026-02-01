@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -37,17 +38,18 @@ func (m *channelMux) recvLoop() {
 	for {
 		frame, err := m.stream.Recv()
 		if err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				m.closed.Store(true)
 				return
 			}
 			m.closed.Store(true)
 			// Wake all pending waiters with nil (they'll see closed).
-			m.pending.Range(func(key, value any) bool {
-				ch := value.(chan *nodev1.ServerFrame)
-				select {
-				case ch <- nil:
-				default:
+			m.pending.Range(func(_, value any) bool {
+				if ch, ok := value.(chan *nodev1.ServerFrame); ok {
+					select {
+					case ch <- nil:
+					default:
+					}
 				}
 				return true
 			})
@@ -60,10 +62,12 @@ func (m *channelMux) recvLoop() {
 		if reqID == 0 {
 			if df, ok := frame.Frame.(*nodev1.ServerFrame_Delivery); ok {
 				if ch, loaded := m.subs.Load(df.Delivery.Channel); loaded {
-					select {
-					case ch.(chan *nodev1.DeliveryFrame) <- df.Delivery:
-					default:
-						// Drop if subscriber is slow.
+					if dch, ok := ch.(chan *nodev1.DeliveryFrame); ok {
+						select {
+						case dch <- df.Delivery:
+						default:
+							// Drop if subscriber is slow.
+						}
 					}
 				}
 			}
@@ -72,7 +76,9 @@ func (m *channelMux) recvLoop() {
 
 		// Correlated response.
 		if ch, loaded := m.pending.LoadAndDelete(reqID); loaded {
-			ch.(chan *nodev1.ServerFrame) <- frame
+			if respCh, ok := ch.(chan *nodev1.ServerFrame); ok {
+				respCh <- frame
+			}
 		}
 	}
 }
@@ -124,7 +130,9 @@ func (m *channelMux) subscribe(channel string) <-chan *nodev1.DeliveryFrame {
 
 func (m *channelMux) unsubscribe(channel string) {
 	if v, loaded := m.subs.LoadAndDelete(channel); loaded {
-		close(v.(chan *nodev1.DeliveryFrame))
+		if ch, ok := v.(chan *nodev1.DeliveryFrame); ok {
+			close(ch)
+		}
 	}
 }
 
@@ -134,5 +142,5 @@ func (m *channelMux) close() {
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.stream.CloseSend()
+	_ = m.stream.CloseSend()
 }

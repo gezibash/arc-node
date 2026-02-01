@@ -20,13 +20,13 @@ func TestAutoIndexer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { backend.Close() })
+	t.Cleanup(func() { _ = backend.Close() })
 
 	store, err := New(backend, metrics)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { store.Close() })
+	t.Cleanup(func() { _ = store.Close() })
 
 	ctx := context.Background()
 
@@ -119,13 +119,13 @@ func TestAutoIndexerTrackDirectly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { backend.Close() })
+	t.Cleanup(func() { _ = backend.Close() })
 
 	store, err := New(backend, metrics)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { store.Close() })
+	t.Cleanup(func() { _ = store.Close() })
 
 	ai, ok := store.autoIdx.(*autoIndexer)
 	if !ok {
@@ -162,13 +162,13 @@ func TestAutoIndexerEvaluateBelowThreshold(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { backend.Close() })
+	t.Cleanup(func() { _ = backend.Close() })
 
 	store, err := New(backend, metrics)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { store.Close() })
+	t.Cleanup(func() { _ = store.Close() })
 
 	ai := store.autoIdx.(*autoIndexer)
 	ai.threshold = 1000

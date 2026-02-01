@@ -37,7 +37,7 @@ func MarshalManifest(m *Manifest) ([]byte, error) {
 
 	// Name (length-prefixed).
 	nameBytes := []byte(m.Name)
-	binary.Write(&buf, binary.BigEndian, uint16(len(nameBytes)))
+	_ = binary.Write(&buf, binary.BigEndian, uint16(len(nameBytes)))
 	buf.Write(nameBytes)
 
 	// Parent (1 byte flag + optional 32 bytes).
@@ -49,14 +49,14 @@ func MarshalManifest(m *Manifest) ([]byte, error) {
 	}
 
 	// Policy.
-	binary.Write(&buf, binary.BigEndian, int32(m.Policy.AdminThreshold))
+	_ = binary.Write(&buf, binary.BigEndian, int32(m.Policy.AdminThreshold))
 
 	// Members.
-	binary.Write(&buf, binary.BigEndian, uint32(len(sorted)))
+	_ = binary.Write(&buf, binary.BigEndian, uint32(len(sorted)))
 	for _, mem := range sorted {
 		buf.Write(mem.PublicKey[:])
 		buf.WriteByte(byte(mem.Role))
-		binary.Write(&buf, binary.BigEndian, uint32(len(mem.SealedSeed)))
+		_ = binary.Write(&buf, binary.BigEndian, uint32(len(mem.SealedSeed)))
 		buf.Write(mem.SealedSeed)
 	}
 
@@ -80,29 +80,29 @@ func UnmarshalManifest(data []byte) (*Manifest, error) {
 
 	// Group ID.
 	if _, err := r.Read(m.ID[:]); err != nil {
-		return nil, fmt.Errorf("%w: read group ID: %v", ErrInvalidManifest, err)
+		return nil, fmt.Errorf("%w: read group ID: %w", ErrInvalidManifest, err)
 	}
 
 	// Name.
 	var nameLen uint16
 	if err := binary.Read(r, binary.BigEndian, &nameLen); err != nil {
-		return nil, fmt.Errorf("%w: read name length: %v", ErrInvalidManifest, err)
+		return nil, fmt.Errorf("%w: read name length: %w", ErrInvalidManifest, err)
 	}
 	nameBytes := make([]byte, nameLen)
 	if _, err := r.Read(nameBytes); err != nil {
-		return nil, fmt.Errorf("%w: read name: %v", ErrInvalidManifest, err)
+		return nil, fmt.Errorf("%w: read name: %w", ErrInvalidManifest, err)
 	}
 	m.Name = string(nameBytes)
 
 	// Parent.
 	parentFlag, err := r.ReadByte()
 	if err != nil {
-		return nil, fmt.Errorf("%w: read parent flag: %v", ErrInvalidManifest, err)
+		return nil, fmt.Errorf("%w: read parent flag: %w", ErrInvalidManifest, err)
 	}
 	if parentFlag == 1 {
 		var ref reference.Reference
 		if _, err := r.Read(ref[:]); err != nil {
-			return nil, fmt.Errorf("%w: read parent ref: %v", ErrInvalidManifest, err)
+			return nil, fmt.Errorf("%w: read parent ref: %w", ErrInvalidManifest, err)
 		}
 		m.Parent = &ref
 	}
@@ -110,34 +110,34 @@ func UnmarshalManifest(data []byte) (*Manifest, error) {
 	// Policy.
 	var threshold int32
 	if err := binary.Read(r, binary.BigEndian, &threshold); err != nil {
-		return nil, fmt.Errorf("%w: read policy: %v", ErrInvalidManifest, err)
+		return nil, fmt.Errorf("%w: read policy: %w", ErrInvalidManifest, err)
 	}
 	m.Policy.AdminThreshold = int(threshold)
 
 	// Members.
 	var count uint32
 	if err := binary.Read(r, binary.BigEndian, &count); err != nil {
-		return nil, fmt.Errorf("%w: read member count: %v", ErrInvalidManifest, err)
+		return nil, fmt.Errorf("%w: read member count: %w", ErrInvalidManifest, err)
 	}
 	m.Members = make([]Member, count)
 	for i := range m.Members {
 		if _, err := r.Read(m.Members[i].PublicKey[:]); err != nil {
-			return nil, fmt.Errorf("%w: read member %d key: %v", ErrInvalidManifest, i, err)
+			return nil, fmt.Errorf("%w: read member %d key: %w", ErrInvalidManifest, i, err)
 		}
 		roleByte, err := r.ReadByte()
 		if err != nil {
-			return nil, fmt.Errorf("%w: read member %d role: %v", ErrInvalidManifest, i, err)
+			return nil, fmt.Errorf("%w: read member %d role: %w", ErrInvalidManifest, i, err)
 		}
 		m.Members[i].Role = Role(roleByte)
 
 		var sealedLen uint32
 		if err := binary.Read(r, binary.BigEndian, &sealedLen); err != nil {
-			return nil, fmt.Errorf("%w: read member %d sealed len: %v", ErrInvalidManifest, i, err)
+			return nil, fmt.Errorf("%w: read member %d sealed len: %w", ErrInvalidManifest, i, err)
 		}
 		if sealedLen > 0 {
 			m.Members[i].SealedSeed = make([]byte, sealedLen)
 			if _, err := r.Read(m.Members[i].SealedSeed); err != nil {
-				return nil, fmt.Errorf("%w: read member %d sealed seed: %v", ErrInvalidManifest, i, err)
+				return nil, fmt.Errorf("%w: read member %d sealed seed: %w", ErrInvalidManifest, i, err)
 			}
 		}
 	}
