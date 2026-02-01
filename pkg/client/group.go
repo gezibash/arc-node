@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/gezibash/arc/v2/pkg/identity"
-	"github.com/gezibash/arc/v2/pkg/message"
 	"github.com/gezibash/arc/v2/pkg/reference"
 	"github.com/gezibash/arc-node/pkg/group"
 )
@@ -72,17 +71,20 @@ func (c *Client) GetGroupManifest(ctx context.Context, groupPK identity.PublicKe
 	}
 
 	entry := result.Entries[0]
-	data, err := c.GetContent(ctx, entry.Ref)
+	contentHex, ok := entry.Labels["content"]
+	if !ok {
+		return nil, fmt.Errorf("manifest entry missing content label")
+	}
+	contentBytes, err := hex.DecodeString(contentHex)
+	if err != nil {
+		return nil, fmt.Errorf("decode content ref: %w", err)
+	}
+	var contentRef reference.Reference
+	copy(contentRef[:], contentBytes)
+	data, err := c.GetContent(ctx, contentRef)
 	if err != nil {
 		return nil, fmt.Errorf("get manifest content: %w", err)
 	}
-
-	// Reconstruct the message for verification.
-	contentRef := reference.Compute(data)
-	msg := message.New(groupPK, identity.PublicKey{}, contentRef, "arc/group.manifest")
-	// We need the original signature; for now, unmarshal without full verification
-	// since the node verified on ingest.
-	_ = msg
 
 	m, err := group.UnmarshalManifest(data)
 	if err != nil {

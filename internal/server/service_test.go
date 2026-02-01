@@ -20,6 +20,7 @@ import (
 	_ "github.com/gezibash/arc-node/internal/indexstore/physical/memory"
 	"github.com/gezibash/arc-node/internal/observability"
 	"github.com/gezibash/arc-node/pkg/client"
+	"github.com/gezibash/arc-node/pkg/group"
 	"github.com/gezibash/arc/v2/pkg/identity"
 	"github.com/gezibash/arc/v2/pkg/message"
 	"github.com/gezibash/arc/v2/pkg/reference"
@@ -1054,5 +1055,113 @@ func TestReferenceFromBytesValid(t *testing.T) {
 	}
 	if ref[0] != 0xAA {
 		t.Errorf("ref[0] = %x, want 0xAA", ref[0])
+	}
+}
+
+// --- Delegated Group Publish ---
+
+func TestPublishGroupManifestDelegated(t *testing.T) {
+	// Admin publishes a manifest where envelope signer != msg.From (group key).
+	_, nodeKP, addr := newTestServer(t)
+	c, adminKP := newTestClient(t, addr, nodeKP)
+	ctx := context.Background()
+
+	manifest, groupKP, err := c.CreateGroup(ctx, "delegated-test", adminKP)
+	if err != nil {
+		t.Fatalf("CreateGroup: %v", err)
+	}
+
+	// Verify the manifest was stored and is retrievable.
+	got, err := c.GetGroupManifest(ctx, groupKP.PublicKey())
+	if err != nil {
+		t.Fatalf("GetGroupManifest: %v", err)
+	}
+	if got.Name != manifest.Name {
+		t.Errorf("name = %q, want %q", got.Name, manifest.Name)
+	}
+}
+
+func TestPublishGroupMessageAsMember(t *testing.T) {
+	// After cache is populated via manifest publish, a member can publish as the group.
+	_, nodeKP, addr := newTestServer(t)
+	c, adminKP := newTestClient(t, addr, nodeKP)
+	ctx := context.Background()
+
+	manifest, groupKP, err := c.CreateGroup(ctx, "member-pub-test", adminKP)
+	if err != nil {
+		t.Fatalf("CreateGroup: %v", err)
+	}
+
+	// Add a regular member.
+	memberKP, err := identity.Generate()
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	_, err = c.AddGroupMember(ctx, groupKP, manifest, memberKP.PublicKey(), group.RoleMember)
+	if err != nil {
+		t.Fatalf("AddGroupMember: %v", err)
+	}
+
+	// Now the member connects and publishes a message as the group.
+	nodePub := nodeKP.PublicKey()
+	memberClient, err := client.Dial(addr, client.WithIdentity(memberKP), client.WithNodeKey(nodePub))
+	if err != nil {
+		t.Fatalf("dial member: %v", err)
+	}
+	t.Cleanup(func() { memberClient.Close() })
+
+	// Create a message with From=group pubkey, signed by group key
+	// but envelope signed by member. We need the group keypair to sign the message.
+	groupPub := groupKP.PublicKey()
+	contentRef := reference.Compute([]byte("group-member-content"))
+	msg := message.New(groupPub, groupPub, contentRef, "text/plain")
+	if err := message.Sign(&msg, groupKP); err != nil {
+		t.Fatalf("sign: %v", err)
+	}
+
+	_, err = memberClient.SendMessage(ctx, msg, map[string]string{"app": "group-test"})
+	if err != nil {
+		t.Fatalf("SendMessage as member: %v", err)
+	}
+}
+
+func TestPublishGroupManifestNonMember(t *testing.T) {
+	// A stranger (not in the group) cannot publish as the group.
+	_, nodeKP, addr := newTestServer(t)
+	c, adminKP := newTestClient(t, addr, nodeKP)
+	ctx := context.Background()
+
+	// Create a group but don't add the stranger.
+	_, groupKP, err := c.CreateGroup(ctx, "stranger-test", adminKP)
+	if err != nil {
+		t.Fatalf("CreateGroup: %v", err)
+	}
+
+	// Stranger connects.
+	strangerKP, err := identity.Generate()
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	nodePub := nodeKP.PublicKey()
+	strangerClient, err := client.Dial(addr, client.WithIdentity(strangerKP), client.WithNodeKey(nodePub))
+	if err != nil {
+		t.Fatalf("dial stranger: %v", err)
+	}
+	t.Cleanup(func() { strangerClient.Close() })
+
+	// Try to publish as the group.
+	groupPub := groupKP.PublicKey()
+	contentRef := reference.Compute([]byte("stranger-content"))
+	msg := message.New(groupPub, groupPub, contentRef, "text/plain")
+	if err := message.Sign(&msg, groupKP); err != nil {
+		t.Fatalf("sign: %v", err)
+	}
+
+	_, err = strangerClient.SendMessage(ctx, msg, nil)
+	if err == nil {
+		t.Fatal("expected error for non-member publish")
+	}
+	if s, ok := status.FromError(err); !ok || s.Code() != codes.PermissionDenied {
+		t.Errorf("code = %v, want PermissionDenied", err)
 	}
 }

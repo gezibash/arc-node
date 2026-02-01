@@ -13,6 +13,7 @@ import (
 	"github.com/gezibash/arc-node/internal/indexstore"
 	"github.com/gezibash/arc-node/internal/indexstore/physical"
 	"github.com/gezibash/arc-node/internal/observability"
+	"github.com/gezibash/arc-node/pkg/group"
 	"github.com/gezibash/arc/v2/pkg/identity"
 	"github.com/gezibash/arc/v2/pkg/message"
 	"github.com/gezibash/arc/v2/pkg/reference"
@@ -65,7 +66,9 @@ func (s *nodeService) doPublish(ctx context.Context, msgBytes []byte, labels map
 
 	if caller, hasCaller := envelope.GetCaller(ctx); hasCaller {
 		if caller.PublicKey != msg.From {
-			return reference.Reference{}, fmt.Errorf("envelope signer does not match message author")
+			if !s.canPublishFor(ctx, caller.PublicKey, msg.From, msg.ContentType, msg.Content) {
+				return reference.Reference{}, fmt.Errorf("envelope signer does not match message author")
+			}
 		}
 	}
 
@@ -141,6 +144,15 @@ func (s *nodeService) doPublish(ctx context.Context, msgBytes []byte, labels map
 
 	if err := s.index.Index(ctx, entry); err != nil {
 		return reference.Reference{}, fmt.Errorf("index message: %w", err)
+	}
+
+	// Auto-update group cache when a manifest is published.
+	if msg.ContentType == "arc/group.manifest" {
+		if data, err := s.blobs.Fetch(ctx, msg.Content); err == nil {
+			if m, err := group.UnmarshalManifest(data); err == nil {
+				s.groupCache.LoadManifest(m)
+			}
+		}
 	}
 
 	return msgRef, nil
@@ -275,6 +287,42 @@ func referenceFromBytes(b []byte) (reference.Reference, error) {
 	var ref reference.Reference
 	copy(ref[:], b)
 	return ref, nil
+}
+
+// canPublishFor checks whether callerPK is allowed to publish a message
+// on behalf of authorPK (a group identity). It first checks the group cache,
+// then falls back to bootstrapping from the manifest blob for the first publish.
+func (s *nodeService) canPublishFor(ctx context.Context, callerPK, authorPK identity.PublicKey, contentType string, contentRef reference.Reference) bool {
+	// Fast path: cache already populated from a prior manifest.
+	if s.groupCache.IsMember(authorPK, callerPK) {
+		return true
+	}
+
+	// Bootstrap path: only for manifest publishes where the cache is empty.
+	if contentType != "arc/group.manifest" {
+		return false
+	}
+
+	data, err := s.blobs.Fetch(ctx, contentRef)
+	if err != nil {
+		return false
+	}
+	m, err := group.UnmarshalManifest(data)
+	if err != nil {
+		return false
+	}
+	if m.ID != authorPK {
+		return false
+	}
+
+	// Check if caller is an admin in this manifest.
+	for _, mem := range m.Members {
+		if mem.PublicKey == callerPK && mem.Role == group.RoleAdmin {
+			s.groupCache.LoadManifest(m)
+			return true
+		}
+	}
+	return false
 }
 
 // isAdmin checks whether the caller in context matches the admin key.
