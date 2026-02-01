@@ -9,7 +9,7 @@ import (
 
 	nodev1 "github.com/gezibash/arc-node/api/arc/node/v1"
 	"github.com/gezibash/arc-node/internal/blobstore"
-	"github.com/gezibash/arc-node/internal/envelope"
+	"github.com/gezibash/arc-node/pkg/envelope"
 	"github.com/gezibash/arc-node/internal/indexstore"
 	"github.com/gezibash/arc-node/internal/indexstore/physical"
 	"github.com/gezibash/arc-node/internal/observability"

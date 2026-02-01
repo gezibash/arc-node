@@ -298,49 +298,6 @@ func (m *mockServerStream) Context() context.Context { return m.ctx }
 func (m *mockServerStream) SendMsg(msg any) error    { return m.sendErr }
 func (m *mockServerStream) RecvMsg(msg any) error     { return m.recvErr }
 
-func TestUnaryServerInterceptor(t *testing.T) {
-	m := NewMetrics()
-	interceptor := UnaryServerInterceptor(m)
-
-	info := &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}
-	handler := func(ctx context.Context, req any) (any, error) {
-		return "response", nil
-	}
-
-	resp, err := interceptor(context.Background(), "request", info, handler)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if resp != "response" {
-		t.Fatalf("expected 'response', got %v", resp)
-	}
-
-	count := testutil.ToFloat64(m.OperationTotal.WithLabelValues("/test.Service/Method", "OK"))
-	if count != 1 {
-		t.Fatalf("expected 1, got %f", count)
-	}
-}
-
-func TestUnaryServerInterceptorError(t *testing.T) {
-	m := NewMetrics()
-	interceptor := UnaryServerInterceptor(m)
-
-	info := &grpc.UnaryServerInfo{FullMethod: "/test.Service/Fail"}
-	handler := func(ctx context.Context, req any) (any, error) {
-		return nil, grpcstatus.Errorf(grpccodes.NotFound, "not found")
-	}
-
-	_, err := interceptor(context.Background(), "request", info, handler)
-	if err == nil {
-		t.Fatal("expected error")
-	}
-
-	count := testutil.ToFloat64(m.OperationTotal.WithLabelValues("/test.Service/Fail", "NotFound"))
-	if count != 1 {
-		t.Fatalf("expected 1, got %f", count)
-	}
-}
-
 func TestStreamServerInterceptor(t *testing.T) {
 	m := NewMetrics()
 	interceptor := StreamServerInterceptor(m)
@@ -809,29 +766,6 @@ func TestPrettyHandlerEnabledNilLevel(t *testing.T) {
 }
 
 // --- Interceptor with metadata trace propagation ---
-
-func TestUnaryServerInterceptorWithMetadata(t *testing.T) {
-	m := NewMetrics()
-	interceptor := UnaryServerInterceptor(m)
-
-	md := metadata.New(map[string]string{
-		"traceparent": "00-00000000000000000000000000000001-0000000000000001-01",
-	})
-	ctx := metadata.NewIncomingContext(context.Background(), md)
-
-	info := &grpc.UnaryServerInfo{FullMethod: "/test.Service/Traced"}
-	handler := func(ctx context.Context, req any) (any, error) {
-		return "ok", nil
-	}
-
-	resp, err := interceptor(ctx, "req", info, handler)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if resp != "ok" {
-		t.Fatalf("expected 'ok', got %v", resp)
-	}
-}
 
 func TestStreamServerInterceptorWithMetadata(t *testing.T) {
 	m := NewMetrics()

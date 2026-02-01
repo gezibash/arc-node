@@ -7,7 +7,7 @@ import (
 	"time"
 
 	nodev1 "github.com/gezibash/arc-node/api/arc/node/v1"
-	"github.com/gezibash/arc-node/internal/envelope"
+	"github.com/gezibash/arc-node/pkg/envelope"
 	"github.com/gezibash/arc/v2/pkg/identity"
 	"github.com/gezibash/arc/v2/pkg/message"
 	"github.com/gezibash/arc/v2/pkg/reference"

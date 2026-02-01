@@ -7,7 +7,6 @@ import (
 
 	nodev1 "github.com/gezibash/arc-node/api/arc/node/v1"
 	"github.com/gezibash/arc-node/internal/blobstore"
-	"github.com/gezibash/arc-node/internal/envelope"
 	"github.com/gezibash/arc-node/internal/indexstore"
 	"github.com/gezibash/arc-node/internal/middleware"
 	"github.com/gezibash/arc-node/internal/observability"
@@ -47,7 +46,7 @@ func New(addr string, obs *observability.Observability, enableReflection bool, k
 	serverOpts := []grpc.ServerOption{
 		grpc.ChainStreamInterceptor(
 			observability.StreamServerInterceptor(obs.Metrics),
-			envelope.StreamServerInterceptor(kp, mw),
+			StreamServerInterceptor(kp, mw),
 		),
 	}
 

@@ -15,33 +15,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// UnaryServerInterceptor returns a gRPC unary interceptor that creates spans and records metrics.
-func UnaryServerInterceptor(m *Metrics) grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-		ctx = extractTraceContext(ctx)
-		ctx, span := otel.Tracer("grpc").Start(ctx, info.FullMethod, trace.WithSpanKind(trace.SpanKindServer))
-		defer span.End()
-
-		start := time.Now()
-		resp, err := handler(ctx, req)
-		duration := time.Since(start).Seconds()
-
-		st, _ := status.FromError(err)
-		code := st.Code().String()
-
-		span.SetAttributes(attribute.String("rpc.grpc.status_code", code))
-		if err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, err.Error())
-		}
-
-		m.OperationDuration.WithLabelValues(info.FullMethod, code).Observe(duration)
-		m.OperationTotal.WithLabelValues(info.FullMethod, code).Inc()
-
-		return resp, err
-	}
-}
-
 // StreamServerInterceptor returns a gRPC stream interceptor that creates spans and tracks messages.
 func StreamServerInterceptor(m *Metrics) grpc.StreamServerInterceptor {
 	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {

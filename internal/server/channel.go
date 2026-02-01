@@ -12,7 +12,7 @@ import (
 	"time"
 
 	nodev1 "github.com/gezibash/arc-node/api/arc/node/v1"
-	"github.com/gezibash/arc-node/internal/envelope"
+	"github.com/gezibash/arc-node/pkg/envelope"
 	"github.com/gezibash/arc-node/internal/indexstore"
 	"github.com/gezibash/arc-node/internal/indexstore/physical"
 	"google.golang.org/grpc/codes"
