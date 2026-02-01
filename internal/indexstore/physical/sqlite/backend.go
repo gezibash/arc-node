@@ -42,12 +42,31 @@ func Defaults() map[string]string {
 	}
 }
 
+// NOTE: For existing databases, the new dimension/delivery columns will not be
+// added automatically because CREATE TABLE IF NOT EXISTS does not alter existing
+// tables. A production migration strategy (e.g. ALTER TABLE) is needed.
+// The migrateSchema helper below handles this via idempotent ALTER TABLE calls.
 const schema = `
 CREATE TABLE IF NOT EXISTS entries (
-    ref_hex     TEXT PRIMARY KEY,
-    ref_bytes   BLOB NOT NULL,
-    timestamp   INTEGER NOT NULL,
-    expires_at  INTEGER NOT NULL DEFAULT 0
+    ref_hex           TEXT PRIMARY KEY,
+    ref_bytes         BLOB NOT NULL,
+    timestamp         INTEGER NOT NULL,
+    expires_at        INTEGER NOT NULL DEFAULT 0,
+    persistence       INTEGER NOT NULL DEFAULT 0,
+    visibility        INTEGER NOT NULL DEFAULT 0,
+    delivery_mode     INTEGER NOT NULL DEFAULT 0,
+    pattern           INTEGER NOT NULL DEFAULT 0,
+    affinity          INTEGER NOT NULL DEFAULT 0,
+    affinity_key      TEXT NOT NULL DEFAULT '',
+    ordering          INTEGER NOT NULL DEFAULT 0,
+    dedup_mode        INTEGER NOT NULL DEFAULT 0,
+    idempotency_key   TEXT NOT NULL DEFAULT '',
+    delivery_complete INTEGER NOT NULL DEFAULT 0,
+    complete_n        INTEGER NOT NULL DEFAULT 0,
+    priority          INTEGER NOT NULL DEFAULT 0,
+    max_redelivery    INTEGER NOT NULL DEFAULT 0,
+    ack_timeout_ms    INTEGER NOT NULL DEFAULT 0,
+    correlation       TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS labels (
@@ -103,8 +122,39 @@ func NewFactory(_ context.Context, config map[string]string) (physical.Backend, 
 		return nil, storage.NewConfigErrorWithCause("sqlite", KeyPath, "failed to initialize schema", err)
 	}
 
+	migrateSchema(db)
+
 	slog.Info("sqlite indexstore initialized", "path", path, "journal_mode", journalMode)
 	return &Backend{db: db}, nil
+}
+
+// migrateSchema adds columns that may be missing in existing databases.
+// Each ALTER TABLE is idempotent — SQLite returns an error for duplicates
+// which we silently ignore.
+func migrateSchema(db *sql.DB) {
+	cols := []struct {
+		name string
+		def  string
+	}{
+		{"persistence", "INTEGER NOT NULL DEFAULT 0"},
+		{"visibility", "INTEGER NOT NULL DEFAULT 0"},
+		{"delivery_mode", "INTEGER NOT NULL DEFAULT 0"},
+		{"pattern", "INTEGER NOT NULL DEFAULT 0"},
+		{"affinity", "INTEGER NOT NULL DEFAULT 0"},
+		{"affinity_key", "TEXT NOT NULL DEFAULT ''"},
+		{"ordering", "INTEGER NOT NULL DEFAULT 0"},
+		{"dedup_mode", "INTEGER NOT NULL DEFAULT 0"},
+		{"idempotency_key", "TEXT NOT NULL DEFAULT ''"},
+		{"delivery_complete", "INTEGER NOT NULL DEFAULT 0"},
+		{"complete_n", "INTEGER NOT NULL DEFAULT 0"},
+		{"priority", "INTEGER NOT NULL DEFAULT 0"},
+		{"max_redelivery", "INTEGER NOT NULL DEFAULT 0"},
+		{"ack_timeout_ms", "INTEGER NOT NULL DEFAULT 0"},
+		{"correlation", "TEXT NOT NULL DEFAULT ''"},
+	}
+	for _, c := range cols {
+		_, _ = db.Exec("ALTER TABLE entries ADD COLUMN " + c.name + " " + c.def)
+	}
 }
 
 // Backend is a SQLite implementation of physical.Backend.
@@ -155,8 +205,16 @@ func (b *Backend) putInTx(ctx context.Context, tx *sql.Tx, entry *physical.Entry
 	refHex := reference.Hex(entry.Ref)
 
 	if _, err := tx.ExecContext(ctx,
-		`INSERT OR REPLACE INTO entries (ref_hex, ref_bytes, timestamp, expires_at) VALUES (?, ?, ?, ?)`,
+		`INSERT OR REPLACE INTO entries (
+			ref_hex, ref_bytes, timestamp, expires_at,
+			persistence, visibility, delivery_mode, pattern, affinity, affinity_key,
+			ordering, dedup_mode, idempotency_key, delivery_complete, complete_n,
+			priority, max_redelivery, ack_timeout_ms, correlation
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		refHex, entry.Ref[:], entry.Timestamp, entry.ExpiresAt,
+		entry.Persistence, entry.Visibility, entry.DeliveryMode, entry.Pattern, entry.Affinity, entry.AffinityKey,
+		entry.Ordering, entry.DedupMode, entry.IdempotencyKey, entry.DeliveryComplete, entry.CompleteN,
+		entry.Priority, entry.MaxRedelivery, entry.AckTimeoutMs, entry.Correlation,
 	); err != nil {
 		return fmt.Errorf("sqlite put: insert entry: %w", err)
 	}
@@ -190,22 +248,26 @@ func (b *Backend) Get(ctx context.Context, r reference.Reference) (*physical.Ent
 
 	refHex := reference.Hex(r)
 
+	entry := &physical.Entry{
+		Labels: make(map[string]string),
+	}
 	var refBytes []byte
-	var ts, expiresAt int64
 	err := b.db.QueryRowContext(ctx,
-		`SELECT ref_bytes, timestamp, expires_at FROM entries WHERE ref_hex = ?`, refHex,
-	).Scan(&refBytes, &ts, &expiresAt)
+		`SELECT ref_bytes, timestamp, expires_at,
+			persistence, visibility, delivery_mode, pattern, affinity, affinity_key,
+			ordering, dedup_mode, idempotency_key, delivery_complete, complete_n,
+			priority, max_redelivery, ack_timeout_ms, correlation
+		FROM entries WHERE ref_hex = ?`, refHex,
+	).Scan(&refBytes, &entry.Timestamp, &entry.ExpiresAt,
+		&entry.Persistence, &entry.Visibility, &entry.DeliveryMode, &entry.Pattern, &entry.Affinity, &entry.AffinityKey,
+		&entry.Ordering, &entry.DedupMode, &entry.IdempotencyKey, &entry.DeliveryComplete, &entry.CompleteN,
+		&entry.Priority, &entry.MaxRedelivery, &entry.AckTimeoutMs, &entry.Correlation,
+	)
 	if err == sql.ErrNoRows {
 		return nil, physical.ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("sqlite get: %w", err)
-	}
-
-	entry := &physical.Entry{
-		Timestamp: ts,
-		ExpiresAt: expiresAt,
-		Labels:    make(map[string]string),
 	}
 	copy(entry.Ref[:], refBytes)
 
@@ -298,7 +360,11 @@ func (b *Backend) Query(ctx context.Context, opts *physical.QueryOptions) (*phys
 			i++
 		}
 
-		qb.WriteString("SELECT e.ref_bytes, e.timestamp, e.expires_at, e.ref_hex FROM labels d")
+		qb.WriteString("SELECT e.ref_bytes, e.timestamp, e.expires_at, e.ref_hex,")
+		qb.WriteString(" e.persistence, e.visibility, e.delivery_mode, e.pattern, e.affinity, e.affinity_key,")
+		qb.WriteString(" e.ordering, e.dedup_mode, e.idempotency_key, e.delivery_complete, e.complete_n,")
+		qb.WriteString(" e.priority, e.max_redelivery, e.ack_timeout_ms, e.correlation")
+		qb.WriteString(" FROM labels d")
 		qb.WriteString(" JOIN entries e ON e.ref_hex = d.ref_hex")
 
 		// Additional label JOINs for multi-label queries
@@ -343,7 +409,11 @@ func (b *Backend) Query(ctx context.Context, opts *physical.QueryOptions) (*phys
 			qb.WriteString(" ORDER BY d.timestamp ASC, d.ref_hex ASC")
 		}
 	} else {
-		qb.WriteString("SELECT e.ref_bytes, e.timestamp, e.expires_at, e.ref_hex FROM entries e")
+		qb.WriteString("SELECT e.ref_bytes, e.timestamp, e.expires_at, e.ref_hex,")
+		qb.WriteString(" e.persistence, e.visibility, e.delivery_mode, e.pattern, e.affinity, e.affinity_key,")
+		qb.WriteString(" e.ordering, e.dedup_mode, e.idempotency_key, e.delivery_complete, e.complete_n,")
+		qb.WriteString(" e.priority, e.max_redelivery, e.ack_timeout_ms, e.correlation")
+		qb.WriteString(" FROM entries e")
 
 		if hasLabels {
 			i := 0
@@ -397,14 +467,14 @@ func (b *Backend) Query(ctx context.Context, opts *physical.QueryOptions) (*phys
 	var entries []*physical.Entry
 	for rows.Next() {
 		var refBytes []byte
-		var ts, expiresAt int64
 		var rh string
-		if err := rows.Scan(&refBytes, &ts, &expiresAt, &rh); err != nil {
+		e := &physical.Entry{}
+		if err := rows.Scan(&refBytes, &e.Timestamp, &e.ExpiresAt, &rh,
+			&e.Persistence, &e.Visibility, &e.DeliveryMode, &e.Pattern, &e.Affinity, &e.AffinityKey,
+			&e.Ordering, &e.DedupMode, &e.IdempotencyKey, &e.DeliveryComplete, &e.CompleteN,
+			&e.Priority, &e.MaxRedelivery, &e.AckTimeoutMs, &e.Correlation,
+		); err != nil {
 			return nil, fmt.Errorf("sqlite query: scan: %w", err)
-		}
-		e := &physical.Entry{
-			Timestamp: ts,
-			ExpiresAt: expiresAt,
 		}
 		copy(e.Ref[:], refBytes)
 		entries = append(entries, e)

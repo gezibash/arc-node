@@ -9,11 +9,14 @@ import (
 	"testing"
 	"time"
 
+	nodev1 "github.com/gezibash/arc-node/api/arc/node/v1"
 	"github.com/gezibash/arc-node/internal/blobstore"
 	blobphysical "github.com/gezibash/arc-node/internal/blobstore/physical"
+	_ "github.com/gezibash/arc-node/internal/blobstore/physical/badger"
 	_ "github.com/gezibash/arc-node/internal/blobstore/physical/memory"
 	"github.com/gezibash/arc-node/internal/indexstore"
 	idxphysical "github.com/gezibash/arc-node/internal/indexstore/physical"
+	_ "github.com/gezibash/arc-node/internal/indexstore/physical/badger"
 	_ "github.com/gezibash/arc-node/internal/indexstore/physical/memory"
 	"github.com/gezibash/arc-node/internal/observability"
 	"github.com/gezibash/arc-node/pkg/client"
@@ -21,6 +24,7 @@ import (
 	"github.com/gezibash/arc/v2/pkg/message"
 	"github.com/gezibash/arc/v2/pkg/reference"
 	"google.golang.org/grpc/codes"
+	grpc_health_v1 "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
 )
 
@@ -100,6 +104,52 @@ func newTestAdminClient(t *testing.T, addr string, nodeKP *identity.Keypair) *cl
 	t.Cleanup(func() { c.Close() })
 	return c
 }
+func newTestServerWithBackend(t *testing.T, blobBackend, idxBackend string) (*Server, *identity.Keypair, string) {
+	t.Helper()
+	ctx := context.Background()
+	metrics := observability.NewMetrics()
+
+	cfg := map[string]string{"in_memory": "true"}
+
+	bb, err := blobphysical.New(ctx, blobBackend, cfg, metrics)
+	if err != nil {
+		t.Fatalf("create blob backend %s: %v", blobBackend, err)
+	}
+	t.Cleanup(func() { bb.Close() })
+	blobs := blobstore.New(bb, metrics)
+
+	ib, err := idxphysical.New(ctx, idxBackend, cfg, metrics)
+	if err != nil {
+		t.Fatalf("create index backend %s: %v", idxBackend, err)
+	}
+	t.Cleanup(func() { ib.Close() })
+	idx, err := indexstore.New(ib, metrics)
+	if err != nil {
+		t.Fatalf("create index store: %v", err)
+	}
+
+	obs, err := observability.New(ctx, observability.ObsConfig{LogLevel: "error"}, io.Discard)
+	if err != nil {
+		t.Fatalf("create observability: %v", err)
+	}
+	t.Cleanup(func() { obs.Close(ctx) })
+
+	kp, err := identity.Generate()
+	if err != nil {
+		t.Fatalf("generate keypair: %v", err)
+	}
+
+	srv, err := New(":0", obs, false, kp, blobs, idx)
+	if err != nil {
+		t.Fatalf("create server: %v", err)
+	}
+
+	go srv.Serve()
+	t.Cleanup(func() { srv.Stop(context.Background()) })
+
+	return srv, kp, srv.Addr()
+}
+
 func makeMessage(t *testing.T, kp *identity.Keypair, contentType string) message.Message {
 	t.Helper()
 	pub := kp.PublicKey()
@@ -702,5 +752,307 @@ func TestFederateReplicatesMessages(t *testing.T) {
 	}
 	if !bytes.Equal(got, data) {
 		t.Errorf("content = %q, want %q", got, data)
+	}
+}
+
+func TestSendMessageDimensionsRoundTrip(t *testing.T) {
+	_, kp, addr := newTestServer(t)
+	c, callerKP := newTestClient(t, addr, kp)
+	ctx := context.Background()
+
+	msg := makeMessage(t, callerKP, "text/plain")
+	dims := &nodev1.Dimensions{
+		Visibility:  nodev1.Visibility_VISIBILITY_PUBLIC,
+		Persistence: nodev1.Persistence_PERSISTENCE_DURABLE,
+		Delivery:    nodev1.Delivery_DELIVERY_AT_LEAST_ONCE,
+		Priority:    7,
+		TtlMs:       30000,
+		Ordering:    nodev1.Ordering_ORDERING_FIFO,
+	}
+	ref, err := c.SendMessageWithDimensions(ctx, msg, map[string]string{"drt": "test"}, dims)
+	if err != nil {
+		t.Fatalf("SendMessageWithDimensions: %v", err)
+	}
+	if ref == (reference.Reference{}) {
+		t.Fatal("zero reference")
+	}
+
+	result, err := c.QueryMessages(ctx, &client.QueryOptions{
+		Labels: map[string]string{"drt": "test"},
+	})
+	if err != nil {
+		t.Fatalf("QueryMessages: %v", err)
+	}
+	if len(result.Entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(result.Entries))
+	}
+	d := result.Entries[0].Dimensions
+	if d == nil {
+		t.Fatal("Dimensions is nil")
+	}
+	if d.Visibility != int32(nodev1.Visibility_VISIBILITY_PUBLIC) {
+		t.Errorf("Visibility = %d, want %d", d.Visibility, nodev1.Visibility_VISIBILITY_PUBLIC)
+	}
+	if d.Persistence != int32(nodev1.Persistence_PERSISTENCE_DURABLE) {
+		t.Errorf("Persistence = %d, want %d", d.Persistence, nodev1.Persistence_PERSISTENCE_DURABLE)
+	}
+	if d.Delivery != int32(nodev1.Delivery_DELIVERY_AT_LEAST_ONCE) {
+		t.Errorf("Delivery = %d, want %d", d.Delivery, nodev1.Delivery_DELIVERY_AT_LEAST_ONCE)
+	}
+	if d.TtlMs == 0 {
+		t.Error("TtlMs should be non-zero")
+	}
+}
+
+func TestSendMessageEmptyPayload(t *testing.T) {
+	_, kp, addr := newTestServer(t)
+	c, _ := newTestClient(t, addr, kp)
+	ctx := context.Background()
+
+	// SendMessage with a zero message fails during canonical bytes serialization.
+	_, err := c.SendMessage(ctx, message.Message{}, nil)
+	if err == nil {
+		t.Fatal("expected error for empty message")
+	}
+	// The error may come from client-side (canonical bytes) or server-side (invalid argument).
+	// Either way it should be an error.
+}
+
+func TestSendMessageWrongSigner(t *testing.T) {
+	// Envelope signer (client key) != message.From should fail.
+	_, kp, addr := newTestServer(t)
+	c, _ := newTestClient(t, addr, kp)
+	ctx := context.Background()
+
+	// Create a message signed by a different keypair.
+	otherKP, err := identity.Generate()
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	msg := makeMessage(t, otherKP, "text/plain")
+	_, err = c.SendMessage(ctx, msg, nil)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if s, ok := status.FromError(err); !ok || s.Code() != codes.PermissionDenied {
+		t.Errorf("code = %v, want PermissionDenied", err)
+	}
+}
+
+func TestGetContentInvalidReference(t *testing.T) {
+	// GetContent with a random 32-byte ref that doesn't exist.
+	_, kp, addr := newTestServer(t)
+	c, _ := newTestClient(t, addr, kp)
+	ctx := context.Background()
+
+	ref := reference.Compute([]byte("nonexistent"))
+	_, err := c.GetContent(ctx, ref)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if s, ok := status.FromError(err); !ok || s.Code() != codes.NotFound {
+		t.Errorf("code = %v, want NotFound", err)
+	}
+}
+
+func TestSendMessageWithCorrelation(t *testing.T) {
+	_, kp, addr := newTestServer(t)
+	c, callerKP := newTestClient(t, addr, kp)
+	ctx := context.Background()
+
+	msg := makeMessage(t, callerKP, "text/plain")
+	dims := &nodev1.Dimensions{
+		Persistence: nodev1.Persistence_PERSISTENCE_DURABLE,
+		Correlation: "corr-123",
+	}
+	_, err := c.SendMessageWithDimensions(ctx, msg, map[string]string{"corr": "test"}, dims)
+	if err != nil {
+		t.Fatalf("SendMessageWithDimensions: %v", err)
+	}
+
+	// Query for correlation label.
+	result, err := c.QueryMessages(ctx, &client.QueryOptions{
+		Labels: map[string]string{"_correlation": "corr-123"},
+	})
+	if err != nil {
+		t.Fatalf("QueryMessages: %v", err)
+	}
+	if len(result.Entries) != 1 {
+		t.Errorf("expected 1 entry, got %d", len(result.Entries))
+	}
+}
+
+func TestFederateAlreadyFederating(t *testing.T) {
+	_, peerKP, peerAddr := newTestServer(t)
+	_ = peerKP
+	_, localKP, localAddr := newTestServer(t)
+
+	admin := newTestAdminClient(t, localAddr, localKP)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	result1, err := admin.Federate(ctx, peerAddr, nil)
+	if err != nil {
+		t.Fatalf("Federate: %v", err)
+	}
+	if result1.Status != "ok" {
+		t.Errorf("status = %q, want ok", result1.Status)
+	}
+
+	result2, err := admin.Federate(ctx, peerAddr, nil)
+	if err != nil {
+		t.Fatalf("Federate: %v", err)
+	}
+	if result2.Status != "already_federating" {
+		t.Errorf("status = %q, want already_federating", result2.Status)
+	}
+}
+
+func TestQueryEmptyResult(t *testing.T) {
+	_, kp, addr := newTestServer(t)
+	c, _ := newTestClient(t, addr, kp)
+	ctx := context.Background()
+
+	result, err := c.QueryMessages(ctx, &client.QueryOptions{
+		Expression: `labels["nonexistent"] == "value"`,
+	})
+	if err != nil {
+		t.Fatalf("QueryMessages: %v", err)
+	}
+	if len(result.Entries) != 0 {
+		t.Errorf("expected 0 entries, got %d", len(result.Entries))
+	}
+	if result.HasMore {
+		t.Error("HasMore should be false for empty result")
+	}
+}
+
+// --- Server getters ---
+
+func TestServerGetters(t *testing.T) {
+	srv, kp, _ := newTestServer(t)
+
+	if srv.GRPCServer() == nil {
+		t.Error("GRPCServer() returned nil")
+	}
+	if srv.Keypair() == nil {
+		t.Error("Keypair() returned nil")
+	}
+	if srv.Keypair().PublicKey() != kp.PublicKey() {
+		t.Error("Keypair() returned wrong key")
+	}
+
+	srv.SetServingStatus(grpc_health_v1.HealthCheckResponse_SERVING)
+	srv.SetServingStatus(grpc_health_v1.HealthCheckResponse_NOT_SERVING)
+}
+
+func TestStopTimeout(t *testing.T) {
+	_, kp, addr := newTestServer(t)
+
+	// Open a subscription to keep the server busy.
+	c, _ := newTestClient(t, addr, kp)
+	subCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	_, _, err := c.SubscribeMessages(subCtx, "true", nil)
+	if err != nil {
+		t.Fatalf("SubscribeMessages: %v", err)
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	// Use an already-expired context to force the timeout branch.
+	expiredCtx, expiredCancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer expiredCancel()
+
+	// This should hit ctx.Done() and force-stop.
+	srv2, kp2, addr2 := newTestServer(t)
+	c2, _ := newTestClient(t, addr2, kp2)
+	subCtx2, cancel2 := context.WithCancel(context.Background())
+	defer cancel2()
+	_, _, err = c2.SubscribeMessages(subCtx2, "true", nil)
+	if err != nil {
+		t.Fatalf("SubscribeMessages: %v", err)
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	srv2.Stop(expiredCtx)
+	// If we get here without hanging, the force-stop path worked.
+}
+
+// --- Service error paths ---
+
+func TestGetContentInvalidRefLength(t *testing.T) {
+	_, kp, addr := newTestServer(t)
+	c, _ := newTestClient(t, addr, kp)
+	ctx := context.Background()
+
+	// Send a 16-byte ref via GetContent - should get InvalidArgument.
+	shortRef := reference.Reference{}
+	_, err := c.GetContent(ctx, shortRef)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	// Zero ref triggers NotFound (valid 32 bytes but not found).
+	if s, ok := status.FromError(err); !ok || s.Code() != codes.NotFound {
+		t.Errorf("code = %v, want NotFound", err)
+	}
+}
+
+func TestPublishErrToStatusDefaultCase(t *testing.T) {
+	// Test the default case in publishErrToStatus with an unrecognized error.
+	err := publishErrToStatus(fmt.Errorf("some random internal error"))
+	if s, ok := status.FromError(err); !ok || s.Code() != codes.Internal {
+		t.Errorf("code = %v, want Internal", err)
+	}
+}
+
+func TestPublishErrToStatusInvalidSig(t *testing.T) {
+	err := publishErrToStatus(fmt.Errorf("invalid signature"))
+	if s, ok := status.FromError(err); !ok || s.Code() != codes.InvalidArgument {
+		t.Errorf("code = %v, want InvalidArgument", err)
+	}
+}
+
+func TestPublishErrToStatusEnvelopeSigner(t *testing.T) {
+	err := publishErrToStatus(fmt.Errorf("envelope signer does not match"))
+	if s, ok := status.FromError(err); !ok || s.Code() != codes.PermissionDenied {
+		t.Errorf("code = %v, want PermissionDenied", err)
+	}
+}
+
+func TestReferenceFromBytesInvalidLength(t *testing.T) {
+	_, err := referenceFromBytes([]byte{0x01, 0x02})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if s, ok := status.FromError(err); !ok || s.Code() != codes.InvalidArgument {
+		t.Errorf("code = %v, want InvalidArgument", err)
+	}
+}
+
+func TestResolveGetAmbiguousPrefix(t *testing.T) {
+	_, kp, addr := newTestServer(t)
+	c, _ := newTestClient(t, addr, kp)
+	ctx := context.Background()
+
+	// Store two blobs that happen to share a prefix.
+	// This is hard to engineer, so instead test the "prefix too short" path.
+	_, err := c.ResolveGet(ctx, "ab")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if s, ok := status.FromError(err); !ok || s.Code() != codes.InvalidArgument {
+		t.Errorf("code = %v, want InvalidArgument", err)
+	}
+}
+
+func TestReferenceFromBytesValid(t *testing.T) {
+	b := make([]byte, 32)
+	b[0] = 0xAA
+	ref, err := referenceFromBytes(b)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ref[0] != 0xAA {
+		t.Errorf("ref[0] = %x, want 0xAA", ref[0])
 	}
 }

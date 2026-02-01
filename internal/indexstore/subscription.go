@@ -88,6 +88,7 @@ type subscription struct {
 	totalDelivered   atomic.Int64
 	totalDropped     atomic.Int64
 	consecutiveDrops atomic.Int64
+	disconnected     atomic.Bool
 
 	// FIFO ordering: tracks last delivered sequence per sender.
 	fifoMu      sync.Mutex
@@ -355,6 +356,9 @@ func (m *subscriptionManager) drainFIFOHeld(sub *subscription, senderKey string)
 // For now, FIFO delivery is sequence-based, not ack-based, so this is a no-op placeholder.
 
 func (m *subscriptionManager) deliverToSub(sub *subscription, entry *physical.Entry) {
+	if sub.disconnected.Load() {
+		return
+	}
 	switch sub.opts.BackpressurePolicy {
 	case BackpressureBlock:
 		timer := time.NewTimer(sub.opts.BlockTimeout)
@@ -403,6 +407,9 @@ func (m *subscriptionManager) deliverToSub(sub *subscription, entry *physical.En
 }
 
 func (m *subscriptionManager) disconnectSub(sub *subscription, reason string) {
+	if sub.disconnected.Swap(true) {
+		return // already disconnected
+	}
 	slog.Warn("disconnecting slow subscriber",
 		"subscription_id", sub.id, "reason", reason,
 		"total_delivered", sub.totalDelivered.Load(),

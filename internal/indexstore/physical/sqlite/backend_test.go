@@ -401,6 +401,766 @@ func TestStats(t *testing.T) {
 	}
 }
 
+func TestDimensionFieldsRoundTrip(t *testing.T) {
+	be := newTestBackend(t)
+	ctx := context.Background()
+
+	ref := reference.Compute([]byte("dim-roundtrip"))
+	entry := &physical.Entry{
+		Ref:              ref,
+		Labels:           map[string]string{"type": "test"},
+		Timestamp:        time.Now().UnixMilli(),
+		ExpiresAt:        time.Now().Add(time.Hour).UnixMilli(),
+		Persistence:      1,
+		Visibility:       2,
+		DeliveryMode:     1,
+		Pattern:          3,
+		Affinity:         2,
+		AffinityKey:      "my-key",
+		Ordering:         1,
+		DedupMode:        2,
+		IdempotencyKey:   "idem-123",
+		DeliveryComplete: 1,
+		CompleteN:        3,
+		Priority:         42,
+		MaxRedelivery:    5,
+		AckTimeoutMs:     15000,
+		Correlation:      "corr-abc",
+	}
+
+	if err := be.Put(ctx, entry); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	got, err := be.Get(ctx, ref)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+
+	if got.Persistence != 1 {
+		t.Errorf("Persistence = %d, want 1", got.Persistence)
+	}
+	if got.Visibility != 2 {
+		t.Errorf("Visibility = %d, want 2", got.Visibility)
+	}
+	if got.DeliveryMode != 1 {
+		t.Errorf("DeliveryMode = %d, want 1", got.DeliveryMode)
+	}
+	if got.Pattern != 3 {
+		t.Errorf("Pattern = %d, want 3", got.Pattern)
+	}
+	if got.Affinity != 2 {
+		t.Errorf("Affinity = %d, want 2", got.Affinity)
+	}
+	if got.AffinityKey != "my-key" {
+		t.Errorf("AffinityKey = %q, want %q", got.AffinityKey, "my-key")
+	}
+	if got.Ordering != 1 {
+		t.Errorf("Ordering = %d, want 1", got.Ordering)
+	}
+	if got.DedupMode != 2 {
+		t.Errorf("DedupMode = %d, want 2", got.DedupMode)
+	}
+	if got.IdempotencyKey != "idem-123" {
+		t.Errorf("IdempotencyKey = %q, want %q", got.IdempotencyKey, "idem-123")
+	}
+	if got.DeliveryComplete != 1 {
+		t.Errorf("DeliveryComplete = %d, want 1", got.DeliveryComplete)
+	}
+	if got.CompleteN != 3 {
+		t.Errorf("CompleteN = %d, want 3", got.CompleteN)
+	}
+	if got.Priority != 42 {
+		t.Errorf("Priority = %d, want 42", got.Priority)
+	}
+	if got.MaxRedelivery != 5 {
+		t.Errorf("MaxRedelivery = %d, want 5", got.MaxRedelivery)
+	}
+	if got.AckTimeoutMs != 15000 {
+		t.Errorf("AckTimeoutMs = %d, want 15000", got.AckTimeoutMs)
+	}
+	if got.Correlation != "corr-abc" {
+		t.Errorf("Correlation = %q, want %q", got.Correlation, "corr-abc")
+	}
+}
+
+func TestDefaults(t *testing.T) {
+	d := Defaults()
+	if d[KeyPath] != "~/.arc/index.db" {
+		t.Errorf("path = %s, want ~/.arc/index.db", d[KeyPath])
+	}
+	if d[KeyJournalMode] != "wal" {
+		t.Errorf("journal_mode = %s, want wal", d[KeyJournalMode])
+	}
+	if d[KeyBusyTimeout] != "5000" {
+		t.Errorf("busy_timeout = %s, want 5000", d[KeyBusyTimeout])
+	}
+	if d[KeyCacheSize] != "-64000" {
+		t.Errorf("cache_size = %s, want -64000", d[KeyCacheSize])
+	}
+}
+
+func TestNewFactoryEmptyPath(t *testing.T) {
+	_, err := NewFactory(context.Background(), map[string]string{"path": ""})
+	if err == nil {
+		t.Fatal("expected error for empty path")
+	}
+}
+
+func TestPutBatch(t *testing.T) {
+	be := newTestBackend(t)
+	ctx := context.Background()
+
+	entries := make([]*physical.Entry, 5)
+	for i := range entries {
+		var buf [8]byte
+		binary.BigEndian.PutUint64(buf[:], uint64(100+i))
+		entries[i] = &physical.Entry{
+			Ref:       reference.Reference(sha256.Sum256(buf[:])),
+			Labels:    map[string]string{"batch": "yes"},
+			Timestamp: int64(2000 + i),
+		}
+	}
+
+	if err := be.PutBatch(ctx, entries); err != nil {
+		t.Fatalf("PutBatch: %v", err)
+	}
+
+	for _, e := range entries {
+		got, err := be.Get(ctx, e.Ref)
+		if err != nil {
+			t.Fatalf("Get after PutBatch: %v", err)
+		}
+		if got.Labels["batch"] != "yes" {
+			t.Errorf("label batch = %s, want yes", got.Labels["batch"])
+		}
+	}
+}
+
+func TestPutBatchClosed(t *testing.T) {
+	be := newTestBackend(t)
+	be.Close()
+
+	err := be.PutBatch(context.Background(), []*physical.Entry{{Ref: testRef(1)}})
+	if !errors.Is(err, physical.ErrClosed) {
+		t.Errorf("PutBatch on closed = %v, want ErrClosed", err)
+	}
+}
+
+func TestPutNoLabels(t *testing.T) {
+	be := newTestBackend(t)
+	ctx := context.Background()
+
+	ref := reference.Compute([]byte("no-labels"))
+	if err := be.Put(ctx, &physical.Entry{
+		Ref:       ref,
+		Timestamp: 5000,
+	}); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	got, err := be.Get(ctx, ref)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if len(got.Labels) != 0 {
+		t.Errorf("labels = %v, want empty", got.Labels)
+	}
+}
+
+func TestQueryByLabelFilter(t *testing.T) {
+	be := newTestBackend(t)
+	ctx := context.Background()
+
+	for i := range 10 {
+		grp := "a"
+		if i%2 == 0 {
+			grp = "b"
+		}
+		var buf [8]byte
+		binary.BigEndian.PutUint64(buf[:], uint64(200+i))
+		be.Put(ctx, &physical.Entry{
+			Ref:       reference.Reference(sha256.Sum256(buf[:])),
+			Labels:    map[string]string{"group": grp},
+			Timestamp: int64(3000 + i),
+		})
+	}
+
+	// OR filter: group=a OR group=b -> all 10
+	res, err := be.Query(ctx, &physical.QueryOptions{
+		LabelFilter: &physical.LabelFilter{
+			OR: []physical.LabelFilterGroup{
+				{Predicates: []physical.LabelPredicate{{Key: "group", Value: "a"}}},
+				{Predicates: []physical.LabelPredicate{{Key: "group", Value: "b"}}},
+			},
+		},
+		Limit: 100,
+	})
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(res.Entries) != 10 {
+		t.Errorf("got %d entries, want 10", len(res.Entries))
+	}
+
+	// OR filter: just group=a -> 5
+	res, err = be.Query(ctx, &physical.QueryOptions{
+		LabelFilter: &physical.LabelFilter{
+			OR: []physical.LabelFilterGroup{
+				{Predicates: []physical.LabelPredicate{{Key: "group", Value: "a"}}},
+			},
+		},
+		Limit: 100,
+	})
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(res.Entries) != 5 {
+		t.Errorf("got %d entries, want 5", len(res.Entries))
+	}
+}
+
+func TestQueryByLabelFilterDescending(t *testing.T) {
+	be := newTestBackend(t)
+	ctx := context.Background()
+
+	for i := range 6 {
+		grp := "x"
+		if i < 3 {
+			grp = "y"
+		}
+		var buf [8]byte
+		binary.BigEndian.PutUint64(buf[:], uint64(300+i))
+		be.Put(ctx, &physical.Entry{
+			Ref:       reference.Reference(sha256.Sum256(buf[:])),
+			Labels:    map[string]string{"g": grp},
+			Timestamp: int64(4000 + i),
+		})
+	}
+
+	res, err := be.Query(ctx, &physical.QueryOptions{
+		LabelFilter: &physical.LabelFilter{
+			OR: []physical.LabelFilterGroup{
+				{Predicates: []physical.LabelPredicate{{Key: "g", Value: "x"}}},
+				{Predicates: []physical.LabelPredicate{{Key: "g", Value: "y"}}},
+			},
+		},
+		Limit:      100,
+		Descending: true,
+	})
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(res.Entries) != 6 {
+		t.Fatalf("got %d entries, want 6", len(res.Entries))
+	}
+	for i := 1; i < len(res.Entries); i++ {
+		if res.Entries[i].Timestamp > res.Entries[i-1].Timestamp {
+			t.Error("entries not in descending order")
+		}
+	}
+}
+
+func TestQueryByLabelFilterWithPagination(t *testing.T) {
+	be := newTestBackend(t)
+	ctx := context.Background()
+
+	for i := range 8 {
+		var buf [8]byte
+		binary.BigEndian.PutUint64(buf[:], uint64(400+i))
+		be.Put(ctx, &physical.Entry{
+			Ref:       reference.Reference(sha256.Sum256(buf[:])),
+			Labels:    map[string]string{"k": "v"},
+			Timestamp: int64(5000 + i),
+		})
+	}
+
+	res, err := be.Query(ctx, &physical.QueryOptions{
+		LabelFilter: &physical.LabelFilter{
+			OR: []physical.LabelFilterGroup{
+				{Predicates: []physical.LabelPredicate{{Key: "k", Value: "v"}}},
+			},
+		},
+		Limit: 3,
+	})
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if !res.HasMore {
+		t.Error("expected HasMore=true")
+	}
+	if res.NextCursor == "" {
+		t.Error("expected non-empty NextCursor")
+	}
+	if len(res.Entries) != 3 {
+		t.Errorf("got %d entries, want 3", len(res.Entries))
+	}
+}
+
+func TestCount(t *testing.T) {
+	be := newTestBackend(t)
+	ctx := context.Background()
+
+	for i := range 8 {
+		var buf [8]byte
+		binary.BigEndian.PutUint64(buf[:], uint64(500+i))
+		label := "aa"
+		if i < 3 {
+			label = "bb"
+		}
+		be.Put(ctx, &physical.Entry{
+			Ref:       reference.Reference(sha256.Sum256(buf[:])),
+			Labels:    map[string]string{"t": label},
+			Timestamp: int64(6000 + i),
+		})
+	}
+
+	// Count all
+	n, err := be.Count(ctx, nil)
+	if err != nil {
+		t.Fatalf("Count: %v", err)
+	}
+	if n != 8 {
+		t.Errorf("count = %d, want 8", n)
+	}
+
+	// Count with label
+	n, err = be.Count(ctx, &physical.QueryOptions{
+		Labels: map[string]string{"t": "bb"},
+	})
+	if err != nil {
+		t.Fatalf("Count: %v", err)
+	}
+	if n != 3 {
+		t.Errorf("count = %d, want 3", n)
+	}
+
+	// Count with time range
+	n, err = be.Count(ctx, &physical.QueryOptions{
+		After:  6002,
+		Before: 6006,
+	})
+	if err != nil {
+		t.Fatalf("Count: %v", err)
+	}
+	if n != 3 {
+		t.Errorf("count = %d, want 3 (6003,6004,6005)", n)
+	}
+}
+
+func TestCountClosed(t *testing.T) {
+	be := newTestBackend(t)
+	be.Close()
+
+	_, err := be.Count(context.Background(), nil)
+	if !errors.Is(err, physical.ErrClosed) {
+		t.Errorf("Count on closed = %v, want ErrClosed", err)
+	}
+}
+
+func TestCountIncludeExpired(t *testing.T) {
+	be := newTestBackend(t)
+	ctx := context.Background()
+	now := time.Now()
+
+	// 2 expired, 2 not
+	for i := range 4 {
+		var buf [8]byte
+		binary.BigEndian.PutUint64(buf[:], uint64(600+i))
+		exp := now.Add(time.Hour).UnixMilli()
+		if i < 2 {
+			exp = now.Add(-time.Hour).UnixMilli()
+		}
+		be.Put(ctx, &physical.Entry{
+			Ref:       reference.Reference(sha256.Sum256(buf[:])),
+			Labels:    map[string]string{"z": "z"},
+			Timestamp: int64(7000 + i),
+			ExpiresAt: exp,
+		})
+	}
+
+	// Without IncludeExpired
+	n, err := be.Count(ctx, &physical.QueryOptions{})
+	if err != nil {
+		t.Fatalf("Count: %v", err)
+	}
+	if n != 2 {
+		t.Errorf("count = %d, want 2 (non-expired)", n)
+	}
+
+	// With IncludeExpired
+	n, err = be.Count(ctx, &physical.QueryOptions{IncludeExpired: true})
+	if err != nil {
+		t.Fatalf("Count: %v", err)
+	}
+	if n != 4 {
+		t.Errorf("count = %d, want 4 (all)", n)
+	}
+}
+
+func TestCursorOperations(t *testing.T) {
+	be := newTestBackend(t)
+	ctx := context.Background()
+
+	// GetCursor not found
+	_, err := be.GetCursor(ctx, "missing")
+	if !errors.Is(err, physical.ErrCursorNotFound) {
+		t.Errorf("GetCursor = %v, want ErrCursorNotFound", err)
+	}
+
+	// PutCursor + GetCursor
+	cur := physical.Cursor{Timestamp: 12345, Sequence: 99}
+	if err := be.PutCursor(ctx, "sub-1", cur); err != nil {
+		t.Fatalf("PutCursor: %v", err)
+	}
+
+	got, err := be.GetCursor(ctx, "sub-1")
+	if err != nil {
+		t.Fatalf("GetCursor: %v", err)
+	}
+	if got.Timestamp != 12345 || got.Sequence != 99 {
+		t.Errorf("cursor = %+v, want {12345 99}", got)
+	}
+
+	// PutCursor replace
+	cur2 := physical.Cursor{Timestamp: 99999, Sequence: 200}
+	if err := be.PutCursor(ctx, "sub-1", cur2); err != nil {
+		t.Fatalf("PutCursor replace: %v", err)
+	}
+	got, _ = be.GetCursor(ctx, "sub-1")
+	if got.Timestamp != 99999 {
+		t.Errorf("cursor timestamp = %d, want 99999", got.Timestamp)
+	}
+
+	// DeleteCursor
+	if err := be.DeleteCursor(ctx, "sub-1"); err != nil {
+		t.Fatalf("DeleteCursor: %v", err)
+	}
+	_, err = be.GetCursor(ctx, "sub-1")
+	if !errors.Is(err, physical.ErrCursorNotFound) {
+		t.Errorf("GetCursor after delete = %v, want ErrCursorNotFound", err)
+	}
+
+	// DeleteCursor idempotent
+	if err := be.DeleteCursor(ctx, "sub-1"); err != nil {
+		t.Fatalf("DeleteCursor idempotent: %v", err)
+	}
+}
+
+func TestCursorsClosed(t *testing.T) {
+	be := newTestBackend(t)
+	be.Close()
+	ctx := context.Background()
+
+	if err := be.PutCursor(ctx, "k", physical.Cursor{}); !errors.Is(err, physical.ErrClosed) {
+		t.Errorf("PutCursor on closed = %v, want ErrClosed", err)
+	}
+	if _, err := be.GetCursor(ctx, "k"); !errors.Is(err, physical.ErrClosed) {
+		t.Errorf("GetCursor on closed = %v, want ErrClosed", err)
+	}
+	if err := be.DeleteCursor(ctx, "k"); !errors.Is(err, physical.ErrClosed) {
+		t.Errorf("DeleteCursor on closed = %v, want ErrClosed", err)
+	}
+}
+
+func TestQueryNilOpts(t *testing.T) {
+	be := newTestBackend(t)
+	ctx := context.Background()
+
+	res, err := be.Query(ctx, nil)
+	if err != nil {
+		t.Fatalf("Query(nil): %v", err)
+	}
+	if len(res.Entries) != 0 {
+		t.Errorf("got %d entries, want 0", len(res.Entries))
+	}
+}
+
+func TestQueryIncludeExpired(t *testing.T) {
+	be := newTestBackend(t)
+	ctx := context.Background()
+	now := time.Now()
+
+	for i := range 4 {
+		var buf [8]byte
+		binary.BigEndian.PutUint64(buf[:], uint64(700+i))
+		exp := now.Add(time.Hour).UnixMilli()
+		if i < 2 {
+			exp = now.Add(-time.Hour).UnixMilli()
+		}
+		be.Put(ctx, &physical.Entry{
+			Ref:       reference.Reference(sha256.Sum256(buf[:])),
+			Labels:    map[string]string{"q": "q"},
+			Timestamp: int64(8000 + i),
+			ExpiresAt: exp,
+		})
+	}
+
+	// Without IncludeExpired: only 2
+	res, err := be.Query(ctx, &physical.QueryOptions{Limit: 100})
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(res.Entries) != 2 {
+		t.Errorf("got %d, want 2", len(res.Entries))
+	}
+
+	// With IncludeExpired: all 4
+	res, err = be.Query(ctx, &physical.QueryOptions{Limit: 100, IncludeExpired: true})
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(res.Entries) != 4 {
+		t.Errorf("got %d, want 4", len(res.Entries))
+	}
+}
+
+func TestQueryLabelAndTimeDescending(t *testing.T) {
+	be := newTestBackend(t)
+	ctx := context.Background()
+
+	for i := range 10 {
+		var buf [8]byte
+		binary.BigEndian.PutUint64(buf[:], uint64(800+i))
+		be.Put(ctx, &physical.Entry{
+			Ref:       reference.Reference(sha256.Sum256(buf[:])),
+			Labels:    map[string]string{"k": "v"},
+			Timestamp: int64(9000 + i),
+		})
+	}
+
+	// Label + time + descending (exercises the hasLabels && hasTime + descending branch)
+	res, err := be.Query(ctx, &physical.QueryOptions{
+		Labels:     map[string]string{"k": "v"},
+		After:      9002,
+		Before:     9008,
+		Descending: true,
+		Limit:      100,
+	})
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(res.Entries) != 5 {
+		t.Errorf("got %d, want 5 (9003-9007)", len(res.Entries))
+	}
+	for i := 1; i < len(res.Entries); i++ {
+		if res.Entries[i].Timestamp > res.Entries[i-1].Timestamp {
+			t.Error("not in descending order")
+		}
+	}
+}
+
+func TestQueryLabelAndTimePagination(t *testing.T) {
+	be := newTestBackend(t)
+	ctx := context.Background()
+
+	for i := range 10 {
+		var buf [8]byte
+		binary.BigEndian.PutUint64(buf[:], uint64(900+i))
+		be.Put(ctx, &physical.Entry{
+			Ref:       reference.Reference(sha256.Sum256(buf[:])),
+			Labels:    map[string]string{"p": "q"},
+			Timestamp: int64(10000 + i),
+		})
+	}
+
+	// Paginate with label + time (cursor in the hasLabels && hasTime path)
+	var total int
+	cursor := ""
+	for {
+		res, err := be.Query(ctx, &physical.QueryOptions{
+			Labels: map[string]string{"p": "q"},
+			After:  10001,
+			Before: 10009,
+			Limit:  2,
+			Cursor: cursor,
+		})
+		if err != nil {
+			t.Fatalf("Query: %v", err)
+		}
+		total += len(res.Entries)
+		if !res.HasMore {
+			break
+		}
+		cursor = res.NextCursor
+	}
+	if total != 7 {
+		t.Errorf("paginated total = %d, want 7 (10002-10008)", total)
+	}
+}
+
+func TestQueryLabelAndTimeDescendingPagination(t *testing.T) {
+	be := newTestBackend(t)
+	ctx := context.Background()
+
+	for i := range 10 {
+		var buf [8]byte
+		binary.BigEndian.PutUint64(buf[:], uint64(1000+i))
+		be.Put(ctx, &physical.Entry{
+			Ref:       reference.Reference(sha256.Sum256(buf[:])),
+			Labels:    map[string]string{"d": "e"},
+			Timestamp: int64(11000 + i),
+		})
+	}
+
+	var total int
+	cursor := ""
+	for {
+		res, err := be.Query(ctx, &physical.QueryOptions{
+			Labels:     map[string]string{"d": "e"},
+			After:      11001,
+			Before:     11009,
+			Limit:      2,
+			Cursor:     cursor,
+			Descending: true,
+		})
+		if err != nil {
+			t.Fatalf("Query: %v", err)
+		}
+		total += len(res.Entries)
+		if !res.HasMore {
+			break
+		}
+		cursor = res.NextCursor
+	}
+	if total != 7 {
+		t.Errorf("paginated total = %d, want 7", total)
+	}
+}
+
+func TestQueryMultiLabelAndTime(t *testing.T) {
+	be := newTestBackend(t)
+	ctx := context.Background()
+
+	for i := range 10 {
+		env := "dev"
+		if i%2 == 0 {
+			env = "prod"
+		}
+		var buf [8]byte
+		binary.BigEndian.PutUint64(buf[:], uint64(1100+i))
+		be.Put(ctx, &physical.Entry{
+			Ref:       reference.Reference(sha256.Sum256(buf[:])),
+			Labels:    map[string]string{"app": "test", "env": env},
+			Timestamp: int64(12000 + i),
+		})
+	}
+
+	// Multi-label + time range (exercises the hasLabels && hasTime path with extra JOIN)
+	res, err := be.Query(ctx, &physical.QueryOptions{
+		Labels: map[string]string{"app": "test", "env": "prod"},
+		After:  12001,
+		Before: 12009,
+		Limit:  100,
+	})
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	// prod = even indices: 0,2,4,6,8. After 12001 & before 12009: 2,4,6,8
+	if len(res.Entries) != 4 {
+		t.Errorf("got %d entries, want 4", len(res.Entries))
+	}
+}
+
+func TestQueryDescendingPagination(t *testing.T) {
+	be := newTestBackend(t)
+	ctx := context.Background()
+
+	for i := range 10 {
+		var buf [8]byte
+		binary.BigEndian.PutUint64(buf[:], uint64(1200+i))
+		be.Put(ctx, &physical.Entry{
+			Ref:       reference.Reference(sha256.Sum256(buf[:])),
+			Labels:    map[string]string{"x": "y"},
+			Timestamp: int64(13000 + i),
+		})
+	}
+
+	var total int
+	cursor := ""
+	for {
+		res, err := be.Query(ctx, &physical.QueryOptions{
+			Limit:      3,
+			Cursor:     cursor,
+			Descending: true,
+		})
+		if err != nil {
+			t.Fatalf("Query: %v", err)
+		}
+		total += len(res.Entries)
+		if !res.HasMore {
+			break
+		}
+		cursor = res.NextCursor
+	}
+	if total != 10 {
+		t.Errorf("paginated total = %d, want 10", total)
+	}
+}
+
+func TestDeleteExpiredNone(t *testing.T) {
+	be := newTestBackend(t)
+	ctx := context.Background()
+
+	// Entry with no expiry
+	be.Put(ctx, &physical.Entry{
+		Ref:       reference.Compute([]byte("no-expire")),
+		Timestamp: 1000,
+		ExpiresAt: 0,
+	})
+
+	n, err := be.DeleteExpired(ctx, time.Now())
+	if err != nil {
+		t.Fatalf("DeleteExpired: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("deleted = %d, want 0", n)
+	}
+}
+
+func TestStatsHasSizeBytes(t *testing.T) {
+	be := newTestBackend(t)
+	ctx := context.Background()
+
+	// Put some data
+	for i := range 5 {
+		var buf [8]byte
+		binary.BigEndian.PutUint64(buf[:], uint64(1300+i))
+		be.Put(ctx, &physical.Entry{
+			Ref:       reference.Reference(sha256.Sum256(buf[:])),
+			Labels:    map[string]string{"s": "t"},
+			Timestamp: int64(14000 + i),
+		})
+	}
+
+	stats, err := be.Stats(ctx)
+	if err != nil {
+		t.Fatalf("Stats: %v", err)
+	}
+	if stats.SizeBytes <= 0 {
+		t.Errorf("SizeBytes = %d, want > 0", stats.SizeBytes)
+	}
+	if stats.BackendType != "sqlite" {
+		t.Errorf("BackendType = %s, want sqlite", stats.BackendType)
+	}
+}
+
+func TestCloseIdempotent(t *testing.T) {
+	cfg := map[string]string{"path": filepath.Join(t.TempDir(), "close.db")}
+	be, err := NewFactory(context.Background(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := be.Close(); err != nil {
+		t.Fatalf("first Close: %v", err)
+	}
+	// Second close should be no-op
+	if err := be.Close(); err != nil {
+		t.Fatalf("second Close: %v", err)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Benchmark helpers
 // ---------------------------------------------------------------------------

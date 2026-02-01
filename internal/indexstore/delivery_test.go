@@ -2,6 +2,8 @@ package indexstore
 
 import (
 	"context"
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -12,6 +14,7 @@ import (
 	"github.com/gezibash/arc-node/internal/observability"
 )
 
+
 func newTestBackend(t *testing.T) physical.Backend {
 	t.Helper()
 	metrics := observability.NewMetrics()
@@ -21,6 +24,53 @@ func newTestBackend(t *testing.T) physical.Backend {
 	}
 	t.Cleanup(func() { backend.Close() })
 	return backend
+}
+
+func newBenchBackend(b *testing.B) physical.Backend {
+	b.Helper()
+	metrics := observability.NewMetrics()
+	backend, err := physical.New(context.Background(), "memory", nil, metrics)
+	if err != nil {
+		b.Fatalf("create memory backend: %v", err)
+	}
+	b.Cleanup(func() { backend.Close() })
+	return backend
+}
+
+func BenchmarkDeliver(b *testing.B) {
+	b.ReportAllocs()
+	backend := newBenchBackend(b)
+	tracker := NewDeliveryTracker(backend)
+	entry := &physical.Entry{
+		Ref:          reference.Compute([]byte("bench")),
+		Labels:       map[string]string{"type": "bench"},
+		Timestamp:    time.Now().UnixMilli(),
+		DeliveryMode: 1,
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		tracker.Deliver(entry, "sub-1")
+	}
+}
+
+func BenchmarkDeliverAndAck(b *testing.B) {
+	b.ReportAllocs()
+	ctx := context.Background()
+	backend := newBenchBackend(b)
+	tracker := NewDeliveryTracker(backend)
+	entry := &physical.Entry{
+		Ref:          reference.Compute([]byte("bench-ack")),
+		Labels:       map[string]string{"type": "bench"},
+		Timestamp:    time.Now().UnixMilli(),
+		DeliveryMode: 0, // no auto-delete to avoid backend interaction
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		id := tracker.Deliver(entry, "sub-1")
+		if _, err := tracker.Ack(ctx, id); err != nil {
+			b.Fatal(err)
+		}
+	}
 }
 
 func TestDeliveryTracker_DeliverAssignsMonotonicIDs(t *testing.T) {
@@ -356,6 +406,349 @@ func TestPerEntryMaxRedelivery(t *testing.T) {
 	}
 	if expired[0].Attempt != 2 {
 		t.Fatalf("attempt = %d, want 2", expired[0].Attempt)
+	}
+}
+
+func TestDeliveryTracker_DoubleAck(t *testing.T) {
+	ctx := context.Background()
+	backend := newTestBackend(t)
+	tracker := NewDeliveryTracker(backend)
+
+	ref := reference.Compute([]byte("double-ack"))
+	entry := &physical.Entry{
+		Ref:          ref,
+		Labels:       map[string]string{"type": "test"},
+		Timestamp:    time.Now().UnixMilli(),
+		DeliveryMode: 1,
+	}
+	if err := backend.Put(ctx, entry); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	id := tracker.Deliver(entry, "sub-1")
+
+	// First ack should return the entry.
+	got, err := tracker.Ack(ctx, id)
+	if err != nil {
+		t.Fatalf("first Ack: %v", err)
+	}
+	if got == nil {
+		t.Fatal("first Ack returned nil entry")
+	}
+
+	// Second ack of the same ID should be idempotent: nil entry, no error.
+	got2, err2 := tracker.Ack(ctx, id)
+	if err2 != nil {
+		t.Fatalf("second Ack: %v", err2)
+	}
+	if got2 != nil {
+		t.Fatal("second Ack should return nil entry (idempotent)")
+	}
+}
+
+func TestDeliveryTracker_DeadLetterLabels(t *testing.T) {
+	ctx := context.Background()
+	backend := newTestBackend(t)
+	tracker := NewDeliveryTracker(backend)
+	tracker.ackTimeout = time.Millisecond
+	tracker.maxRedeliver = 1
+
+	ref := reference.Compute([]byte("dl-labels"))
+	entry := &physical.Entry{
+		Ref:          ref,
+		Labels:       map[string]string{"type": "test", "app": "myapp"},
+		Timestamp:    time.Now().UnixMilli(),
+		DeliveryMode: 1,
+	}
+	if err := backend.Put(ctx, entry); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	tracker.Deliver(entry, "sub-dl")
+	time.Sleep(5 * time.Millisecond)
+
+	expired := tracker.Expired()
+	if len(expired) != 1 {
+		t.Fatalf("expected 1 expired, got %d", len(expired))
+	}
+
+	// Dead letter the entry.
+	if err := tracker.DeadLetter(ctx, expired[0]); err != nil {
+		t.Fatalf("DeadLetter: %v", err)
+	}
+
+	// Fetch from backend and verify dead letter labels.
+	got, err := backend.Get(ctx, ref)
+	if err != nil {
+		t.Fatalf("Get after dead letter: %v", err)
+	}
+	if got.Labels["_dead_letter"] != "true" {
+		t.Errorf("expected _dead_letter=true, got %q", got.Labels["_dead_letter"])
+	}
+	if got.Labels["_dead_letter_sub"] != "sub-dl" {
+		t.Errorf("expected _dead_letter_sub=sub-dl, got %q", got.Labels["_dead_letter_sub"])
+	}
+	if got.Labels["_dead_letter_attempts"] != "1" {
+		t.Errorf("expected _dead_letter_attempts=1, got %q", got.Labels["_dead_letter_attempts"])
+	}
+}
+
+func TestDeliveryTracker_ConcurrentDeliverAck(t *testing.T) {
+	ctx := context.Background()
+	backend := newTestBackend(t)
+	tracker := NewDeliveryTracker(backend)
+
+	const goroutines = 50
+
+	// 50 goroutines delivering, 50 goroutines acking.
+	ids := make(chan int64, goroutines)
+	var wg sync.WaitGroup
+
+	// Deliver goroutines.
+	for i := 0; i < goroutines; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			entry := &physical.Entry{
+				Ref:          reference.Compute([]byte(fmt.Sprintf("concurrent-%d", i))),
+				Labels:       map[string]string{"type": "test"},
+				Timestamp:    time.Now().UnixMilli(),
+				DeliveryMode: 0, // no auto-delete
+			}
+			id := tracker.Deliver(entry, fmt.Sprintf("sub-%d", i))
+			ids <- id
+		}(i)
+	}
+
+	// Ack goroutines — read IDs as they come in.
+	var ackWg sync.WaitGroup
+	for i := 0; i < goroutines; i++ {
+		ackWg.Add(1)
+		go func() {
+			defer ackWg.Done()
+			id := <-ids
+			tracker.Ack(ctx, id)
+		}()
+	}
+
+	wg.Wait()
+	ackWg.Wait()
+
+	// No corruption — Pending should be >= 0 (likely 0 since all acked).
+	pending := tracker.Pending()
+	if pending < 0 {
+		t.Fatalf("Pending() = %d, should be >= 0", pending)
+	}
+}
+
+func TestDeliveryTracker_MaxRedeliver(t *testing.T) {
+	backend := newTestBackend(t)
+	tracker := NewDeliveryTracker(backend)
+
+	if tracker.MaxRedeliver() != 3 {
+		t.Fatalf("MaxRedeliver() = %d, want 3", tracker.MaxRedeliver())
+	}
+
+	tracker.maxRedeliver = 7
+	if tracker.MaxRedeliver() != 7 {
+		t.Fatalf("MaxRedeliver() = %d, want 7", tracker.MaxRedeliver())
+	}
+}
+
+func TestDeliveryTracker_RedeliverExceedsMax(t *testing.T) {
+	ctx := context.Background()
+	backend := newTestBackend(t)
+	tracker := NewDeliveryTracker(backend)
+	tracker.ackTimeout = time.Millisecond
+	tracker.maxRedeliver = 1
+
+	entry := &physical.Entry{
+		Ref:          reference.Compute([]byte("redeliver-max")),
+		Labels:       map[string]string{"type": "test"},
+		Timestamp:    time.Now().UnixMilli(),
+		DeliveryMode: 1,
+	}
+	if err := backend.Put(ctx, entry); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	tracker.Deliver(entry, "sub-1")
+	time.Sleep(5 * time.Millisecond)
+
+	expired := tracker.Expired()
+	if len(expired) != 1 {
+		t.Fatalf("expected 1 expired, got %d", len(expired))
+	}
+
+	// Redeliver — attempt becomes 2 which exceeds maxRedeliver=1.
+	tracker.Redeliver(expired[0])
+	time.Sleep(5 * time.Millisecond)
+
+	expired = tracker.Expired()
+	if len(expired) != 1 {
+		t.Fatalf("expected 1 expired, got %d", len(expired))
+	}
+	if expired[0].Attempt != 2 {
+		t.Fatalf("attempt = %d, want 2", expired[0].Attempt)
+	}
+
+	// Should dead letter since attempt > maxRedeliver.
+	if expired[0].Attempt <= tracker.MaxRedeliver() {
+		t.Fatal("attempt should exceed max redeliver")
+	}
+
+	if err := tracker.DeadLetter(ctx, expired[0]); err != nil {
+		t.Fatalf("DeadLetter: %v", err)
+	}
+	if tracker.Pending() != 0 {
+		t.Fatalf("Pending = %d, want 0", tracker.Pending())
+	}
+}
+
+func TestDeliveryTracker_DeadLetterNilEntry(t *testing.T) {
+	backend := newTestBackend(t)
+	tracker := NewDeliveryTracker(backend)
+
+	d := &InflightDelivery{
+		id:    999,
+		ref:   reference.Compute([]byte("nil-entry")),
+		Entry: nil,
+		subID: "sub-1",
+	}
+
+	// DeadLetter with nil Entry should return nil (no-op).
+	if err := tracker.DeadLetter(context.Background(), d); err != nil {
+		t.Fatalf("DeadLetter nil entry: %v", err)
+	}
+}
+
+func TestDeliveryTracker_RedeliverWithPerEntryTimeout(t *testing.T) {
+	backend := newTestBackend(t)
+	tracker := NewDeliveryTracker(backend)
+	tracker.ackTimeout = time.Hour // global is huge
+
+	entry := &physical.Entry{
+		Ref:          reference.Compute([]byte("redeliver-per-entry")),
+		Labels:       map[string]string{"type": "test"},
+		Timestamp:    time.Now().UnixMilli(),
+		DeliveryMode: 1,
+		AckTimeoutMs: 10, // 10ms per-entry
+	}
+
+	id := tracker.Deliver(entry, "sub-1")
+
+	// Wait for per-entry timeout.
+	time.Sleep(20 * time.Millisecond)
+	expired := tracker.Expired()
+	if len(expired) != 1 {
+		t.Fatalf("expected 1 expired, got %d", len(expired))
+	}
+
+	// Redeliver should also use per-entry timeout.
+	newID := tracker.Redeliver(expired[0])
+	if newID == id {
+		t.Fatal("expected different ID")
+	}
+
+	// Should not be expired immediately after redeliver.
+	if len(tracker.Expired()) != 0 {
+		t.Fatal("should not be expired immediately after redeliver")
+	}
+
+	// Wait for per-entry timeout again.
+	time.Sleep(20 * time.Millisecond)
+	if len(tracker.Expired()) != 1 {
+		t.Fatal("should be expired after per-entry timeout")
+	}
+}
+
+func TestDeliveryTracker_PendingAfterMultipleDeliveries(t *testing.T) {
+	backend := newTestBackend(t)
+	tracker := NewDeliveryTracker(backend)
+
+	ref := reference.Compute([]byte("multi-deliver"))
+	entry := &physical.Entry{
+		Ref:          ref,
+		Labels:       map[string]string{"type": "test"},
+		Timestamp:    time.Now().UnixMilli(),
+		DeliveryMode: 1,
+	}
+
+	tracker.Deliver(entry, "sub-1")
+	tracker.Deliver(entry, "sub-2")
+	tracker.Deliver(entry, "sub-3")
+
+	if tracker.Pending() != 3 {
+		t.Fatalf("Pending = %d, want 3", tracker.Pending())
+	}
+}
+
+func TestDeliveryTracker_CleanupNotExpiredEnough(t *testing.T) {
+	ctx := context.Background()
+	backend := newTestBackend(t)
+	tracker := NewDeliveryTracker(backend)
+	tracker.ackTimeout = time.Millisecond
+
+	entry := &physical.Entry{
+		Ref:          reference.Compute([]byte("not-stale")),
+		Labels:       map[string]string{"type": "test"},
+		Timestamp:    time.Now().UnixMilli(),
+		DeliveryMode: 1,
+	}
+	if err := backend.Put(ctx, entry); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	tracker.Deliver(entry, "sub-1")
+
+	// Expired but not old enough for cleanup (maxAge=1h, expired only ms ago).
+	time.Sleep(5 * time.Millisecond)
+	cleaned, err := tracker.Cleanup(ctx, time.Hour)
+	if err != nil {
+		t.Fatalf("Cleanup: %v", err)
+	}
+	if cleaned != 0 {
+		t.Fatalf("expected 0 cleaned (not stale enough), got %d", cleaned)
+	}
+	if tracker.Pending() != 1 {
+		t.Fatalf("Pending = %d, want 1", tracker.Pending())
+	}
+}
+
+func TestDeliveryTracker_CleanupMultiple(t *testing.T) {
+	ctx := context.Background()
+	backend := newTestBackend(t)
+	tracker := NewDeliveryTracker(backend)
+	tracker.ackTimeout = time.Millisecond
+
+	for i := 0; i < 3; i++ {
+		entry := &physical.Entry{
+			Ref:          reference.Compute([]byte(fmt.Sprintf("stale-%d", i))),
+			Labels:       map[string]string{"type": "test"},
+			Timestamp:    time.Now().UnixMilli(),
+			DeliveryMode: 1,
+		}
+		if err := backend.Put(ctx, entry); err != nil {
+			t.Fatalf("Put %d: %v", i, err)
+		}
+		tracker.Deliver(entry, fmt.Sprintf("sub-%d", i))
+	}
+
+	// Backdate all deliveries.
+	tracker.mu.Lock()
+	for _, d := range tracker.inflight {
+		d.expiresAt = time.Now().Add(-2 * time.Hour)
+	}
+	tracker.mu.Unlock()
+
+	cleaned, err := tracker.Cleanup(ctx, time.Hour)
+	if err != nil {
+		t.Fatalf("Cleanup: %v", err)
+	}
+	if cleaned != 3 {
+		t.Fatalf("Cleanup cleaned = %d, want 3", cleaned)
+	}
+	if tracker.Pending() != 0 {
+		t.Fatalf("Pending = %d, want 0", tracker.Pending())
 	}
 }
 

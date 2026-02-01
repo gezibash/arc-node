@@ -2,6 +2,7 @@ package observability
 
 import (
 	"context"
+	"sync/atomic"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -58,8 +59,8 @@ func StreamServerInterceptor(m *Metrics) grpc.StreamServerInterceptor {
 
 		span.SetAttributes(
 			attribute.String("rpc.grpc.status_code", code),
-			attribute.Int64("rpc.messages_sent", wrapped.sent),
-			attribute.Int64("rpc.messages_received", wrapped.recv),
+			attribute.Int64("rpc.messages_sent", wrapped.sent.Load()),
+			attribute.Int64("rpc.messages_received", wrapped.recv.Load()),
 		)
 		if err != nil {
 			span.RecordError(err)
@@ -88,8 +89,8 @@ func extractTraceContext(ctx context.Context) context.Context {
 type wrappedStream struct {
 	grpc.ServerStream
 	ctx  context.Context
-	sent int64
-	recv int64
+	sent atomic.Int64
+	recv atomic.Int64
 }
 
 func (w *wrappedStream) Context() context.Context { return w.ctx }
@@ -97,7 +98,7 @@ func (w *wrappedStream) Context() context.Context { return w.ctx }
 func (w *wrappedStream) SendMsg(m any) error {
 	err := w.ServerStream.SendMsg(m)
 	if err == nil {
-		w.sent++
+		w.sent.Add(1)
 	}
 	return err
 }
@@ -105,7 +106,7 @@ func (w *wrappedStream) SendMsg(m any) error {
 func (w *wrappedStream) RecvMsg(m any) error {
 	err := w.ServerStream.RecvMsg(m)
 	if err == nil {
-		w.recv++
+		w.recv.Add(1)
 	}
 	return err
 }

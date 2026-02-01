@@ -883,6 +883,15 @@ func (b *Backend) queryByLabel(opts *physical.QueryOptions) (*physical.QueryResu
 				built.Pattern = dm.Pattern
 				built.Affinity = dm.Affinity
 				built.AffinityKey = dm.AffinityKey
+				built.Ordering = dm.Ordering
+				built.DedupMode = dm.DedupMode
+				built.IdempotencyKey = dm.IdempotencyKey
+				built.DeliveryComplete = dm.DeliveryComplete
+				built.CompleteN = dm.CompleteN
+				built.Priority = dm.Priority
+				built.MaxRedelivery = dm.MaxRedelivery
+				built.AckTimeoutMs = dm.AckTimeoutMs
+				built.Correlation = dm.Correlation
 				entry = built
 				return nil
 			}); metaDecErr != nil {
@@ -1072,6 +1081,15 @@ func (b *Backend) queryByComposite(def physical.CompositeIndexDef, vals []string
 				built.Pattern = dm.Pattern
 				built.Affinity = dm.Affinity
 				built.AffinityKey = dm.AffinityKey
+				built.Ordering = dm.Ordering
+				built.DedupMode = dm.DedupMode
+				built.IdempotencyKey = dm.IdempotencyKey
+				built.DeliveryComplete = dm.DeliveryComplete
+				built.CompleteN = dm.CompleteN
+				built.Priority = dm.Priority
+				built.MaxRedelivery = dm.MaxRedelivery
+				built.AckTimeoutMs = dm.AckTimeoutMs
+				built.Correlation = dm.Correlation
 				entry = built
 				return nil
 			}); metaDecErr != nil {
@@ -1532,14 +1550,14 @@ func (b *Backend) Close() error {
 // encodeMeta encodes ExpiresAt and Labels into a compact binary format.
 // Dimensions block: 4*int32 + string(affinity_key) = 4*4 + 2 + len(key) = 18+ bytes
 // Layout: persistence(4) + visibility(4) + deliveryMode(4) + pattern(4) + affinity(4) + affinityKeyLen(2) + affinityKey(var)
-const dimBlockFixedSize = 4 + 4 + 4 + 4 + 4 + 2 // 22 bytes without affinity key
+const dimBlockFixedSize = 4 + 4 + 4 + 4 + 4 + 2 + 4 + 4 + 2 + 4 + 4 + 4 + 4 + 8 + 2 // 62 bytes without variable-length strings
 
 func encodeMeta(entry *physical.Entry) []byte {
 	size := 8 + 2
 	for k, v := range entry.Labels {
 		size += 2 + len(k) + 2 + len(v)
 	}
-	size += dimBlockFixedSize + len(entry.AffinityKey)
+	size += dimBlockFixedSize + len(entry.AffinityKey) + len(entry.IdempotencyKey) + len(entry.Correlation)
 	buf := make([]byte, size)
 	binary.BigEndian.PutUint64(buf[0:8], uint64(entry.ExpiresAt)) //nolint:gosec
 	binary.BigEndian.PutUint16(buf[8:10], uint16(len(entry.Labels)))
@@ -1568,18 +1586,50 @@ func encodeMeta(entry *physical.Entry) []byte {
 	binary.BigEndian.PutUint16(buf[off:off+2], uint16(len(entry.AffinityKey)))
 	off += 2
 	copy(buf[off:], entry.AffinityKey)
+	off += len(entry.AffinityKey)
+	// New fields
+	binary.BigEndian.PutUint32(buf[off:off+4], uint32(entry.Ordering))
+	off += 4
+	binary.BigEndian.PutUint32(buf[off:off+4], uint32(entry.DedupMode))
+	off += 4
+	binary.BigEndian.PutUint16(buf[off:off+2], uint16(len(entry.IdempotencyKey)))
+	off += 2
+	copy(buf[off:], entry.IdempotencyKey)
+	off += len(entry.IdempotencyKey)
+	binary.BigEndian.PutUint32(buf[off:off+4], uint32(entry.DeliveryComplete))
+	off += 4
+	binary.BigEndian.PutUint32(buf[off:off+4], uint32(entry.CompleteN))
+	off += 4
+	binary.BigEndian.PutUint32(buf[off:off+4], uint32(entry.Priority))
+	off += 4
+	binary.BigEndian.PutUint32(buf[off:off+4], uint32(entry.MaxRedelivery))
+	off += 4
+	binary.BigEndian.PutUint64(buf[off:off+8], uint64(entry.AckTimeoutMs))
+	off += 8
+	binary.BigEndian.PutUint16(buf[off:off+2], uint16(len(entry.Correlation)))
+	off += 2
+	copy(buf[off:], entry.Correlation)
 	return buf
 }
 
 type decodedMeta struct {
-	ExpiresAt    int64
-	Labels       map[string]string
-	Persistence  int32
-	Visibility   int32
-	DeliveryMode int32
-	Pattern      int32
-	Affinity     int32
-	AffinityKey  string
+	ExpiresAt        int64
+	Labels           map[string]string
+	Persistence      int32
+	Visibility       int32
+	DeliveryMode     int32
+	Pattern          int32
+	Affinity         int32
+	AffinityKey      string
+	Ordering         int32
+	DedupMode        int32
+	IdempotencyKey   string
+	DeliveryComplete int32
+	CompleteN        int32
+	Priority         int32
+	MaxRedelivery    int32
+	AckTimeoutMs     int64
+	Correlation      string
 }
 
 func decodeMeta(data []byte) (expiresAt int64, labels map[string]string, err error) {
@@ -1636,8 +1686,43 @@ func decodeMetaFull(data []byte) (*decodedMeta, error) {
 		off += 4
 		akl := int(binary.BigEndian.Uint16(data[off : off+2]))
 		off += 2
-		if off+akl <= len(data) {
-			dm.AffinityKey = string(data[off : off+akl])
+		if off+akl > len(data) {
+			return dm, nil
+		}
+		dm.AffinityKey = string(data[off : off+akl])
+		off += akl
+		// New fields (backwards compat: old entries stop here)
+		if off+4+4+2 > len(data) {
+			return dm, nil
+		}
+		dm.Ordering = int32(binary.BigEndian.Uint32(data[off : off+4]))
+		off += 4
+		dm.DedupMode = int32(binary.BigEndian.Uint32(data[off : off+4]))
+		off += 4
+		ikl := int(binary.BigEndian.Uint16(data[off : off+2]))
+		off += 2
+		if off+ikl > len(data) {
+			return dm, nil
+		}
+		dm.IdempotencyKey = string(data[off : off+ikl])
+		off += ikl
+		if off+4+4+4+4+8+2 > len(data) {
+			return dm, nil
+		}
+		dm.DeliveryComplete = int32(binary.BigEndian.Uint32(data[off : off+4]))
+		off += 4
+		dm.CompleteN = int32(binary.BigEndian.Uint32(data[off : off+4]))
+		off += 4
+		dm.Priority = int32(binary.BigEndian.Uint32(data[off : off+4]))
+		off += 4
+		dm.MaxRedelivery = int32(binary.BigEndian.Uint32(data[off : off+4]))
+		off += 4
+		dm.AckTimeoutMs = int64(binary.BigEndian.Uint64(data[off : off+8]))
+		off += 8
+		cl := int(binary.BigEndian.Uint16(data[off : off+2]))
+		off += 2
+		if off+cl <= len(data) {
+			dm.Correlation = string(data[off : off+cl])
 		}
 	}
 	return dm, nil
@@ -1665,6 +1750,15 @@ func entryFromMetaBytes(suffix string, data []byte) (*physical.Entry, error) {
 	entry.Pattern = dm.Pattern
 	entry.Affinity = dm.Affinity
 	entry.AffinityKey = dm.AffinityKey
+	entry.Ordering = dm.Ordering
+	entry.DedupMode = dm.DedupMode
+	entry.IdempotencyKey = dm.IdempotencyKey
+	entry.DeliveryComplete = dm.DeliveryComplete
+	entry.CompleteN = dm.CompleteN
+	entry.Priority = dm.Priority
+	entry.MaxRedelivery = dm.MaxRedelivery
+	entry.AckTimeoutMs = dm.AckTimeoutMs
+	entry.Correlation = dm.Correlation
 	return entry, nil
 }
 

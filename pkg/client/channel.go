@@ -132,5 +132,7 @@ func (m *channelMux) close() {
 	if m.closed.Swap(true) {
 		return
 	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.stream.CloseSend()
 }
