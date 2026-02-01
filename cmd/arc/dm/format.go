@@ -11,8 +11,8 @@ import (
 
 	"github.com/gezibash/arc-node/cmd/arc/render"
 	"github.com/gezibash/arc-node/pkg/dm"
-	"github.com/gezibash/arc/pkg/identity"
-	"github.com/gezibash/arc/pkg/reference"
+	"github.com/gezibash/arc/v2/pkg/identity"
+	"github.com/gezibash/arc/v2/pkg/reference"
 )
 
 // --- Text ---

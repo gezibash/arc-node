@@ -8,8 +8,8 @@ import (
 	"strconv"
 
 	"github.com/gezibash/arc-node/pkg/client"
-	"github.com/gezibash/arc/pkg/message"
-	"github.com/gezibash/arc/pkg/reference"
+	"github.com/gezibash/arc/v2/pkg/message"
+	"github.com/gezibash/arc/v2/pkg/reference"
 )
 
 const searchIndexContentType = "application/x-arc-journal-search-index+encrypted"

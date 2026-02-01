@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/gezibash/arc/pkg/reference"
+	"github.com/gezibash/arc/v2/pkg/reference"
 	_ "modernc.org/sqlite"
 )
 

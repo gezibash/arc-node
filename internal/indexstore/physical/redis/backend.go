@@ -17,7 +17,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"github.com/gezibash/arc/pkg/reference"
+	"github.com/gezibash/arc/v2/pkg/reference"
 
 	"github.com/gezibash/arc-node/internal/indexstore/physical"
 	"github.com/gezibash/arc-node/internal/storage"
@@ -809,6 +809,39 @@ func (b *Backend) Stats(ctx context.Context) (*physical.Stats, error) {
 		SizeBytes:   -1,
 		BackendType: "redis",
 	}, nil
+}
+
+func (b *Backend) PutCursor(ctx context.Context, key string, cursor physical.Cursor) error {
+	if b.closed.Load() {
+		return physical.ErrClosed
+	}
+	val := fmt.Sprintf("%d:%d", cursor.Timestamp, cursor.Sequence)
+	return b.client.Set(ctx, b.prefix+"cursor:"+key, val, 0).Err()
+}
+
+func (b *Backend) GetCursor(ctx context.Context, key string) (physical.Cursor, error) {
+	if b.closed.Load() {
+		return physical.Cursor{}, physical.ErrClosed
+	}
+	val, err := b.client.Get(ctx, b.prefix+"cursor:"+key).Result()
+	if err == redis.Nil {
+		return physical.Cursor{}, physical.ErrCursorNotFound
+	}
+	if err != nil {
+		return physical.Cursor{}, fmt.Errorf("redis get cursor: %w", err)
+	}
+	var c physical.Cursor
+	if _, err := fmt.Sscanf(val, "%d:%d", &c.Timestamp, &c.Sequence); err != nil {
+		return physical.Cursor{}, fmt.Errorf("redis parse cursor: %w", err)
+	}
+	return c, nil
+}
+
+func (b *Backend) DeleteCursor(ctx context.Context, key string) error {
+	if b.closed.Load() {
+		return physical.ErrClosed
+	}
+	return b.client.Del(ctx, b.prefix+"cursor:"+key).Err()
 }
 
 func (b *Backend) Close() error {

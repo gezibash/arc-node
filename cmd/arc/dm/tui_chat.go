@@ -13,8 +13,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/gezibash/arc-node/cmd/arc/tui"
 	"github.com/gezibash/arc-node/pkg/dm"
-	"github.com/gezibash/arc/pkg/identity"
-	"github.com/gezibash/arc/pkg/reference"
+	"github.com/gezibash/arc/v2/pkg/identity"
+	"github.com/gezibash/arc/v2/pkg/reference"
 )
 
 // chatView owns only UI-local state. Domain data (messages, previews) lives

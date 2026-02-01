@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/gezibash/arc/pkg/message"
+	"github.com/gezibash/arc/v2/pkg/message"
 )
 
 // Send encrypts plaintext and publishes it as a DM with the given extra labels.

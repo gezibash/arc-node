@@ -19,31 +19,15 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	NodeService_PutContent_FullMethodName        = "/arc.node.v1.NodeService/PutContent"
-	NodeService_GetContent_FullMethodName        = "/arc.node.v1.NodeService/GetContent"
-	NodeService_SendMessage_FullMethodName       = "/arc.node.v1.NodeService/SendMessage"
-	NodeService_QueryMessages_FullMethodName     = "/arc.node.v1.NodeService/QueryMessages"
-	NodeService_SubscribeMessages_FullMethodName = "/arc.node.v1.NodeService/SubscribeMessages"
-	NodeService_Federate_FullMethodName          = "/arc.node.v1.NodeService/Federate"
-	NodeService_ListPeers_FullMethodName         = "/arc.node.v1.NodeService/ListPeers"
-	NodeService_ResolveGet_FullMethodName        = "/arc.node.v1.NodeService/ResolveGet"
+	NodeService_Channel_FullMethodName = "/arc.node.v1.NodeService/Channel"
 )
 
 // NodeServiceClient is the client API for NodeService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type NodeServiceClient interface {
-	// Content storage
-	PutContent(ctx context.Context, in *PutContentRequest, opts ...grpc.CallOption) (*PutContentResponse, error)
-	GetContent(ctx context.Context, in *GetContentRequest, opts ...grpc.CallOption) (*GetContentResponse, error)
-	// Messaging
-	SendMessage(ctx context.Context, in *SendMessageRequest, opts ...grpc.CallOption) (*SendMessageResponse, error)
-	QueryMessages(ctx context.Context, in *QueryMessagesRequest, opts ...grpc.CallOption) (*QueryMessagesResponse, error)
-	SubscribeMessages(ctx context.Context, in *SubscribeMessagesRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[SubscribeMessagesResponse], error)
-	Federate(ctx context.Context, in *FederateRequest, opts ...grpc.CallOption) (*FederateResponse, error)
-	ListPeers(ctx context.Context, in *ListPeersRequest, opts ...grpc.CallOption) (*ListPeersResponse, error)
-	// Unified get: resolve prefix against blobs and messages
-	ResolveGet(ctx context.Context, in *ResolveGetRequest, opts ...grpc.CallOption) (*ResolveGetResponse, error)
+	// Multiplexed bidirectional stream — the only transport.
+	Channel(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ClientFrame, ServerFrame], error)
 }
 
 type nodeServiceClient struct {
@@ -54,110 +38,25 @@ func NewNodeServiceClient(cc grpc.ClientConnInterface) NodeServiceClient {
 	return &nodeServiceClient{cc}
 }
 
-func (c *nodeServiceClient) PutContent(ctx context.Context, in *PutContentRequest, opts ...grpc.CallOption) (*PutContentResponse, error) {
+func (c *nodeServiceClient) Channel(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ClientFrame, ServerFrame], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(PutContentResponse)
-	err := c.cc.Invoke(ctx, NodeService_PutContent_FullMethodName, in, out, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &NodeService_ServiceDesc.Streams[0], NodeService_Channel_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
-}
-
-func (c *nodeServiceClient) GetContent(ctx context.Context, in *GetContentRequest, opts ...grpc.CallOption) (*GetContentResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetContentResponse)
-	err := c.cc.Invoke(ctx, NodeService_GetContent_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *nodeServiceClient) SendMessage(ctx context.Context, in *SendMessageRequest, opts ...grpc.CallOption) (*SendMessageResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(SendMessageResponse)
-	err := c.cc.Invoke(ctx, NodeService_SendMessage_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *nodeServiceClient) QueryMessages(ctx context.Context, in *QueryMessagesRequest, opts ...grpc.CallOption) (*QueryMessagesResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(QueryMessagesResponse)
-	err := c.cc.Invoke(ctx, NodeService_QueryMessages_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *nodeServiceClient) SubscribeMessages(ctx context.Context, in *SubscribeMessagesRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[SubscribeMessagesResponse], error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &NodeService_ServiceDesc.Streams[0], NodeService_SubscribeMessages_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &grpc.GenericClientStream[SubscribeMessagesRequest, SubscribeMessagesResponse]{ClientStream: stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
+	x := &grpc.GenericClientStream[ClientFrame, ServerFrame]{ClientStream: stream}
 	return x, nil
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type NodeService_SubscribeMessagesClient = grpc.ServerStreamingClient[SubscribeMessagesResponse]
-
-func (c *nodeServiceClient) Federate(ctx context.Context, in *FederateRequest, opts ...grpc.CallOption) (*FederateResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(FederateResponse)
-	err := c.cc.Invoke(ctx, NodeService_Federate_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *nodeServiceClient) ListPeers(ctx context.Context, in *ListPeersRequest, opts ...grpc.CallOption) (*ListPeersResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListPeersResponse)
-	err := c.cc.Invoke(ctx, NodeService_ListPeers_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *nodeServiceClient) ResolveGet(ctx context.Context, in *ResolveGetRequest, opts ...grpc.CallOption) (*ResolveGetResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ResolveGetResponse)
-	err := c.cc.Invoke(ctx, NodeService_ResolveGet_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
+type NodeService_ChannelClient = grpc.BidiStreamingClient[ClientFrame, ServerFrame]
 
 // NodeServiceServer is the server API for NodeService service.
 // All implementations must embed UnimplementedNodeServiceServer
 // for forward compatibility.
 type NodeServiceServer interface {
-	// Content storage
-	PutContent(context.Context, *PutContentRequest) (*PutContentResponse, error)
-	GetContent(context.Context, *GetContentRequest) (*GetContentResponse, error)
-	// Messaging
-	SendMessage(context.Context, *SendMessageRequest) (*SendMessageResponse, error)
-	QueryMessages(context.Context, *QueryMessagesRequest) (*QueryMessagesResponse, error)
-	SubscribeMessages(*SubscribeMessagesRequest, grpc.ServerStreamingServer[SubscribeMessagesResponse]) error
-	Federate(context.Context, *FederateRequest) (*FederateResponse, error)
-	ListPeers(context.Context, *ListPeersRequest) (*ListPeersResponse, error)
-	// Unified get: resolve prefix against blobs and messages
-	ResolveGet(context.Context, *ResolveGetRequest) (*ResolveGetResponse, error)
+	// Multiplexed bidirectional stream — the only transport.
+	Channel(grpc.BidiStreamingServer[ClientFrame, ServerFrame]) error
 	mustEmbedUnimplementedNodeServiceServer()
 }
 
@@ -168,29 +67,8 @@ type NodeServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedNodeServiceServer struct{}
 
-func (UnimplementedNodeServiceServer) PutContent(context.Context, *PutContentRequest) (*PutContentResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method PutContent not implemented")
-}
-func (UnimplementedNodeServiceServer) GetContent(context.Context, *GetContentRequest) (*GetContentResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetContent not implemented")
-}
-func (UnimplementedNodeServiceServer) SendMessage(context.Context, *SendMessageRequest) (*SendMessageResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method SendMessage not implemented")
-}
-func (UnimplementedNodeServiceServer) QueryMessages(context.Context, *QueryMessagesRequest) (*QueryMessagesResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method QueryMessages not implemented")
-}
-func (UnimplementedNodeServiceServer) SubscribeMessages(*SubscribeMessagesRequest, grpc.ServerStreamingServer[SubscribeMessagesResponse]) error {
-	return status.Error(codes.Unimplemented, "method SubscribeMessages not implemented")
-}
-func (UnimplementedNodeServiceServer) Federate(context.Context, *FederateRequest) (*FederateResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method Federate not implemented")
-}
-func (UnimplementedNodeServiceServer) ListPeers(context.Context, *ListPeersRequest) (*ListPeersResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListPeers not implemented")
-}
-func (UnimplementedNodeServiceServer) ResolveGet(context.Context, *ResolveGetRequest) (*ResolveGetResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ResolveGet not implemented")
+func (UnimplementedNodeServiceServer) Channel(grpc.BidiStreamingServer[ClientFrame, ServerFrame]) error {
+	return status.Error(codes.Unimplemented, "method Channel not implemented")
 }
 func (UnimplementedNodeServiceServer) mustEmbedUnimplementedNodeServiceServer() {}
 func (UnimplementedNodeServiceServer) testEmbeddedByValue()                     {}
@@ -213,142 +91,12 @@ func RegisterNodeServiceServer(s grpc.ServiceRegistrar, srv NodeServiceServer) {
 	s.RegisterService(&NodeService_ServiceDesc, srv)
 }
 
-func _NodeService_PutContent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PutContentRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(NodeServiceServer).PutContent(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: NodeService_PutContent_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NodeServiceServer).PutContent(ctx, req.(*PutContentRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _NodeService_GetContent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetContentRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(NodeServiceServer).GetContent(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: NodeService_GetContent_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NodeServiceServer).GetContent(ctx, req.(*GetContentRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _NodeService_SendMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SendMessageRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(NodeServiceServer).SendMessage(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: NodeService_SendMessage_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NodeServiceServer).SendMessage(ctx, req.(*SendMessageRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _NodeService_QueryMessages_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(QueryMessagesRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(NodeServiceServer).QueryMessages(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: NodeService_QueryMessages_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NodeServiceServer).QueryMessages(ctx, req.(*QueryMessagesRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _NodeService_SubscribeMessages_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(SubscribeMessagesRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(NodeServiceServer).SubscribeMessages(m, &grpc.GenericServerStream[SubscribeMessagesRequest, SubscribeMessagesResponse]{ServerStream: stream})
+func _NodeService_Channel_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(NodeServiceServer).Channel(&grpc.GenericServerStream[ClientFrame, ServerFrame]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type NodeService_SubscribeMessagesServer = grpc.ServerStreamingServer[SubscribeMessagesResponse]
-
-func _NodeService_Federate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(FederateRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(NodeServiceServer).Federate(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: NodeService_Federate_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NodeServiceServer).Federate(ctx, req.(*FederateRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _NodeService_ListPeers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListPeersRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(NodeServiceServer).ListPeers(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: NodeService_ListPeers_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NodeServiceServer).ListPeers(ctx, req.(*ListPeersRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _NodeService_ResolveGet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ResolveGetRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(NodeServiceServer).ResolveGet(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: NodeService_ResolveGet_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NodeServiceServer).ResolveGet(ctx, req.(*ResolveGetRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
+type NodeService_ChannelServer = grpc.BidiStreamingServer[ClientFrame, ServerFrame]
 
 // NodeService_ServiceDesc is the grpc.ServiceDesc for NodeService service.
 // It's only intended for direct use with grpc.RegisterService,
@@ -356,41 +104,13 @@ func _NodeService_ResolveGet_Handler(srv interface{}, ctx context.Context, dec f
 var NodeService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "arc.node.v1.NodeService",
 	HandlerType: (*NodeServiceServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{
-			MethodName: "PutContent",
-			Handler:    _NodeService_PutContent_Handler,
-		},
-		{
-			MethodName: "GetContent",
-			Handler:    _NodeService_GetContent_Handler,
-		},
-		{
-			MethodName: "SendMessage",
-			Handler:    _NodeService_SendMessage_Handler,
-		},
-		{
-			MethodName: "QueryMessages",
-			Handler:    _NodeService_QueryMessages_Handler,
-		},
-		{
-			MethodName: "Federate",
-			Handler:    _NodeService_Federate_Handler,
-		},
-		{
-			MethodName: "ListPeers",
-			Handler:    _NodeService_ListPeers_Handler,
-		},
-		{
-			MethodName: "ResolveGet",
-			Handler:    _NodeService_ResolveGet_Handler,
-		},
-	},
+	Methods:     []grpc.MethodDesc{},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "SubscribeMessages",
-			Handler:       _NodeService_SubscribeMessages_Handler,
+			StreamName:    "Channel",
+			Handler:       _NodeService_Channel_Handler,
 			ServerStreams: true,
+			ClientStreams: true,
 		},
 	},
 	Metadata: "arc/node/v1/node.proto",

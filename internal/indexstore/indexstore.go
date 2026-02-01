@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/cel-go/cel"
 
-	"github.com/gezibash/arc/pkg/reference"
+	"github.com/gezibash/arc/v2/pkg/reference"
 
 	celeval "github.com/gezibash/arc-node/internal/indexstore/cel"
 	"github.com/gezibash/arc-node/internal/indexstore/physical"
@@ -23,11 +25,14 @@ type Options struct {
 
 // IndexStore provides indexed storage with CEL queries and subscriptions.
 type IndexStore struct {
-	backend physical.Backend
-	metrics *observability.Metrics
-	eval    *celeval.Evaluator
-	subs    *subscriptionManager
-	autoIdx queryTracker
+	backend          physical.Backend
+	metrics          *observability.Metrics
+	eval             *celeval.Evaluator
+	subs             *subscriptionManager
+	autoIdx          queryTracker
+	delivery         *DeliveryTracker
+	seq              atomic.Int64
+	idempotencyCache *idempotencyLRU
 }
 
 // New creates a new IndexStore with the given backend.
@@ -43,10 +48,12 @@ func New(backend physical.Backend, metrics *observability.Metrics, opts ...*Opti
 	}
 
 	s := &IndexStore{
-		backend: backend,
-		metrics: metrics,
-		eval:    eval,
-		subs:    newSubscriptionManager(eval, cfg),
+		backend:          backend,
+		metrics:          metrics,
+		eval:             eval,
+		subs:             newSubscriptionManager(eval, cfg),
+		delivery:         NewDeliveryTracker(backend),
+		idempotencyCache: newIdempotencyLRU(10000),
 	}
 	s.autoIdx = newQueryTracker(s, metrics)
 	return s, nil
@@ -59,17 +66,144 @@ func (s *IndexStore) Index(ctx context.Context, entry *physical.Entry) (err erro
 
 	slog.DebugContext(ctx, "indexing entry", "ref", reference.Hex(entry.Ref), "label_count", len(entry.Labels))
 
+	// Dedup check before any storage or notification.
+	if dup, _ := s.checkDedup(ctx, entry); dup {
+		slog.DebugContext(ctx, "duplicate entry skipped", "ref", reference.Hex(entry.Ref), "dedup_mode", entry.DedupMode)
+		return nil
+	}
+
+	// Assign monotonic sequence if not already set (e.g. by federation).
+	if entry.Sequence == 0 {
+		entry.Sequence = s.seq.Add(1)
+	} else {
+		// Advance the counter past externally-set sequences to avoid collisions.
+		for {
+			cur := s.seq.Load()
+			if cur >= entry.Sequence {
+				break
+			}
+			if s.seq.CompareAndSwap(cur, entry.Sequence) {
+				break
+			}
+		}
+	}
+
+	// STORE_ONLY pattern: index but never notify subscribers.
+	storeOnly := entry.Pattern == 4 // PATTERN_STORE_ONLY
+
+	// Ephemeral entries bypass disk entirely — fan out to subscribers only.
+	if entry.Persistence == 0 {
+		if !storeOnly && s.subs.Len() > 0 {
+			s.subs.Notify(ctx, entry)
+		}
+		slog.DebugContext(ctx, "ephemeral entry fanned out", "ref", reference.Hex(entry.Ref))
+		return nil
+	}
+
 	if err = s.backend.Put(ctx, entry); err != nil {
 		return fmt.Errorf("index entry: %w", err)
 	}
 
-	// Notify subscribers (non-blocking async fan-out)
-	if s.subs.Len() > 0 {
+	// Cache idempotency key after successful store.
+	s.cacheIdempotencyKey(entry)
+
+	// Note: delivery tracking for at-least-once entries is handled
+	// at the Channel layer via Deliver() when entries are sent to subscribers.
+
+	// Notify subscribers (non-blocking async fan-out), unless STORE_ONLY.
+	if !storeOnly && s.subs.Len() > 0 {
 		s.subs.Notify(ctx, entry)
 	}
 
 	slog.InfoContext(ctx, "entry indexed", "ref", reference.Hex(entry.Ref))
 	return nil
+}
+
+// checkDedup returns true if the entry is a duplicate that should be skipped.
+func (s *IndexStore) checkDedup(ctx context.Context, entry *physical.Entry) (bool, error) {
+	switch entry.DedupMode {
+	case 1: // DEDUP_REF
+		if _, err := s.backend.Get(ctx, entry.Ref); err == nil {
+			return true, nil
+		}
+	case 2: // DEDUP_IDEMPOTENCY_KEY
+		if entry.IdempotencyKey != "" {
+			if s.idempotencyCache.Contains(entry.IdempotencyKey) {
+				return true, nil
+			}
+			// Will be cached after successful store.
+		}
+	}
+	return false, nil
+}
+
+// cacheIdempotencyKey records the key after a successful index.
+func (s *IndexStore) cacheIdempotencyKey(entry *physical.Entry) {
+	if entry.DedupMode == 2 && entry.IdempotencyKey != "" {
+		s.idempotencyCache.Add(entry.IdempotencyKey)
+	}
+}
+
+// idempotencyLRU is a bounded set of recently-seen idempotency keys.
+type idempotencyLRU struct {
+	mu      sync.Mutex
+	keys    map[string]struct{}
+	order   []string
+	maxSize int
+}
+
+func newIdempotencyLRU(maxSize int) *idempotencyLRU {
+	return &idempotencyLRU{
+		keys:    make(map[string]struct{}),
+		maxSize: maxSize,
+	}
+}
+
+func (c *idempotencyLRU) Contains(key string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	_, ok := c.keys[key]
+	return ok
+}
+
+func (c *idempotencyLRU) Add(key string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if _, ok := c.keys[key]; ok {
+		return
+	}
+	if len(c.order) >= c.maxSize {
+		evict := c.order[0]
+		c.order = c.order[1:]
+		delete(c.keys, evict)
+	}
+	c.keys[key] = struct{}{}
+	c.order = append(c.order, key)
+}
+
+// Deliver assigns a delivery ID for an at-least-once entry being sent to a subscriber.
+func (s *IndexStore) Deliver(entry *physical.Entry, subID string) int64 {
+	return s.delivery.Deliver(entry, subID)
+}
+
+// AckDelivery acknowledges a delivery by its ID. Returns the entry for cursor updates.
+func (s *IndexStore) AckDelivery(ctx context.Context, deliveryID int64) (*physical.Entry, error) {
+	return s.delivery.Ack(ctx, deliveryID)
+}
+
+// PutCursor stores a durable subscription cursor.
+func (s *IndexStore) PutCursor(ctx context.Context, key string, cursor physical.Cursor) error {
+	return s.backend.PutCursor(ctx, key, cursor)
+}
+
+// GetCursor retrieves a durable subscription cursor.
+func (s *IndexStore) GetCursor(ctx context.Context, key string) (physical.Cursor, error) {
+	return s.backend.GetCursor(ctx, key)
+}
+
+// DeliveryTracker returns the delivery tracker for redelivery loop access.
+func (s *IndexStore) DeliveryTracker() *DeliveryTracker {
+	return s.delivery
 }
 
 // Get retrieves an entry by its reference.
@@ -246,7 +380,8 @@ func (s *IndexStore) Count(ctx context.Context, opts *QueryOptions) (count int64
 }
 
 // Subscribe creates a subscription for entries matching the CEL expression.
-func (s *IndexStore) Subscribe(ctx context.Context, expression string, opts ...*SubscriptionOptions) (sub Subscription, err error) {
+// callerKey identifies the subscriber for visibility filtering and direct routing.
+func (s *IndexStore) Subscribe(ctx context.Context, expression string, callerKey [32]byte, opts ...*SubscriptionOptions) (sub Subscription, err error) {
 	op, ctx := observability.StartOperation(ctx, s.metrics, "indexstore.subscribe")
 	defer op.End(err)
 
@@ -255,7 +390,7 @@ func (s *IndexStore) Subscribe(ctx context.Context, expression string, opts ...*
 		subOpts = opts[0]
 	}
 
-	sub, err = s.subs.Subscribe(ctx, expression, subOpts)
+	sub, err = s.subs.Subscribe(ctx, expression, callerKey, subOpts)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrInvalidExpression, err)
 	}
@@ -339,6 +474,12 @@ func (s *IndexStore) Stats(ctx context.Context) (stats *physical.Stats, err erro
 	return stats, nil
 }
 
+// SetVisibilityFilter sets the function used to check whether an entry
+// should be visible to a given subscriber.
+func (s *IndexStore) SetVisibilityFilter(f VisibilityFilter) {
+	s.subs.SetVisibilityFilter(f)
+}
+
 // SubscriptionCount returns the number of active subscriptions.
 func (s *IndexStore) SubscriptionCount() int {
 	return s.subs.Len()
@@ -368,6 +509,15 @@ func (s *IndexStore) StartCleanup(ctx context.Context, interval time.Duration) {
 				}
 				if count > 0 {
 					slog.InfoContext(ctx, "periodic cleanup completed", "deleted", count)
+				}
+
+				// Clean up stale until-delivered entries.
+				dCount, dErr := s.delivery.Cleanup(ctx, time.Hour)
+				if dErr != nil {
+					slog.ErrorContext(ctx, "delivery cleanup failed", "error", dErr)
+				}
+				if dCount > 0 {
+					slog.InfoContext(ctx, "delivery cleanup completed", "deleted", dCount)
 				}
 			}
 		}

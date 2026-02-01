@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/gezibash/arc/pkg/reference"
+	"github.com/gezibash/arc/v2/pkg/reference"
 )
 
 // Read fetches and decrypts a journal entry by its content reference.

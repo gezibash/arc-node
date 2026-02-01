@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/gezibash/arc/pkg/identity"
+	"github.com/gezibash/arc/v2/pkg/identity"
 )
 
 type keyringFile struct {

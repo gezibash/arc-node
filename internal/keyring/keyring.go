@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
-	"github.com/gezibash/arc/pkg/identity"
+	"github.com/gezibash/arc/v2/pkg/identity"
+	"github.com/gezibash/arc-node/pkg/group"
 )
 
 const (
@@ -35,6 +37,7 @@ type Key struct {
 type Metadata struct {
 	PublicKey string    `json:"public_key"`
 	CreatedAt time.Time `json:"created_at"`
+	Type      string    `json:"type,omitempty"` // "" = personal, "group" = group key
 }
 
 type KeyInfo struct {
@@ -42,6 +45,7 @@ type KeyInfo struct {
 	Aliases   []string  `json:"aliases,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 	IsDefault bool      `json:"is_default"`
+	Type      string    `json:"type,omitempty"`
 }
 
 func New(dir string) *Keyring {
@@ -178,6 +182,7 @@ func (kr *Keyring) List(_ context.Context) ([]*KeyInfo, error) {
 			PublicKey: meta.PublicKey,
 			Aliases:   aliasMap[pkHex],
 			CreatedAt: meta.CreatedAt,
+			Type:      meta.Type,
 		}
 
 		if kf != nil && kf.Default != "" {
@@ -316,4 +321,50 @@ func isHex(s string) bool {
 
 func normalize(s string) string {
 	return strings.ToLower(strings.TrimSpace(s))
+}
+
+// ImportGroupKey decrypts a sealed group seed using the admin's keypair,
+// stores the resulting group key, and tags its metadata as type "group".
+func (kr *Keyring) ImportGroupKey(_ context.Context, sealedSeed []byte, adminKP *identity.Keypair, alias string) (*Key, error) {
+	kp, err := group.RecoverGroupKey(sealedSeed, adminKP)
+	if err != nil {
+		return nil, fmt.Errorf("recover group key: %w", err)
+	}
+
+	pkHex := pubKeyHex(kp)
+
+	meta := &Metadata{
+		PublicKey: pkHex,
+		CreatedAt: time.Now(),
+		Type:      "group",
+	}
+
+	if err := kr.saveKey(kp, pkHex, meta); err != nil {
+		return nil, err
+	}
+
+	if alias != "" {
+		if err := kr.SetAlias(alias, pkHex); err != nil {
+			_ = kr.deleteKeyFiles(pkHex)
+			return nil, err
+		}
+	}
+
+	return &Key{Keypair: kp, PublicKey: pkHex, Metadata: meta}, nil
+}
+
+// ListGroups returns key info for all keys tagged as type "group".
+func (kr *Keyring) ListGroups(_ context.Context) ([]*KeyInfo, error) {
+	all, err := kr.List(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
+	var groups []*KeyInfo
+	for _, info := range all {
+		if info.Type == "group" {
+			groups = append(groups, info)
+		}
+	}
+	return groups, nil
 }

@@ -16,8 +16,8 @@ import (
 	"github.com/gezibash/arc-node/internal/indexstore"
 	"github.com/gezibash/arc-node/internal/indexstore/physical"
 	"github.com/gezibash/arc-node/pkg/client"
-	"github.com/gezibash/arc/pkg/identity"
-	"github.com/gezibash/arc/pkg/reference"
+	"github.com/gezibash/arc/v2/pkg/identity"
+	"github.com/gezibash/arc/v2/pkg/reference"
 )
 
 type federationManager struct {
@@ -26,6 +26,7 @@ type federationManager struct {
 	blobs      *blobstore.BlobStore
 	index      *indexstore.IndexStore
 	kp         *identity.Keypair
+	groupCache *groupCache
 	baseCtx    context.Context
 	baseCancel context.CancelFunc
 }
@@ -110,13 +111,14 @@ func (t *subscriberTracker) List() []SubscriberInfo {
 	return out
 }
 
-func newFederationManager(blobs *blobstore.BlobStore, index *indexstore.IndexStore, kp *identity.Keypair) *federationManager {
+func newFederationManager(blobs *blobstore.BlobStore, index *indexstore.IndexStore, kp *identity.Keypair, gc *groupCache) *federationManager {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &federationManager{
 		active:     make(map[string]*federation),
 		blobs:      blobs,
 		index:      index,
 		kp:         kp,
+		groupCache: gc,
 		baseCtx:    ctx,
 		baseCancel: cancel,
 	}
@@ -205,7 +207,8 @@ func (f *federationManager) run(ctx context.Context, fed *federation) {
 		return
 	}
 
-	entries, errs, err := peerClient.SubscribeMessages(ctx, "true", fed.labels)
+	// Subscribe exclusively via the Channel bidi stream.
+	entries, errs, err := peerClient.SubscribeChannel(ctx, "true", fed.labels)
 	if err != nil {
 		slog.Error("federation subscribe failed", "peer", fed.peerAddr, "error", err)
 		return
@@ -231,9 +234,42 @@ func (f *federationManager) run(ctx context.Context, fed *federation) {
 	}
 }
 
+// validateFederationPolicy checks whether this node can honor the
+// originating entry's dimension constraints. Returns an error if
+// the entry must be rejected.
+func (f *federationManager) validateFederationPolicy(entry *client.Entry) error {
+	if entry.Dimensions == nil {
+		return nil
+	}
+	dims := entry.Dimensions
+
+	// VISIBILITY_LABEL_SCOPED: reject if the group cache doesn't know the scope.
+	if dims.Visibility == 2 {
+		scope := entry.Labels["scope"]
+		if scope != "" && f.groupCache != nil {
+			scopeBytes, err := reference.FromHex(scope)
+			if err == nil {
+				var scopeKey identity.PublicKey
+				copy(scopeKey[:], scopeBytes[:])
+				if !f.groupCache.HasGroup(scopeKey) {
+					return fmt.Errorf("unknown scope group %s, rejecting federated entry", scope)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
 func (f *federationManager) replicateEntry(ctx context.Context, peer *client.Client, fed *federation, entry *client.Entry) error {
 	if entry == nil {
 		return fmt.Errorf("entry required")
+	}
+
+	// Validate federation policy before replicating.
+	if err := f.validateFederationPolicy(entry); err != nil {
+		slog.Warn("federation policy rejected entry", "ref", reference.Hex(entry.Ref), "error", err)
+		return nil // skip, don't propagate error
 	}
 
 	if _, err := f.index.Get(ctx, entry.Ref); err == nil {
@@ -276,6 +312,31 @@ func (f *federationManager) replicateEntry(ctx context.Context, peer *client.Cli
 		Labels:    labels,
 		Timestamp: entry.Timestamp,
 	}
+
+	// Map dimensions from origin, defaulting to durable if absent.
+	if dims := entry.Dimensions; dims != nil {
+		fedEntry.Persistence = dims.Persistence
+		fedEntry.Visibility = dims.Visibility
+		fedEntry.DeliveryMode = dims.Delivery
+		fedEntry.Pattern = dims.Pattern
+		fedEntry.Affinity = dims.Affinity
+		fedEntry.AffinityKey = dims.AffinityKey
+		fedEntry.Ordering = dims.Ordering
+		fedEntry.DedupMode = dims.DedupMode
+		fedEntry.IdempotencyKey = dims.IdempotencyKey
+		fedEntry.DeliveryComplete = dims.DeliveryComplete
+		fedEntry.CompleteN = dims.CompleteN
+		fedEntry.Priority = dims.Priority
+		fedEntry.MaxRedelivery = dims.MaxRedelivery
+		fedEntry.AckTimeoutMs = dims.AckTimeoutMs
+		fedEntry.Correlation = dims.Correlation
+		if dims.TtlMs > 0 {
+			fedEntry.ExpiresAt = entry.Timestamp + dims.TtlMs
+		}
+	} else {
+		fedEntry.Persistence = 1 // default to durable
+	}
+
 	if err := f.index.Index(ctx, fedEntry); err != nil {
 		return fmt.Errorf("index entry: %w", err)
 	}

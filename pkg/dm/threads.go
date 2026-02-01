@@ -7,7 +7,7 @@ import (
 	"sort"
 
 	"github.com/gezibash/arc-node/pkg/client"
-	"github.com/gezibash/arc/pkg/identity"
+	"github.com/gezibash/arc/v2/pkg/identity"
 )
 
 // Threads provides cross-conversation DM operations without requiring a peer pubkey.

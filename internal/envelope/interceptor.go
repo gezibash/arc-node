@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/gezibash/arc-node/internal/middleware"
-	"github.com/gezibash/arc/pkg/identity"
+	"github.com/gezibash/arc/v2/pkg/identity"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	grpcmd "google.golang.org/grpc/metadata"
@@ -24,7 +24,7 @@ func UnaryServerInterceptor(kp *identity.Keypair, chain *middleware.Chain, respM
 			return nil, status.Error(codes.Unauthenticated, "missing envelope metadata")
 		}
 
-		from, to, origin, ts, sig, ct, hopCount, reqMeta, err := Extract(md)
+		from, to, origin, ts, sig, ct, hopCount, reqMeta, dims, err := Extract(md)
 		if err != nil {
 			return nil, status.Errorf(codes.Unauthenticated, "extract envelope: %v", err)
 		}
@@ -38,16 +38,17 @@ func UnaryServerInterceptor(kp *identity.Keypair, chain *middleware.Chain, respM
 			return nil, status.Errorf(codes.Internal, "marshal request: %v", err)
 		}
 
-		_, err = Open(from, to, payload, ct, ts, sig, origin, hopCount, reqMeta)
+		_, err = Open(from, to, payload, ct, ts, sig, origin, hopCount, reqMeta, dims)
 		if err != nil {
 			return nil, status.Errorf(codes.Unauthenticated, "verify envelope: %v", err)
 		}
 
 		caller := &Caller{
-			PublicKey: from,
-			Origin:    origin,
-			HopCount:  hopCount,
-			Metadata:  reqMeta,
+			PublicKey:  from,
+			Origin:     origin,
+			HopCount:   hopCount,
+			Metadata:   reqMeta,
+			Dimensions: dims,
 		}
 		ctx = WithCaller(ctx, caller)
 
@@ -69,7 +70,7 @@ func UnaryServerInterceptor(kp *identity.Keypair, chain *middleware.Chain, respM
 		if resp != nil {
 			if respMsg, ok := resp.(proto.Message); ok {
 				if respPayload, marshalErr := marshalOpts.Marshal(respMsg); marshalErr == nil {
-					if respEnv, sealErr := Seal(kp, from, respPayload, info.FullMethod, kp.PublicKey(), 0, respMeta); sealErr == nil {
+					if respEnv, sealErr := Seal(kp, from, respPayload, info.FullMethod, kp.PublicKey(), 0, respMeta, dims); sealErr == nil {
 						Inject(ctx, respEnv, *respEnv.Message.Signature)
 					}
 				}
@@ -90,21 +91,25 @@ func StreamServerInterceptor(kp *identity.Keypair, chain *middleware.Chain) grpc
 			return status.Error(codes.Unauthenticated, "missing envelope metadata")
 		}
 
-		from, _, origin, ts, sig, ct, hopCount, meta, err := Extract(md)
+		from, to, origin, ts, sig, ct, hopCount, meta, dims, err := Extract(md)
 		if err != nil {
 			return status.Errorf(codes.Unauthenticated, "extract envelope: %v", err)
 		}
 
-		_, err = Open(from, kp.PublicKey(), []byte{}, ct, ts, sig, origin, hopCount, meta)
+		// Use the "to" from the client's envelope for verification.
+		// This allows clients that don't know the server's key (e.g. federation)
+		// to open streams with a zero "to" field.
+		_, err = Open(from, to, []byte{}, ct, ts, sig, origin, hopCount, meta, dims)
 		if err != nil {
 			return status.Errorf(codes.Unauthenticated, "verify envelope: %v", err)
 		}
 
 		caller := &Caller{
-			PublicKey: from,
-			Origin:    origin,
-			HopCount:  hopCount,
-			Metadata:  meta,
+			PublicKey:  from,
+			Origin:     origin,
+			HopCount:   hopCount,
+			Metadata:   meta,
+			Dimensions: dims,
 		}
 		ctx = WithCaller(ctx, caller)
 

@@ -18,7 +18,7 @@ import (
 
 	"github.com/dgraph-io/badger/v4"
 
-	"github.com/gezibash/arc/pkg/reference"
+	"github.com/gezibash/arc/v2/pkg/reference"
 
 	"github.com/gezibash/arc-node/internal/indexstore/physical"
 	"github.com/gezibash/arc-node/internal/storage"
@@ -29,6 +29,7 @@ const (
 	prefixRef       = "ref/"
 	prefixMeta      = "meta/"
 	prefixComposite = "cidx/"
+	prefixCursor    = "cursor/"
 )
 
 const (
@@ -496,11 +497,7 @@ func (b *Backend) Get(_ context.Context, r reference.Reference) (*physical.Entry
 		}
 
 		return metaItem.Value(func(val []byte) error {
-			expiresAt, labels, decErr := decodeMeta(val)
-			if decErr != nil {
-				return decErr
-			}
-			built, buildErr := entryFromSuffix(suffix, expiresAt, labels)
+			built, buildErr := entryFromMetaBytes(suffix, val)
 			if buildErr != nil {
 				return buildErr
 			}
@@ -865,20 +862,29 @@ func (b *Backend) queryByLabel(opts *physical.QueryOptions) (*physical.QueryResu
 			var skip bool
 			var entry *physical.Entry
 			if metaDecErr := metaItem.Value(func(val []byte) error {
-				expiresAt, labels, decErr := decodeMeta(val)
+				dm, decErr := decodeMetaFull(val)
 				if decErr != nil {
 					return decErr
 				}
-				if !matchesMetaFilter(expiresAt, labels, opts, now) {
+				if !matchesMetaFilter(dm.ExpiresAt, dm.Labels, opts, now) {
 					skip = true
 					return nil
 				}
 				if len(results) >= limit {
 					return nil
 				}
-				var buildErr error
-				entry, buildErr = entryFromSuffix(suffix, expiresAt, labels)
-				return buildErr
+				built, buildErr := entryFromSuffix(suffix, dm.ExpiresAt, dm.Labels)
+				if buildErr != nil {
+					return buildErr
+				}
+				built.Persistence = dm.Persistence
+				built.Visibility = dm.Visibility
+				built.DeliveryMode = dm.DeliveryMode
+				built.Pattern = dm.Pattern
+				built.Affinity = dm.Affinity
+				built.AffinityKey = dm.AffinityKey
+				entry = built
+				return nil
 			}); metaDecErr != nil {
 				slog.Warn("failed to decode meta", "key", string(metaKey), "error", metaDecErr)
 				continue
@@ -1037,18 +1043,18 @@ func (b *Backend) queryByComposite(def physical.CompositeIndexDef, vals []string
 			var skip bool
 			var entry *physical.Entry
 			if metaDecErr := metaItem.Value(func(val []byte) error {
-				expiresAt, labels, decErr := decodeMeta(val)
+				dm, decErr := decodeMetaFull(val)
 				if decErr != nil {
 					return decErr
 				}
 				// Check expiry and any extra labels not in the composite index
-				if !opts.IncludeExpired && expiresAt > 0 && expiresAt <= now {
+				if !opts.IncludeExpired && dm.ExpiresAt > 0 && dm.ExpiresAt <= now {
 					skip = true
 					return nil
 				}
 				// Validate extra labels beyond the composite index
 				for k, v := range opts.Labels {
-					if labels[k] != v {
+					if dm.Labels[k] != v {
 						skip = true
 						return nil
 					}
@@ -1056,9 +1062,18 @@ func (b *Backend) queryByComposite(def physical.CompositeIndexDef, vals []string
 				if len(results) >= limit {
 					return nil
 				}
-				var buildErr error
-				entry, buildErr = entryFromSuffix(suffix, expiresAt, labels)
-				return buildErr
+				built, buildErr := entryFromSuffix(suffix, dm.ExpiresAt, dm.Labels)
+				if buildErr != nil {
+					return buildErr
+				}
+				built.Persistence = dm.Persistence
+				built.Visibility = dm.Visibility
+				built.DeliveryMode = dm.DeliveryMode
+				built.Pattern = dm.Pattern
+				built.Affinity = dm.Affinity
+				built.AffinityKey = dm.AffinityKey
+				entry = built
+				return nil
 			}); metaDecErr != nil {
 				continue
 			}
@@ -1450,6 +1465,62 @@ func (b *Backend) ScanPrefix(_ context.Context, hexPrefix string, limit int) ([]
 	return refs, err
 }
 
+// PutCursor stores a durable cursor.
+func (b *Backend) PutCursor(_ context.Context, key string, cursor physical.Cursor) error {
+	if b.closed.Load() {
+		return physical.ErrClosed
+	}
+	k := []byte(prefixCursor + key)
+	val := make([]byte, 16)
+	binary.BigEndian.PutUint64(val[0:8], uint64(cursor.Timestamp)) //nolint:gosec
+	binary.BigEndian.PutUint64(val[8:16], uint64(cursor.Sequence)) //nolint:gosec
+	return b.db.Update(func(txn *badger.Txn) error {
+		return txn.Set(k, val)
+	})
+}
+
+// GetCursor retrieves a durable cursor.
+func (b *Backend) GetCursor(_ context.Context, key string) (physical.Cursor, error) {
+	if b.closed.Load() {
+		return physical.Cursor{}, physical.ErrClosed
+	}
+	k := []byte(prefixCursor + key)
+	var cursor physical.Cursor
+	err := b.db.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(k)
+		if err == badger.ErrKeyNotFound {
+			return physical.ErrCursorNotFound
+		}
+		if err != nil {
+			return err
+		}
+		return item.Value(func(val []byte) error {
+			if len(val) < 16 {
+				return fmt.Errorf("cursor value too short: %d", len(val))
+			}
+			cursor.Timestamp = int64(binary.BigEndian.Uint64(val[0:8]))
+			cursor.Sequence = int64(binary.BigEndian.Uint64(val[8:16]))
+			return nil
+		})
+	})
+	return cursor, err
+}
+
+// DeleteCursor removes a durable cursor.
+func (b *Backend) DeleteCursor(_ context.Context, key string) error {
+	if b.closed.Load() {
+		return physical.ErrClosed
+	}
+	k := []byte(prefixCursor + key)
+	return b.db.Update(func(txn *badger.Txn) error {
+		err := txn.Delete(k)
+		if err == badger.ErrKeyNotFound {
+			return nil
+		}
+		return err
+	})
+}
+
 // Close closes the BadgerDB database.
 func (b *Backend) Close() error {
 	if b.closed.Swap(true) {
@@ -1459,11 +1530,16 @@ func (b *Backend) Close() error {
 }
 
 // encodeMeta encodes ExpiresAt and Labels into a compact binary format.
+// Dimensions block: 4*int32 + string(affinity_key) = 4*4 + 2 + len(key) = 18+ bytes
+// Layout: persistence(4) + visibility(4) + deliveryMode(4) + pattern(4) + affinity(4) + affinityKeyLen(2) + affinityKey(var)
+const dimBlockFixedSize = 4 + 4 + 4 + 4 + 4 + 2 // 22 bytes without affinity key
+
 func encodeMeta(entry *physical.Entry) []byte {
 	size := 8 + 2
 	for k, v := range entry.Labels {
 		size += 2 + len(k) + 2 + len(v)
 	}
+	size += dimBlockFixedSize + len(entry.AffinityKey)
 	buf := make([]byte, size)
 	binary.BigEndian.PutUint64(buf[0:8], uint64(entry.ExpiresAt)) //nolint:gosec
 	binary.BigEndian.PutUint16(buf[8:10], uint16(len(entry.Labels)))
@@ -1478,41 +1554,93 @@ func encodeMeta(entry *physical.Entry) []byte {
 		copy(buf[off:], v)
 		off += len(v)
 	}
+	// Dimensions block
+	binary.BigEndian.PutUint32(buf[off:off+4], uint32(entry.Persistence))
+	off += 4
+	binary.BigEndian.PutUint32(buf[off:off+4], uint32(entry.Visibility))
+	off += 4
+	binary.BigEndian.PutUint32(buf[off:off+4], uint32(entry.DeliveryMode))
+	off += 4
+	binary.BigEndian.PutUint32(buf[off:off+4], uint32(entry.Pattern))
+	off += 4
+	binary.BigEndian.PutUint32(buf[off:off+4], uint32(entry.Affinity))
+	off += 4
+	binary.BigEndian.PutUint16(buf[off:off+2], uint16(len(entry.AffinityKey)))
+	off += 2
+	copy(buf[off:], entry.AffinityKey)
 	return buf
 }
 
+type decodedMeta struct {
+	ExpiresAt    int64
+	Labels       map[string]string
+	Persistence  int32
+	Visibility   int32
+	DeliveryMode int32
+	Pattern      int32
+	Affinity     int32
+	AffinityKey  string
+}
+
 func decodeMeta(data []byte) (expiresAt int64, labels map[string]string, err error) {
-	if len(data) < 10 {
-		return 0, nil, fmt.Errorf("meta too short: %d", len(data))
+	dm, err := decodeMetaFull(data)
+	if err != nil {
+		return 0, nil, err
 	}
-	expiresAt = int64(binary.BigEndian.Uint64(data[0:8]))
+	return dm.ExpiresAt, dm.Labels, nil
+}
+
+func decodeMetaFull(data []byte) (*decodedMeta, error) {
+	if len(data) < 10 {
+		return nil, fmt.Errorf("meta too short: %d", len(data))
+	}
+	dm := &decodedMeta{}
+	dm.ExpiresAt = int64(binary.BigEndian.Uint64(data[0:8]))
 	count := int(binary.BigEndian.Uint16(data[8:10]))
-	labels = make(map[string]string, count)
+	dm.Labels = make(map[string]string, count)
 	off := 10
 	for i := 0; i < count; i++ {
 		if off+2 > len(data) {
-			return 0, nil, fmt.Errorf("meta truncated at label %d key length", i)
+			return nil, fmt.Errorf("meta truncated at label %d key length", i)
 		}
 		kl := int(binary.BigEndian.Uint16(data[off : off+2]))
 		off += 2
 		if off+kl > len(data) {
-			return 0, nil, fmt.Errorf("meta truncated at label %d key", i)
+			return nil, fmt.Errorf("meta truncated at label %d key", i)
 		}
 		k := string(data[off : off+kl])
 		off += kl
 		if off+2 > len(data) {
-			return 0, nil, fmt.Errorf("meta truncated at label %d value length", i)
+			return nil, fmt.Errorf("meta truncated at label %d value length", i)
 		}
 		vl := int(binary.BigEndian.Uint16(data[off : off+2]))
 		off += 2
 		if off+vl > len(data) {
-			return 0, nil, fmt.Errorf("meta truncated at label %d value", i)
+			return nil, fmt.Errorf("meta truncated at label %d value", i)
 		}
 		v := string(data[off : off+vl])
 		off += vl
-		labels[k] = v
+		dm.Labels[k] = v
 	}
-	return expiresAt, labels, nil
+	// Decode dimensions block if present (backwards compat: old entries lack it).
+	if off+dimBlockFixedSize <= len(data) {
+		dm.Persistence = int32(binary.BigEndian.Uint32(data[off : off+4]))
+		off += 4
+		dm.Visibility = int32(binary.BigEndian.Uint32(data[off : off+4]))
+		off += 4
+		dm.DeliveryMode = int32(binary.BigEndian.Uint32(data[off : off+4]))
+		off += 4
+		dm.Pattern = int32(binary.BigEndian.Uint32(data[off : off+4]))
+		off += 4
+		dm.Affinity = int32(binary.BigEndian.Uint32(data[off : off+4]))
+		off += 4
+		akl := int(binary.BigEndian.Uint16(data[off : off+2]))
+		off += 2
+		if off+akl <= len(data) {
+			dm.AffinityKey = string(data[off : off+akl])
+		}
+	}
+	return dm, nil
 }
 
 func decodeMetaExpiresAt(data []byte) (int64, error) {
@@ -1523,11 +1651,21 @@ func decodeMetaExpiresAt(data []byte) (int64, error) {
 }
 
 func entryFromMetaBytes(suffix string, data []byte) (*physical.Entry, error) {
-	expiresAt, labels, err := decodeMeta(data)
+	dm, err := decodeMetaFull(data)
 	if err != nil {
 		return nil, err
 	}
-	return entryFromSuffix(suffix, expiresAt, labels)
+	entry, err := entryFromSuffix(suffix, dm.ExpiresAt, dm.Labels)
+	if err != nil {
+		return nil, err
+	}
+	entry.Persistence = dm.Persistence
+	entry.Visibility = dm.Visibility
+	entry.DeliveryMode = dm.DeliveryMode
+	entry.Pattern = dm.Pattern
+	entry.Affinity = dm.Affinity
+	entry.AffinityKey = dm.AffinityKey
+	return entry, nil
 }
 
 func matchesMetaFilter(expiresAt int64, labels map[string]string, opts *physical.QueryOptions, now int64) bool {

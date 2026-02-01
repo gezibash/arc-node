@@ -12,7 +12,7 @@ import (
 
 	"github.com/dgraph-io/badger/v4"
 
-	"github.com/gezibash/arc/pkg/reference"
+	"github.com/gezibash/arc/v2/pkg/reference"
 
 	"github.com/gezibash/arc-node/internal/blobstore/physical"
 	"github.com/gezibash/arc-node/internal/storage"

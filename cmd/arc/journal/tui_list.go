@@ -13,7 +13,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/gezibash/arc-node/cmd/arc/tui"
 	"github.com/gezibash/arc-node/pkg/journal"
-	"github.com/gezibash/arc/pkg/reference"
+	"github.com/gezibash/arc/v2/pkg/reference"
 )
 
 // entryItem wraps a journal entry as a list.Item.

@@ -6,7 +6,7 @@ import (
 	"errors"
 	"io"
 
-	"github.com/gezibash/arc/pkg/identity"
+	"github.com/gezibash/arc/v2/pkg/identity"
 	"golang.org/x/crypto/nacl/secretbox"
 )
 

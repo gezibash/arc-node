@@ -9,9 +9,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/gezibash/arc/pkg/identity"
-	"github.com/gezibash/arc/pkg/message"
-	"github.com/gezibash/arc/pkg/reference"
+	"github.com/gezibash/arc/v2/pkg/identity"
+	"github.com/gezibash/arc/v2/pkg/message"
+	"github.com/gezibash/arc/v2/pkg/reference"
 	"github.com/spf13/cobra"
 )
 

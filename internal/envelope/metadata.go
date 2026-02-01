@@ -7,24 +7,27 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gezibash/arc/pkg/identity"
+	nodev1 "github.com/gezibash/arc-node/api/arc/node/v1"
+	"github.com/gezibash/arc/v2/pkg/identity"
 	"google.golang.org/grpc"
 	grpcmd "google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
-	keyFromBin      = "arc-from-bin"
-	keyToBin        = "arc-to-bin"
-	keyTimestamp    = "arc-timestamp"
-	keySignatureBin = "arc-signature-bin"
-	keyContentType  = "arc-content-type"
-	keyOriginBin    = "arc-origin-bin"
-	keyHopCount     = "arc-hop-count"
-	keyMetaPrefix   = "arc-meta-"
+	keyFromBin       = "arc-from-bin"
+	keyToBin         = "arc-to-bin"
+	keyTimestamp     = "arc-timestamp"
+	keySignatureBin  = "arc-signature-bin"
+	keyContentType   = "arc-content-type"
+	keyOriginBin     = "arc-origin-bin"
+	keyHopCount      = "arc-hop-count"
+	keyMetaPrefix    = "arc-meta-"
+	keyDimensionsBin = "arc-dimensions-bin"
 )
 
 // Extract pulls envelope fields from incoming gRPC metadata.
-func Extract(md grpcmd.MD) (from, to, origin identity.PublicKey, ts int64, sig identity.Signature, contentType string, hopCount int, meta map[string]string, err error) {
+func Extract(md grpcmd.MD) (from, to, origin identity.PublicKey, ts int64, sig identity.Signature, contentType string, hopCount int, meta map[string]string, dims *nodev1.Dimensions, err error) {
 	from, err = extractPubKey(md, keyFromBin)
 	if err != nil {
 		return
@@ -73,6 +76,8 @@ func Extract(md grpcmd.MD) (from, to, origin identity.PublicKey, ts int64, sig i
 		}
 	}
 
+	dims = extractDimensions(md)
+
 	return
 }
 
@@ -90,6 +95,12 @@ func Inject(ctx context.Context, env *Envelope, sig identity.Signature) {
 
 	for k, v := range env.Metadata {
 		md.Append(keyMetaPrefix+k, v)
+	}
+
+	if env.Dimensions != nil {
+		if b, err := proto.Marshal(env.Dimensions); err == nil {
+			md.Append(keyDimensionsBin, string(b))
+		}
 	}
 
 	_ = grpc.SetTrailer(ctx, md)
@@ -111,12 +122,30 @@ func InjectOutgoing(ctx context.Context, env *Envelope, sig identity.Signature) 
 		md.Append(keyMetaPrefix+k, v)
 	}
 
+	if env.Dimensions != nil {
+		if b, err := proto.Marshal(env.Dimensions); err == nil {
+			md.Append(keyDimensionsBin, string(b))
+		}
+	}
+
 	return grpcmd.NewOutgoingContext(ctx, md)
 }
 
 // ExtractTrailing pulls envelope fields from trailing gRPC response metadata.
-func ExtractTrailing(md grpcmd.MD) (from, to, origin identity.PublicKey, ts int64, sig identity.Signature, contentType string, hopCount int, meta map[string]string, err error) {
+func ExtractTrailing(md grpcmd.MD) (from, to, origin identity.PublicKey, ts int64, sig identity.Signature, contentType string, hopCount int, meta map[string]string, dims *nodev1.Dimensions, err error) {
 	return Extract(md)
+}
+
+func extractDimensions(md grpcmd.MD) *nodev1.Dimensions {
+	v := firstVal(md, keyDimensionsBin)
+	if v == "" {
+		return &nodev1.Dimensions{}
+	}
+	dims := &nodev1.Dimensions{}
+	if err := proto.Unmarshal([]byte(v), dims); err != nil {
+		return &nodev1.Dimensions{}
+	}
+	return dims
 }
 
 func extractPubKey(md grpcmd.MD, key string) (identity.PublicKey, error) {

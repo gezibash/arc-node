@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
 
 	nodev1 "github.com/gezibash/arc-node/api/arc/node/v1"
 	"github.com/gezibash/arc-node/internal/blobstore"
@@ -11,8 +13,9 @@ import (
 	"github.com/gezibash/arc-node/internal/indexstore"
 	"github.com/gezibash/arc-node/internal/indexstore/physical"
 	"github.com/gezibash/arc-node/internal/observability"
-	"github.com/gezibash/arc/pkg/message"
-	"github.com/gezibash/arc/pkg/reference"
+	"github.com/gezibash/arc/v2/pkg/identity"
+	"github.com/gezibash/arc/v2/pkg/message"
+	"github.com/gezibash/arc/v2/pkg/reference"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -24,264 +27,193 @@ type nodeService struct {
 	metrics     *observability.Metrics
 	federator   *federationManager
 	subscribers *subscriberTracker
+	visCheck    func(entry *physical.Entry, callerKey [32]byte) bool
+	groupCache  *groupCache
+	adminKey    identity.PublicKey
 }
 
-func (s *nodeService) PutContent(ctx context.Context, req *nodev1.PutContentRequest) (*nodev1.PutContentResponse, error) {
-	ref, err := s.blobs.Store(ctx, req.Data)
+func (s *nodeService) doPut(ctx context.Context, data []byte) (reference.Reference, error) {
+	ref, err := s.blobs.Store(ctx, data)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "store content: %v", err)
+		return reference.Reference{}, fmt.Errorf("store content: %w", err)
 	}
-	return &nodev1.PutContentResponse{Reference: ref[:]}, nil
+	return ref, nil
 }
 
-func (s *nodeService) GetContent(ctx context.Context, req *nodev1.GetContentRequest) (*nodev1.GetContentResponse, error) {
-	ref, err := referenceFromBytes(req.Reference)
-	if err != nil {
-		return nil, err
-	}
+func (s *nodeService) doGet(ctx context.Context, ref reference.Reference) ([]byte, error) {
 	data, err := s.blobs.Fetch(ctx, ref)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "fetch content: %v", err)
+		return nil, fmt.Errorf("fetch content: %w", err)
 	}
-	return &nodev1.GetContentResponse{Data: data}, nil
+	return data, nil
 }
 
-func (s *nodeService) SendMessage(ctx context.Context, req *nodev1.SendMessageRequest) (*nodev1.SendMessageResponse, error) {
-	if len(req.Message) == 0 {
-		return nil, status.Error(codes.InvalidArgument, "message required")
+func (s *nodeService) doPublish(ctx context.Context, msgBytes []byte, labels map[string]string, dims *nodev1.Dimensions) (reference.Reference, error) {
+	if len(msgBytes) == 0 {
+		return reference.Reference{}, fmt.Errorf("message required")
 	}
 
-	// Deserialize canonical bytes
-	msg, err := message.FromCanonicalBytes(req.Message)
+	msg, err := message.FromCanonicalBytes(msgBytes)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "parse message: %v", err)
+		return reference.Reference{}, fmt.Errorf("parse message: %w", err)
 	}
 
-	// Verify signature using arc protocol
 	ok, err := message.Verify(msg)
 	if err != nil || !ok {
-		return nil, status.Error(codes.InvalidArgument, "invalid signature")
+		return reference.Reference{}, fmt.Errorf("invalid signature")
 	}
 
-	// Verify the envelope signer matches the message author.
 	if caller, hasCaller := envelope.GetCaller(ctx); hasCaller {
 		if caller.PublicKey != msg.From {
-			return nil, status.Error(codes.PermissionDenied, "envelope signer does not match message author")
+			return reference.Reference{}, fmt.Errorf("envelope signer does not match message author")
 		}
 	}
 
-	// Compute message reference
 	msgRef, err := message.Ref(msg)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "compute reference: %v", err)
+		return reference.Reference{}, fmt.Errorf("compute reference: %w", err)
 	}
 
-	// Build labels
-	labels := make(map[string]string)
-	for k, v := range req.Labels {
-		labels[k] = v
+	merged := make(map[string]string)
+	for k, v := range labels {
+		merged[k] = v
 	}
-	labels["from"] = reference.Hex(reference.Reference(msg.From))
-	labels["to"] = reference.Hex(reference.Reference(msg.To))
-	labels["content"] = reference.Hex(msg.Content)
+	merged["from"] = reference.Hex(reference.Reference(msg.From))
+	merged["to"] = reference.Hex(reference.Reference(msg.To))
+	merged["content"] = reference.Hex(msg.Content)
 	if msg.ContentType != "" {
-		labels["contentType"] = msg.ContentType
+		merged["contentType"] = msg.ContentType
 	}
 
 	entry := &physical.Entry{
 		Ref:       msgRef,
-		Labels:    labels,
+		Labels:    merged,
 		Timestamp: msg.Timestamp,
 	}
 
-	if err := s.index.Index(ctx, entry); err != nil {
-		return nil, status.Errorf(codes.Internal, "index message: %v", err)
+	// Default to durable.
+	entry.Persistence = 1
+	if dims != nil {
+		entry.Persistence = int32(dims.Persistence)
+		entry.DeliveryMode = int32(dims.Delivery)
+		entry.Visibility = int32(dims.Visibility)
+		entry.Pattern = int32(dims.Pattern)
+		entry.Affinity = int32(dims.Affinity)
+		entry.AffinityKey = dims.AffinityKey
+		entry.Ordering = int32(dims.Ordering)
+		entry.DedupMode = int32(dims.Dedup)
+		entry.IdempotencyKey = dims.IdempotencyKey
+		entry.DeliveryComplete = int32(dims.Complete)
+		entry.CompleteN = dims.CompleteN
+		entry.Priority = int32(dims.Priority)
+		entry.MaxRedelivery = int32(dims.MaxRedelivery)
+		entry.AckTimeoutMs = dims.AckTimeoutMs
+		entry.Correlation = dims.Correlation
+		if dims.TtlMs > 0 {
+			entry.ExpiresAt = time.Now().UnixMilli() + dims.TtlMs
+		}
+	} else if caller, hasDims := envelope.GetCaller(ctx); hasDims && caller.Dimensions != nil {
+		d := caller.Dimensions
+		entry.Persistence = int32(d.Persistence)
+		entry.DeliveryMode = int32(d.Delivery)
+		entry.Visibility = int32(d.Visibility)
+		entry.Pattern = int32(d.Pattern)
+		entry.Affinity = int32(d.Affinity)
+		entry.AffinityKey = d.AffinityKey
+		entry.Ordering = int32(d.Ordering)
+		entry.DedupMode = int32(d.Dedup)
+		entry.IdempotencyKey = d.IdempotencyKey
+		entry.DeliveryComplete = int32(d.Complete)
+		entry.CompleteN = d.CompleteN
+		entry.Priority = int32(d.Priority)
+		entry.MaxRedelivery = int32(d.MaxRedelivery)
+		entry.AckTimeoutMs = d.AckTimeoutMs
+		entry.Correlation = d.Correlation
+		if d.TtlMs > 0 {
+			entry.ExpiresAt = time.Now().UnixMilli() + d.TtlMs
+		}
 	}
 
-	return &nodev1.SendMessageResponse{Reference: msgRef[:]}, nil
+	// Store correlation as a queryable label.
+	if entry.Correlation != "" {
+		entry.Labels["_correlation"] = entry.Correlation
+	}
+
+	if err := s.index.Index(ctx, entry); err != nil {
+		return reference.Reference{}, fmt.Errorf("index message: %w", err)
+	}
+
+	return msgRef, nil
 }
 
-func (s *nodeService) QueryMessages(ctx context.Context, req *nodev1.QueryMessagesRequest) (*nodev1.QueryMessagesResponse, error) {
-	opts := &indexstore.QueryOptions{
-		Expression: req.Expression,
-		Labels:     req.Labels,
-		Limit:      int(req.Limit),
-		Cursor:     req.Cursor,
-		Descending: req.Order == nodev1.Order_ORDER_DESCENDING,
+func publishErrToStatus(err error) error {
+	msg := err.Error()
+	switch {
+	case msg == "message required", strings.Contains(msg, "parse message"), msg == "invalid signature":
+		return status.Error(codes.InvalidArgument, msg)
+	case strings.Contains(msg, "envelope signer"):
+		return status.Error(codes.PermissionDenied, msg)
+	default:
+		return status.Errorf(codes.Internal, "%v", err)
 	}
+}
 
+func (s *nodeService) doQuery(ctx context.Context, opts *indexstore.QueryOptions) (*indexstore.QueryResult, error) {
 	result, err := s.index.Query(ctx, opts)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "query: %v", err)
+		return nil, err
 	}
 
-	entries := make([]*nodev1.IndexEntry, len(result.Entries))
-	for i, e := range result.Entries {
-		entries[i] = &nodev1.IndexEntry{
-			Reference: e.Ref[:],
-			Labels:    e.Labels,
-			Timestamp: e.Timestamp,
+	// Post-filter by visibility using caller's public key.
+	var callerKey [32]byte
+	if caller, ok := envelope.GetCaller(ctx); ok {
+		callerKey = caller.PublicKey
+	}
+	filtered := result.Entries[:0]
+	for _, e := range result.Entries {
+		if s.visCheck(e, callerKey) {
+			filtered = append(filtered, e)
 		}
 	}
-
-	return &nodev1.QueryMessagesResponse{
-		Entries:    entries,
-		NextCursor: result.NextCursor,
-		HasMore:    result.HasMore,
-	}, nil
+	result.Entries = filtered
+	return result, nil
 }
 
-func (s *nodeService) SubscribeMessages(req *nodev1.SubscribeMessagesRequest, stream nodev1.NodeService_SubscribeMessagesServer) error {
-	// Build combined expression from labels and expression
-	expr := req.Expression
-	if expr == "" {
-		expr = "true"
-	}
-
-	// Add label constraints to expression
-	for k, v := range req.Labels {
-		expr = fmt.Sprintf(`%s && "%s" in labels && labels["%s"] == "%s"`, expr, k, k, v)
-	}
-
-	sub, err := s.index.Subscribe(stream.Context(), expr)
-	if err != nil {
-		return status.Errorf(codes.Internal, "subscribe: %v", err)
-	}
-	defer sub.Cancel()
-
-	// Track this subscriber.
-	var tracker *subscriber
-	if s.subscribers != nil {
-		var pubKey [32]byte
-		if caller, ok := envelope.GetCaller(stream.Context()); ok {
-			pubKey = caller.PublicKey
-		}
-		tracker = s.subscribers.Add(pubKey, req.Labels, req.Expression)
-		defer s.subscribers.Remove(tracker)
-	}
-
-	for {
-		select {
-		case <-stream.Context().Done():
-			return nil
-		case entry, ok := <-sub.Entries():
-			if !ok {
-				if err := sub.Err(); err != nil {
-					return status.Errorf(codes.Internal, "subscription error: %v", err)
-				}
-				return nil
-			}
-			resp := &nodev1.SubscribeMessagesResponse{
-				Entry: &nodev1.IndexEntry{
-					Reference: entry.Ref[:],
-					Labels:    entry.Labels,
-					Timestamp: entry.Timestamp,
-				},
-			}
-			if err := stream.Send(resp); err != nil {
-				return err
-			}
-			if tracker != nil {
-				tracker.entriesSent.Add(1)
-			}
-		}
-	}
-}
-
-func (s *nodeService) Federate(ctx context.Context, req *nodev1.FederateRequest) (*nodev1.FederateResponse, error) {
-	if req.Peer == "" {
-		return nil, status.Error(codes.InvalidArgument, "peer required")
-	}
-	if s.federator == nil {
-		return nil, status.Error(codes.FailedPrecondition, "federation unavailable")
-	}
-
-	peer := normalizePeerAddr(req.Peer)
-	started, err := s.federator.Start(peer, req.Labels)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "start federation: %v", err)
-	}
-
-	if started {
-		return &nodev1.FederateResponse{
-			Status:  "ok",
-			Message: fmt.Sprintf("federating with %s", peer),
-		}, nil
-	}
-
-	return &nodev1.FederateResponse{
-		Status:  "already_federating",
-		Message: fmt.Sprintf("already federating with %s", peer),
-	}, nil
-}
-
-func (s *nodeService) ListPeers(ctx context.Context, req *nodev1.ListPeersRequest) (*nodev1.ListPeersResponse, error) {
-	var peers []*nodev1.PeerInfo
-
-	// Outbound: peers we are federating from.
-	for _, info := range s.federator.List() {
-		peers = append(peers, &nodev1.PeerInfo{
-			Address:           info.Address,
-			Labels:            info.Labels,
-			BytesReceived:     info.BytesReceived,
-			EntriesReplicated: info.EntriesReplicated,
-			StartedAt:         info.StartedAt.UnixMilli(),
-			Direction:         nodev1.PeerDirection_PEER_DIRECTION_OUTBOUND,
-		})
-	}
-
-	// Inbound: subscribers pulling from us.
-	if s.subscribers != nil {
-		for _, info := range s.subscribers.List() {
-			peers = append(peers, &nodev1.PeerInfo{
-				PublicKey:   info.PublicKey[:],
-				Labels:      info.Labels,
-				EntriesSent: info.EntriesSent,
-				StartedAt:   info.StartedAt.UnixMilli(),
-				Direction:   nodev1.PeerDirection_PEER_DIRECTION_INBOUND,
-			})
-		}
-	}
-
-	return &nodev1.ListPeersResponse{Peers: peers}, nil
-}
-
-func (s *nodeService) ResolveGet(ctx context.Context, req *nodev1.ResolveGetRequest) (*nodev1.ResolveGetResponse, error) {
-	if req.Prefix == "" {
+func (s *nodeService) doResolveGet(ctx context.Context, prefix string) (*nodev1.ResolveGetResponseFrame, error) {
+	if prefix == "" {
 		return nil, status.Error(codes.InvalidArgument, "prefix required")
 	}
 
 	// Try blob store first.
-	ref, err := s.blobs.ResolvePrefix(ctx, req.Prefix)
+	ref, err := s.blobs.ResolvePrefix(ctx, prefix)
 	if err == nil {
 		data, fetchErr := s.blobs.Fetch(ctx, ref)
 		if fetchErr != nil {
 			return nil, status.Errorf(codes.Internal, "fetch blob: %v", fetchErr)
 		}
-		return &nodev1.ResolveGetResponse{
-			Kind:      nodev1.ResolveGetResponse_KIND_BLOB,
+		return &nodev1.ResolveGetResponseFrame{
+			Kind:      nodev1.ResolveGetResponseFrame_KIND_BLOB,
 			Reference: ref[:],
 			Data:      data,
 		}, nil
 	}
 
-	// If blob prefix was ambiguous or too short, return immediately.
 	if errors.Is(err, blobstore.ErrAmbiguousPrefix) {
-		return nil, status.Errorf(codes.FailedPrecondition, "prefix %q matches multiple blobs", req.Prefix)
+		return nil, status.Errorf(codes.FailedPrecondition, "prefix %q matches multiple blobs", prefix)
 	}
 	if errors.Is(err, blobstore.ErrPrefixTooShort) {
 		return nil, status.Errorf(codes.InvalidArgument, "prefix too short (minimum 4 characters)")
 	}
 
 	// Blob not found — try index store.
-	ref, indexErr := s.index.ResolvePrefix(ctx, req.Prefix)
+	ref, indexErr := s.index.ResolvePrefix(ctx, prefix)
 	if indexErr == nil {
 		entry, getErr := s.index.Get(ctx, ref)
 		if getErr != nil {
 			return nil, status.Errorf(codes.Internal, "get index entry: %v", getErr)
 		}
-		return &nodev1.ResolveGetResponse{
-			Kind:      nodev1.ResolveGetResponse_KIND_MESSAGE,
+		return &nodev1.ResolveGetResponseFrame{
+			Kind:      nodev1.ResolveGetResponseFrame_KIND_MESSAGE,
 			Reference: ref[:],
 			Labels:    entry.Labels,
 			Timestamp: entry.Timestamp,
@@ -289,10 +221,51 @@ func (s *nodeService) ResolveGet(ctx context.Context, req *nodev1.ResolveGetRequ
 	}
 
 	if errors.Is(indexErr, indexstore.ErrAmbiguousPrefix) {
-		return nil, status.Errorf(codes.FailedPrecondition, "prefix %q matches multiple entries", req.Prefix)
+		return nil, status.Errorf(codes.FailedPrecondition, "prefix %q matches multiple entries", prefix)
 	}
 
-	return nil, status.Errorf(codes.NotFound, "no blob or message matches prefix %q", req.Prefix)
+	return nil, status.Errorf(codes.NotFound, "no blob or message matches prefix %q", prefix)
+}
+
+func entryToProtoDims(e *physical.Entry) *nodev1.Dimensions {
+	dims := &nodev1.Dimensions{
+		Visibility:     nodev1.Visibility(e.Visibility),
+		Persistence:    nodev1.Persistence(e.Persistence),
+		Delivery:       nodev1.Delivery(e.DeliveryMode),
+		Pattern:        nodev1.Pattern(e.Pattern),
+		Affinity:       nodev1.Affinity(e.Affinity),
+		AffinityKey:    e.AffinityKey,
+		Ordering:       nodev1.Ordering(e.Ordering),
+		Dedup:          nodev1.Dedup(e.DedupMode),
+		IdempotencyKey: e.IdempotencyKey,
+		Complete:       nodev1.DeliveryComplete(e.DeliveryComplete),
+		CompleteN:      e.CompleteN,
+		Priority:       int32(e.Priority),
+		MaxRedelivery:  int32(e.MaxRedelivery),
+		AckTimeoutMs:   e.AckTimeoutMs,
+		Correlation:    e.Correlation,
+	}
+	if e.ExpiresAt > 0 && e.Timestamp > 0 {
+		dims.TtlMs = e.ExpiresAt - e.Timestamp
+	}
+	return dims
+}
+
+func entryToProto(e *physical.Entry) *nodev1.IndexEntry {
+	return &nodev1.IndexEntry{
+		Reference:  e.Ref[:],
+		Labels:     e.Labels,
+		Timestamp:  e.Timestamp,
+		Dimensions: entryToProtoDims(e),
+	}
+}
+
+func entriesToProto(entries []*physical.Entry) []*nodev1.IndexEntry {
+	out := make([]*nodev1.IndexEntry, len(entries))
+	for i, e := range entries {
+		out[i] = entryToProto(e)
+	}
+	return out
 }
 
 func referenceFromBytes(b []byte) (reference.Reference, error) {
@@ -302,4 +275,13 @@ func referenceFromBytes(b []byte) (reference.Reference, error) {
 	var ref reference.Reference
 	copy(ref[:], b)
 	return ref, nil
+}
+
+// isAdmin checks whether the caller in context matches the admin key.
+func (s *nodeService) isAdmin(ctx context.Context) bool {
+	caller, ok := envelope.GetCaller(ctx)
+	if !ok {
+		return false
+	}
+	return caller.PublicKey == s.adminKey
 }

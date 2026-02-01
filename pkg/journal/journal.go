@@ -7,8 +7,8 @@ import (
 	"fmt"
 
 	"github.com/gezibash/arc-node/pkg/client"
-	"github.com/gezibash/arc/pkg/identity"
-	"github.com/gezibash/arc/pkg/reference"
+	"github.com/gezibash/arc/v2/pkg/identity"
+	"github.com/gezibash/arc/v2/pkg/reference"
 )
 
 const contentType = "application/x-arc-journal+encrypted"

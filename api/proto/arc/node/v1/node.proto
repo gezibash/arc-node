@@ -5,19 +5,8 @@ package arc.node.v1;
 option go_package = "github.com/gezibash/arc-node/api/arc/node/v1;nodev1";
 
 service NodeService {
-  // Content storage
-  rpc PutContent(PutContentRequest) returns (PutContentResponse);
-  rpc GetContent(GetContentRequest) returns (GetContentResponse);
-
-  // Messaging
-  rpc SendMessage(SendMessageRequest) returns (SendMessageResponse);
-  rpc QueryMessages(QueryMessagesRequest) returns (QueryMessagesResponse);
-  rpc SubscribeMessages(SubscribeMessagesRequest) returns (stream SubscribeMessagesResponse);
-  rpc Federate(FederateRequest) returns (FederateResponse);
-  rpc ListPeers(ListPeersRequest) returns (ListPeersResponse);
-
-  // Unified get: resolve prefix against blobs and messages
-  rpc ResolveGet(ResolveGetRequest) returns (ResolveGetResponse);
+  // Multiplexed bidirectional stream — the only transport.
+  rpc Channel(stream ClientFrame) returns (stream ServerFrame);
 }
 
 // Enums
@@ -27,88 +16,231 @@ enum Order {
   ORDER_DESCENDING = 1;
 }
 
-// Content
+// Dimension enums — zero values match current implicit behavior.
 
-message PutContentRequest {
+enum Pattern {
+  PATTERN_FIRE_AND_FORGET = 0;
+  PATTERN_REQ_REP = 1;
+  PATTERN_PUB_SUB = 2;
+  PATTERN_QUEUE = 3;
+  PATTERN_STORE_ONLY = 4;
+}
+
+enum Delivery {
+  DELIVERY_AT_MOST_ONCE = 0;
+  DELIVERY_AT_LEAST_ONCE = 1;
+  DELIVERY_EXACTLY_ONCE = 2;
+}
+
+enum Persistence {
+  PERSISTENCE_EPHEMERAL = 0;
+  PERSISTENCE_DURABLE = 1;
+}
+
+enum Visibility {
+  VISIBILITY_PUBLIC = 0;
+  VISIBILITY_PRIVATE = 1;
+  VISIBILITY_LABEL_SCOPED = 2;
+  VISIBILITY_FEDERATED = 3;
+}
+
+enum Ordering {
+  ORDERING_UNORDERED = 0;
+  ORDERING_FIFO = 1;
+  ORDERING_CAUSAL = 2;
+}
+
+enum Affinity {
+  AFFINITY_NONE = 0;
+  AFFINITY_SENDER = 1;
+  AFFINITY_KEY = 2;
+}
+
+enum Dedup {
+  DEDUP_NONE = 0;
+  DEDUP_REF = 1;
+  DEDUP_IDEMPOTENCY_KEY = 2;
+}
+
+enum DeliveryComplete {
+  DELIVERY_COMPLETE_NONE = 0;
+  DELIVERY_COMPLETE_N_OF_M = 1;
+  DELIVERY_COMPLETE_ALL = 2;
+}
+
+// Dimensions bundles all dimension enums and associated fields.
+message Dimensions {
+  Pattern pattern = 1;
+  Delivery delivery = 2;
+  Persistence persistence = 3;
+  Visibility visibility = 4;
+  Ordering ordering = 5;
+  Affinity affinity = 6;
+  Dedup dedup = 7;
+  DeliveryComplete complete = 8;
+
+  int64 ttl_ms = 10;
+  int32 complete_n = 11;
+  string affinity_key = 12;
+  string idempotency_key = 13;
+  int32 priority = 14;
+  int32 max_redelivery = 15;
+  int64 ack_timeout_ms = 16;
+  string correlation = 17;
+}
+
+// Client frames
+
+message PublishFrame {
+  bytes message = 1;
+  map<string, string> labels = 2;
+  Dimensions dimensions = 3;
+}
+
+message SubscribeFrame {
+  string channel = 1;
+  map<string, string> labels = 2;
+  string expression = 3;
+  Dimensions dimensions = 4;
+  string subscription_id = 5;
+  string cursor = 6;
+}
+
+message UnsubscribeFrame {
+  string channel = 1;
+}
+
+message AckFrame {
+  bytes reference = 1;
+  int64 delivery_id = 2;
+}
+
+message SeekFrame {
+  string channel = 1;
+  int64 timestamp = 2;
+  string cursor = 3;
+}
+
+message QueryFrame {
+  map<string, string> labels = 1;
+  string expression = 2;
+  int32 limit = 3;
+  string cursor = 4;
+  Order order = 5;
+}
+
+message PutFrame {
   bytes data = 1;
   string content_type = 2;
 }
 
-message PutContentResponse {
-  bytes reference = 1; // 32-byte SHA-256 hash
+message GetFrame {
+  bytes reference = 1;
 }
 
-message GetContentRequest {
-  bytes reference = 1; // 32-byte SHA-256 hash
+message FederateFrame {
+  string peer = 1;
+  map<string, string> labels = 2;
 }
 
-message GetContentResponse {
+message ListPeersFrame {}
+
+message ResolveGetFrame {
+  string prefix = 1;
+}
+
+// Server frames
+
+message DeliveryFrame {
+  string channel = 1;
+  IndexEntry entry = 2;
+  int64 delivery_id = 3;
+}
+
+message ReceiptFrame {
+  bytes reference = 1;
+  bool ok = 2;
+  string error = 3;
+}
+
+message ResponseFrame {
   bytes data = 1;
   string content_type = 2;
+  repeated IndexEntry entries = 3;
+  string next_cursor = 4;
+  bool has_more = 5;
 }
 
-// Messaging
+message ErrorFrame {
+  int32 code = 1;
+  string message = 2;
+}
+
+message FederateResponseFrame {
+  string status = 1;
+  string message = 2;
+}
+
+message ListPeersResponseFrame {
+  repeated PeerInfo peers = 1;
+}
+
+message ResolveGetResponseFrame {
+  enum Kind {
+    KIND_BLOB = 0;
+    KIND_MESSAGE = 1;
+  }
+  Kind kind = 1;
+  bytes reference = 2;
+  bytes data = 3;
+  map<string, string> labels = 4;
+  int64 timestamp = 5;
+}
+
+// Oneofs wrapping client and server frames.
+
+message ClientFrame {
+  uint64 request_id = 15;
+  oneof frame {
+    PublishFrame publish = 1;
+    SubscribeFrame subscribe = 2;
+    UnsubscribeFrame unsubscribe = 3;
+    AckFrame ack = 4;
+    SeekFrame seek = 5;
+    QueryFrame query = 6;
+    PutFrame put = 7;
+    GetFrame get = 8;
+    FederateFrame federate = 9;
+    ListPeersFrame list_peers = 10;
+    ResolveGetFrame resolve_get = 11;
+  }
+}
+
+message ServerFrame {
+  uint64 request_id = 15;
+  oneof frame {
+    DeliveryFrame delivery = 1;
+    ReceiptFrame receipt = 2;
+    ResponseFrame response = 3;
+    ErrorFrame error = 4;
+    FederateResponseFrame federate_response = 5;
+    ListPeersResponseFrame list_peers_response = 6;
+    ResolveGetResponseFrame resolve_get_response = 7;
+  }
+}
+
+// Shared messages
 
 message IndexEntry {
   bytes reference = 1;
   map<string, string> labels = 2;
   int64 timestamp = 3;
+  Dimensions dimensions = 4;
 }
-
-message SendMessageRequest {
-  bytes message = 1; // canonical message bytes (from message.CanonicalBytes)
-  map<string, string> labels = 2; // indexing hints
-}
-
-message SendMessageResponse {
-  bytes reference = 1; // message reference
-}
-
-message QueryMessagesRequest {
-  map<string, string> labels = 1;
-  int32 limit = 2;
-  string expression = 4; // CEL filter
-  string cursor = 5;
-  Order order = 6;
-}
-
-message QueryMessagesResponse {
-  repeated IndexEntry entries = 1;
-  string next_cursor = 2;
-  bool has_more = 3;
-}
-
-message SubscribeMessagesRequest {
-  map<string, string> labels = 1;
-  string expression = 2; // CEL filter
-}
-
-message SubscribeMessagesResponse {
-  IndexEntry entry = 1;
-  // Server-side warning (e.g., "lagging", "disconnecting").
-  // Empty when there is no warning.
-  string warning = 10;
-}
-
-// Federation
-
-message FederateRequest {
-  string peer = 1;
-  map<string, string> labels = 2;
-}
-
-message FederateResponse {
-  string status = 1;
-  string message = 2;
-}
-
-// Peers
-
-message ListPeersRequest {}
 
 enum PeerDirection {
-  PEER_DIRECTION_OUTBOUND = 0; // we subscribe to them
-  PEER_DIRECTION_INBOUND = 1;  // they subscribe to us
+  PEER_DIRECTION_OUTBOUND = 0;
+  PEER_DIRECTION_INBOUND = 1;
 }
 
 message PeerInfo {
@@ -120,26 +252,4 @@ message PeerInfo {
   PeerDirection direction = 6;
   bytes public_key = 7;
   int64 entries_sent = 8;
-}
-
-message ListPeersResponse {
-  repeated PeerInfo peers = 1;
-}
-
-// Unified get
-
-message ResolveGetRequest {
-  string prefix = 1; // hex prefix (minimum 4 characters)
-}
-
-message ResolveGetResponse {
-  enum Kind {
-    KIND_BLOB = 0;
-    KIND_MESSAGE = 1;
-  }
-  Kind kind = 1;
-  bytes reference = 2;               // full 32-byte SHA-256 reference
-  bytes data = 3;                    // blob content (KIND_BLOB only)
-  map<string, string> labels = 4;   // message labels (KIND_MESSAGE only)
-  int64 timestamp = 5;              // message timestamp (KIND_MESSAGE only)
 }

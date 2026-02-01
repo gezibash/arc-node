@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/gezibash/arc-node/pkg/client"
-	"github.com/gezibash/arc/pkg/reference"
+	"github.com/gezibash/arc/v2/pkg/reference"
 	"github.com/spf13/cobra"
 )
 

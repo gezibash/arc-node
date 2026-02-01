@@ -9,7 +9,7 @@ import (
 	"github.com/gezibash/arc-node/internal/keyring"
 	"github.com/gezibash/arc-node/pkg/client"
 	"github.com/gezibash/arc-node/pkg/dm"
-	"github.com/gezibash/arc/pkg/identity"
+	"github.com/gezibash/arc/v2/pkg/identity"
 	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"

@@ -15,7 +15,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/gezibash/arc/pkg/reference"
+	"github.com/gezibash/arc/v2/pkg/reference"
 
 	"github.com/gezibash/arc-node/internal/indexstore/physical"
 	"github.com/gezibash/arc-node/internal/storage"
@@ -64,6 +64,12 @@ CREATE INDEX IF NOT EXISTS idx_entries_expires ON entries(expires_at) WHERE expi
 CREATE INDEX IF NOT EXISTS idx_labels_kv ON labels(key, value);
 CREATE INDEX IF NOT EXISTS idx_labels_kvt ON labels(key, value, timestamp, ref_hex);
 CREATE INDEX IF NOT EXISTS idx_entries_ts_ref ON entries(timestamp, ref_hex);
+
+CREATE TABLE IF NOT EXISTS cursors (
+    key         TEXT PRIMARY KEY,
+    timestamp   INTEGER NOT NULL,
+    sequence    INTEGER NOT NULL
+);
 `
 
 // NewFactory creates a new SQLite backend from a configuration map.
@@ -619,6 +625,50 @@ func (b *Backend) Stats(ctx context.Context) (*physical.Stats, error) {
 		SizeBytes:   sizeBytes,
 		BackendType: "sqlite",
 	}, nil
+}
+
+// PutCursor stores a durable cursor.
+func (b *Backend) PutCursor(ctx context.Context, key string, cursor physical.Cursor) error {
+	if b.closed.Load() {
+		return physical.ErrClosed
+	}
+	_, err := b.db.ExecContext(ctx,
+		`INSERT OR REPLACE INTO cursors (key, timestamp, sequence) VALUES (?, ?, ?)`,
+		key, cursor.Timestamp, cursor.Sequence)
+	if err != nil {
+		return fmt.Errorf("sqlite put cursor: %w", err)
+	}
+	return nil
+}
+
+// GetCursor retrieves a durable cursor.
+func (b *Backend) GetCursor(ctx context.Context, key string) (physical.Cursor, error) {
+	if b.closed.Load() {
+		return physical.Cursor{}, physical.ErrClosed
+	}
+	var cursor physical.Cursor
+	err := b.db.QueryRowContext(ctx,
+		`SELECT timestamp, sequence FROM cursors WHERE key = ?`, key,
+	).Scan(&cursor.Timestamp, &cursor.Sequence)
+	if err == sql.ErrNoRows {
+		return physical.Cursor{}, physical.ErrCursorNotFound
+	}
+	if err != nil {
+		return physical.Cursor{}, fmt.Errorf("sqlite get cursor: %w", err)
+	}
+	return cursor, nil
+}
+
+// DeleteCursor removes a durable cursor.
+func (b *Backend) DeleteCursor(ctx context.Context, key string) error {
+	if b.closed.Load() {
+		return physical.ErrClosed
+	}
+	_, err := b.db.ExecContext(ctx, `DELETE FROM cursors WHERE key = ?`, key)
+	if err != nil {
+		return fmt.Errorf("sqlite delete cursor: %w", err)
+	}
+	return nil
 }
 
 // Close closes the SQLite database.

@@ -8,21 +8,20 @@ import (
 
 	nodev1 "github.com/gezibash/arc-node/api/arc/node/v1"
 	"github.com/gezibash/arc-node/internal/envelope"
-	"github.com/gezibash/arc/pkg/identity"
-	"github.com/gezibash/arc/pkg/message"
-	"github.com/gezibash/arc/pkg/reference"
+	"github.com/gezibash/arc/v2/pkg/identity"
+	"github.com/gezibash/arc/v2/pkg/message"
+	"github.com/gezibash/arc/v2/pkg/reference"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	grpcmd "google.golang.org/grpc/metadata"
-	"google.golang.org/protobuf/proto"
 )
-
-var marshalOpts = proto.MarshalOptions{Deterministic: true}
 
 type Client struct {
 	conn     *grpc.ClientConn
 	stub     nodev1.NodeServiceClient
 	nodeInfo *nodeInfoState
+
+	muxMu sync.Mutex
+	mux   *channelMux
 }
 
 type clientConfig struct {
@@ -89,7 +88,6 @@ func Dial(addr string, opts ...Option) (*Client, error) {
 
 	if cfg.kp != nil {
 		dialOpts = append(dialOpts,
-			grpc.WithUnaryInterceptor(clientUnaryInterceptor(cfg.kp, infoState)),
 			grpc.WithStreamInterceptor(clientStreamInterceptor(cfg.kp, infoState)),
 		)
 	}
@@ -105,88 +103,18 @@ func Dial(addr string, opts ...Option) (*Client, error) {
 	}, nil
 }
 
-func clientUnaryInterceptor(kp *identity.Keypair, infoState *nodeInfoState) grpc.UnaryClientInterceptor {
-	return func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, callOpts ...grpc.CallOption) error {
-		// Marshal request to get payload bytes.
-		protoMsg, ok := req.(proto.Message)
-		if !ok {
-			return invoker(ctx, method, req, reply, cc, callOpts...)
-		}
-		payload, err := marshalOpts.Marshal(protoMsg)
-		if err != nil {
-			return invoker(ctx, method, req, reply, cc, callOpts...)
-		}
-
-		// Seal the outgoing envelope.
-		var nodeKey identity.PublicKey
-		if infoState != nil {
-			if info, ok := infoState.get(); ok {
-				nodeKey = info.PublicKey
-			}
-		}
-		env, err := envelope.Seal(kp, nodeKey, payload, method, kp.PublicKey(), 0, nil)
-		if err != nil {
-			return fmt.Errorf("seal envelope: %w", err)
-		}
-
-		ctx = envelope.InjectOutgoing(ctx, env, *env.Message.Signature)
-
-		// Capture trailing metadata for response verification.
-		var trailer grpcmd.MD
-		callOpts = append(callOpts, grpc.Trailer(&trailer))
-
-		err = invoker(ctx, method, req, reply, cc, callOpts...)
-		if err != nil {
-			return err
-		}
-
-		if len(trailer) > 0 {
-			respFrom, _, _, respTs, respSig, respCT, _, meta, extractErr := envelope.ExtractTrailing(trailer)
-			if extractErr == nil && infoState != nil {
-				info := NodeInfo{
-					PublicKey:      respFrom,
-					ServiceName:    meta["service_name"],
-					ServiceVersion: meta["service_version"],
-				}
-				if existing, ok := infoState.get(); ok {
-					if info.ServiceName == "" {
-						info.ServiceName = existing.ServiceName
-					}
-					if info.ServiceVersion == "" {
-						info.ServiceVersion = existing.ServiceVersion
-					}
-				}
-				infoState.set(info)
-			}
-
-			if extractErr == nil {
-				if respProto, ok := reply.(proto.Message); ok {
-					if respPayload, marshalErr := marshalOpts.Marshal(respProto); marshalErr == nil {
-						_, verifyErr := envelope.Open(respFrom, kp.PublicKey(), respPayload, respCT, respTs, respSig, respFrom, 0, nil)
-						if verifyErr != nil {
-							return fmt.Errorf("verify response envelope: %w", verifyErr)
-						}
-					}
-				}
-			}
-		}
-
-		return nil
-	}
-}
-
 func clientStreamInterceptor(kp *identity.Keypair, infoState *nodeInfoState) grpc.StreamClientInterceptor {
 	return func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, callOpts ...grpc.CallOption) (grpc.ClientStream, error) {
-		if infoState == nil {
-			return nil, fmt.Errorf("node public key unavailable")
-		}
-		info, ok := infoState.get()
-		if !ok || info.PublicKey == (identity.PublicKey{}) {
-			return nil, fmt.Errorf("node public key unknown; call Ping first")
+		var toKey identity.PublicKey
+		if infoState != nil {
+			if info, ok := infoState.get(); ok {
+				toKey = info.PublicKey
+			}
 		}
 
 		// Seal envelope with empty payload for stream open.
-		env, err := envelope.Seal(kp, info.PublicKey, []byte{}, method, kp.PublicKey(), 0, nil)
+		// toKey may be zero if node key is unknown (e.g. federation bootstrap).
+		env, err := envelope.Seal(kp, toKey, []byte{}, method, kp.PublicKey(), 0, nil, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE})
 		if err != nil {
 			return nil, fmt.Errorf("seal stream envelope: %w", err)
 		}
@@ -197,7 +125,27 @@ func clientStreamInterceptor(kp *identity.Keypair, infoState *nodeInfoState) grp
 	}
 }
 
+func (c *Client) channel(ctx context.Context) (*channelMux, error) {
+	_ = ctx
+	c.muxMu.Lock()
+	defer c.muxMu.Unlock()
+
+	if c.mux != nil {
+		return c.mux, nil
+	}
+
+	stream, err := c.stub.Channel(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	c.mux = newChannelMux(stream)
+	return c.mux, nil
+}
+
 func (c *Client) Close() error {
+	if c.mux != nil {
+		c.mux.close()
+	}
 	return c.conn.Close()
 }
 
@@ -246,37 +194,57 @@ type GetResult struct {
 }
 
 func (c *Client) ResolveGet(ctx context.Context, prefix string) (*GetResult, error) {
-	resp, err := c.stub.ResolveGet(ctx, &nodev1.ResolveGetRequest{Prefix: prefix})
+	mux, err := c.channel(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("channel unavailable: %w", err)
+	}
+	resp, err := mux.roundTrip(ctx, &nodev1.ClientFrame{
+		Frame: &nodev1.ClientFrame_ResolveGet{ResolveGet: &nodev1.ResolveGetFrame{Prefix: prefix}},
+	})
 	if err != nil {
 		return nil, err
 	}
+	rf := resp.Frame.(*nodev1.ServerFrame_ResolveGetResponse).ResolveGetResponse
 	var ref reference.Reference
-	copy(ref[:], resp.Reference)
+	copy(ref[:], rf.Reference)
 	return &GetResult{
-		Kind:      GetKind(resp.Kind),
+		Kind:      GetKind(rf.Kind),
 		Ref:       ref,
-		Data:      resp.Data,
-		Labels:    resp.Labels,
-		Timestamp: resp.Timestamp,
+		Data:      rf.Data,
+		Labels:    rf.Labels,
+		Timestamp: rf.Timestamp,
 	}, nil
 }
 
 func (c *Client) PutContent(ctx context.Context, data []byte) (reference.Reference, error) {
-	resp, err := c.stub.PutContent(ctx, &nodev1.PutContentRequest{Data: data})
+	mux, err := c.channel(ctx)
+	if err != nil {
+		return reference.Reference{}, fmt.Errorf("channel unavailable: %w", err)
+	}
+	resp, err := mux.roundTrip(ctx, &nodev1.ClientFrame{
+		Frame: &nodev1.ClientFrame_Put{Put: &nodev1.PutFrame{Data: data}},
+	})
 	if err != nil {
 		return reference.Reference{}, err
 	}
+	receipt := resp.Frame.(*nodev1.ServerFrame_Receipt).Receipt
 	var ref reference.Reference
-	copy(ref[:], resp.Reference)
+	copy(ref[:], receipt.Reference)
 	return ref, nil
 }
 
 func (c *Client) GetContent(ctx context.Context, ref reference.Reference) ([]byte, error) {
-	resp, err := c.stub.GetContent(ctx, &nodev1.GetContentRequest{Reference: ref[:]})
+	mux, err := c.channel(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("channel unavailable: %w", err)
+	}
+	resp, err := mux.roundTrip(ctx, &nodev1.ClientFrame{
+		Frame: &nodev1.ClientFrame_Get{Get: &nodev1.GetFrame{Reference: ref[:]}},
+	})
 	if err != nil {
 		return nil, err
 	}
-	return resp.Data, nil
+	return resp.Frame.(*nodev1.ServerFrame_Response).Response.Data, nil
 }
 
 func (c *Client) SendMessage(ctx context.Context, msg message.Message, labels map[string]string) (reference.Reference, error) {
@@ -284,15 +252,48 @@ func (c *Client) SendMessage(ctx context.Context, msg message.Message, labels ma
 	if err != nil {
 		return reference.Reference{}, fmt.Errorf("canonical bytes: %w", err)
 	}
-	resp, err := c.stub.SendMessage(ctx, &nodev1.SendMessageRequest{
-		Message: canonical,
-		Labels:  labels,
+	mux, err := c.channel(ctx)
+	if err != nil {
+		return reference.Reference{}, fmt.Errorf("channel unavailable: %w", err)
+	}
+	resp, err := mux.roundTrip(ctx, &nodev1.ClientFrame{
+		Frame: &nodev1.ClientFrame_Publish{Publish: &nodev1.PublishFrame{
+			Message: canonical,
+			Labels:  labels,
+		}},
 	})
 	if err != nil {
 		return reference.Reference{}, err
 	}
+	receipt := resp.Frame.(*nodev1.ServerFrame_Receipt).Receipt
 	var ref reference.Reference
-	copy(ref[:], resp.Reference)
+	copy(ref[:], receipt.Reference)
+	return ref, nil
+}
+
+// SendMessageWithDimensions sends a signed message with explicit dimensions.
+func (c *Client) SendMessageWithDimensions(ctx context.Context, msg message.Message, labels map[string]string, dims *nodev1.Dimensions) (reference.Reference, error) {
+	canonical, err := message.CanonicalBytes(msg)
+	if err != nil {
+		return reference.Reference{}, fmt.Errorf("canonical bytes: %w", err)
+	}
+	mux, err := c.channel(ctx)
+	if err != nil {
+		return reference.Reference{}, fmt.Errorf("channel unavailable: %w", err)
+	}
+	resp, err := mux.roundTrip(ctx, &nodev1.ClientFrame{
+		Frame: &nodev1.ClientFrame_Publish{Publish: &nodev1.PublishFrame{
+			Message:    canonical,
+			Labels:     labels,
+			Dimensions: dims,
+		}},
+	})
+	if err != nil {
+		return reference.Reference{}, err
+	}
+	receipt := resp.Frame.(*nodev1.ServerFrame_Receipt).Receipt
+	var ref reference.Reference
+	copy(ref[:], receipt.Reference)
 	return ref, nil
 }
 
@@ -311,9 +312,30 @@ type QueryResult struct {
 }
 
 type Entry struct {
-	Ref       reference.Reference
-	Labels    map[string]string
-	Timestamp int64
+	Ref        reference.Reference
+	Labels     map[string]string
+	Timestamp  int64
+	Dimensions *EntryDimensions // nil if not provided by server
+}
+
+// EntryDimensions carries dimension metadata from the originating node.
+type EntryDimensions struct {
+	Visibility       int32
+	Persistence      int32
+	Delivery         int32
+	Pattern          int32
+	Affinity         int32
+	AffinityKey      string
+	TtlMs            int64
+	Ordering         int32
+	DedupMode        int32
+	IdempotencyKey   string
+	DeliveryComplete int32
+	CompleteN        int32
+	Priority         int32
+	MaxRedelivery    int32
+	AckTimeoutMs     int64
+	Correlation      string
 }
 
 func (c *Client) QueryMessages(ctx context.Context, opts *QueryOptions) (*QueryResult, error) {
@@ -321,39 +343,105 @@ func (c *Client) QueryMessages(ctx context.Context, opts *QueryOptions) (*QueryR
 	if opts.Descending {
 		order = nodev1.Order_ORDER_DESCENDING
 	}
-	resp, err := c.stub.QueryMessages(ctx, &nodev1.QueryMessagesRequest{
-		Labels:     opts.Labels,
-		Limit:      int32(opts.Limit),
-		Expression: opts.Expression,
-		Cursor:     opts.Cursor,
-		Order:      order,
+	mux, err := c.channel(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("channel unavailable: %w", err)
+	}
+	resp, err := mux.roundTrip(ctx, &nodev1.ClientFrame{
+		Frame: &nodev1.ClientFrame_Query{Query: &nodev1.QueryFrame{
+			Labels:     opts.Labels,
+			Limit:      int32(opts.Limit),
+			Expression: opts.Expression,
+			Cursor:     opts.Cursor,
+			Order:      order,
+		}},
 	})
 	if err != nil {
 		return nil, err
 	}
-	entries := make([]*Entry, len(resp.Entries))
-	for i, e := range resp.Entries {
-		var ref reference.Reference
-		copy(ref[:], e.Reference)
-		entries[i] = &Entry{
-			Ref:       ref,
-			Labels:    e.Labels,
-			Timestamp: e.Timestamp,
-		}
+	rf := resp.Frame.(*nodev1.ServerFrame_Response).Response
+	return protoToQueryResult(rf.Entries, rf.NextCursor, rf.HasMore), nil
+}
+
+func protoToEntryDimensions(d *nodev1.Dimensions) *EntryDimensions {
+	if d == nil {
+		return nil
+	}
+	return &EntryDimensions{
+		Visibility:       int32(d.Visibility),
+		Persistence:      int32(d.Persistence),
+		Delivery:         int32(d.Delivery),
+		Pattern:          int32(d.Pattern),
+		Affinity:         int32(d.Affinity),
+		AffinityKey:      d.AffinityKey,
+		TtlMs:            d.TtlMs,
+		Ordering:         int32(d.Ordering),
+		DedupMode:        int32(d.Dedup),
+		IdempotencyKey:   d.IdempotencyKey,
+		DeliveryComplete: int32(d.Complete),
+		CompleteN:        d.CompleteN,
+		Priority:         int32(d.Priority),
+		MaxRedelivery:    int32(d.MaxRedelivery),
+		AckTimeoutMs:     d.AckTimeoutMs,
+		Correlation:      d.Correlation,
+	}
+}
+
+func protoToEntry(e *nodev1.IndexEntry) *Entry {
+	var ref reference.Reference
+	copy(ref[:], e.Reference)
+	return &Entry{
+		Ref:        ref,
+		Labels:     e.Labels,
+		Timestamp:  e.Timestamp,
+		Dimensions: protoToEntryDimensions(e.Dimensions),
+	}
+}
+
+func protoToQueryResult(entries []*nodev1.IndexEntry, nextCursor string, hasMore bool) *QueryResult {
+	out := make([]*Entry, len(entries))
+	for i, e := range entries {
+		out[i] = protoToEntry(e)
 	}
 	return &QueryResult{
-		Entries:    entries,
-		NextCursor: resp.NextCursor,
-		HasMore:    resp.HasMore,
-	}, nil
+		Entries:    out,
+		NextCursor: nextCursor,
+		HasMore:    hasMore,
+	}
 }
 
 func (c *Client) SubscribeMessages(ctx context.Context, expression string, labels map[string]string) (<-chan *Entry, <-chan error, error) {
-	stream, err := c.stub.SubscribeMessages(ctx, &nodev1.SubscribeMessagesRequest{
-		Labels:     labels,
-		Expression: expression,
+	mux, err := c.channel(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("channel unavailable: %w", err)
+	}
+	return c.subscribeViaChannel(ctx, mux, expression, labels)
+}
+
+// SubscribeChannel subscribes using only the Channel bidi stream.
+func (c *Client) SubscribeChannel(ctx context.Context, expression string, labels map[string]string) (<-chan *Entry, <-chan error, error) {
+	mux, err := c.channel(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("channel unavailable: %w", err)
+	}
+	return c.subscribeViaChannel(ctx, mux, expression, labels)
+}
+
+func (c *Client) subscribeViaChannel(ctx context.Context, mux *channelMux, expression string, labels map[string]string) (<-chan *Entry, <-chan error, error) {
+	channel := "default"
+
+	// Register delivery channel before sending subscribe frame.
+	deliveries := mux.subscribe(channel)
+
+	_, err := mux.roundTrip(ctx, &nodev1.ClientFrame{
+		Frame: &nodev1.ClientFrame_Subscribe{Subscribe: &nodev1.SubscribeFrame{
+			Channel:    channel,
+			Labels:     labels,
+			Expression: expression,
+		}},
 	})
 	if err != nil {
+		mux.unsubscribe(channel)
 		return nil, nil, err
 	}
 
@@ -364,22 +452,32 @@ func (c *Client) SubscribeMessages(ctx context.Context, expression string, label
 		defer close(entries)
 		defer close(errs)
 		for {
-			resp, err := stream.Recv()
-			if err != nil {
-				errs <- err
-				return
-			}
-			e := resp.Entry
-			var ref reference.Reference
-			copy(ref[:], e.Reference)
 			select {
-			case entries <- &Entry{
-				Ref:       ref,
-				Labels:    e.Labels,
-				Timestamp: e.Timestamp,
-			}:
 			case <-ctx.Done():
+				// Send unsubscribe (best effort).
+				mux.roundTrip(context.Background(), &nodev1.ClientFrame{
+					Frame: &nodev1.ClientFrame_Unsubscribe{Unsubscribe: &nodev1.UnsubscribeFrame{Channel: channel}},
+				})
+				mux.unsubscribe(channel)
 				return
+			case df, ok := <-deliveries:
+				if !ok {
+					return
+				}
+				entry := protoToEntry(df.Entry)
+				select {
+				case entries <- entry:
+					// Auto-ack if delivery_id is set (at-least-once).
+					if df.DeliveryId > 0 {
+						mux.send(&nodev1.ClientFrame{
+							Frame: &nodev1.ClientFrame_Ack{Ack: &nodev1.AckFrame{
+								DeliveryId: df.DeliveryId,
+							}},
+						})
+					}
+				case <-ctx.Done():
+					return
+				}
 			}
 		}
 	}()
@@ -408,12 +506,19 @@ type PeerInfo struct {
 }
 
 func (c *Client) ListPeers(ctx context.Context) ([]PeerInfo, error) {
-	resp, err := c.stub.ListPeers(ctx, &nodev1.ListPeersRequest{})
+	mux, err := c.channel(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("channel unavailable: %w", err)
+	}
+	resp, err := mux.roundTrip(ctx, &nodev1.ClientFrame{
+		Frame: &nodev1.ClientFrame_ListPeers{ListPeers: &nodev1.ListPeersFrame{}},
+	})
 	if err != nil {
 		return nil, err
 	}
-	peers := make([]PeerInfo, len(resp.Peers))
-	for i, p := range resp.Peers {
+	lpr := resp.Frame.(*nodev1.ServerFrame_ListPeersResponse).ListPeersResponse
+	peers := make([]PeerInfo, len(lpr.Peers))
+	for i, p := range lpr.Peers {
 		peers[i] = PeerInfo{
 			Address:           p.Address,
 			Labels:            p.Labels,
@@ -434,15 +539,37 @@ type FederateResult struct {
 }
 
 func (c *Client) Federate(ctx context.Context, peer string, labels map[string]string) (*FederateResult, error) {
-	resp, err := c.stub.Federate(ctx, &nodev1.FederateRequest{
-		Peer:   peer,
-		Labels: labels,
+	mux, err := c.channel(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("channel unavailable: %w", err)
+	}
+	resp, err := mux.roundTrip(ctx, &nodev1.ClientFrame{
+		Frame: &nodev1.ClientFrame_Federate{Federate: &nodev1.FederateFrame{
+			Peer:   peer,
+			Labels: labels,
+		}},
 	})
 	if err != nil {
 		return nil, err
 	}
+	fr := resp.Frame.(*nodev1.ServerFrame_FederateResponse).FederateResponse
 	return &FederateResult{
-		Status:  resp.Status,
-		Message: resp.Message,
+		Status:  fr.Status,
+		Message: fr.Message,
 	}, nil
+}
+
+// Seek repositions an active subscription's cursor.
+func (c *Client) Seek(ctx context.Context, channel string, timestamp int64) error {
+	mux, err := c.channel(ctx)
+	if err != nil {
+		return fmt.Errorf("channel unavailable: %w", err)
+	}
+	_, err = mux.roundTrip(ctx, &nodev1.ClientFrame{
+		Frame: &nodev1.ClientFrame_Seek{Seek: &nodev1.SeekFrame{
+			Channel:   channel,
+			Timestamp: timestamp,
+		}},
+	})
+	return err
 }

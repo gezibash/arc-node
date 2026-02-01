@@ -10,7 +10,7 @@ import (
 	"sort"
 
 	"filippo.io/edwards25519"
-	"github.com/gezibash/arc/pkg/identity"
+	"github.com/gezibash/arc/v2/pkg/identity"
 	"golang.org/x/crypto/curve25519"
 	"golang.org/x/crypto/nacl/secretbox"
 )

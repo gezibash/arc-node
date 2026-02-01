@@ -1,6 +1,6 @@
 package journal
 
-import "github.com/gezibash/arc/pkg/reference"
+import "github.com/gezibash/arc/v2/pkg/reference"
 
 // Entry represents a journal entry.
 type Entry struct {

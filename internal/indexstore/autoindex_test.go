@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/gezibash/arc/pkg/reference"
+	"github.com/gezibash/arc/v2/pkg/reference"
 
 	"github.com/gezibash/arc-node/internal/indexstore/physical"
 	badgerbackend "github.com/gezibash/arc-node/internal/indexstore/physical/badger"
@@ -35,9 +35,10 @@ func TestAutoIndexer(t *testing.T) {
 		data := []byte(fmt.Sprintf("entry-%d", i))
 		ref := reference.Compute(data)
 		err := store.Index(ctx, &physical.Entry{
-			Ref:       ref,
-			Labels:    map[string]string{"app": "journal", "user": "alice"},
-			Timestamp: int64(1000 + i),
+			Ref:         ref,
+			Labels:      map[string]string{"app": "journal", "user": "alice"},
+			Timestamp:   int64(1000 + i),
+			Persistence: 1,
 		})
 		if err != nil {
 			t.Fatal(err)

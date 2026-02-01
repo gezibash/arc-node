@@ -8,7 +8,7 @@ import (
 	"os"
 
 	"github.com/gezibash/arc-node/cmd/arc/render"
-	"github.com/gezibash/arc/pkg/identity"
+	"github.com/gezibash/arc/v2/pkg/identity"
 )
 
 // readInput reads data from the first positional arg — treated as a file path

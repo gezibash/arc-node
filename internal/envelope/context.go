@@ -3,17 +3,19 @@ package envelope
 import (
 	"context"
 
-	"github.com/gezibash/arc/pkg/identity"
+	nodev1 "github.com/gezibash/arc-node/api/arc/node/v1"
+	"github.com/gezibash/arc/v2/pkg/identity"
 )
 
 type ctxKey struct{}
 
 // Caller holds the authenticated identity extracted from an envelope.
 type Caller struct {
-	PublicKey identity.PublicKey
+	PublicKey  identity.PublicKey
 	Origin    identity.PublicKey
 	HopCount  int
 	Metadata  map[string]string
+	Dimensions *nodev1.Dimensions
 }
 
 // WithCaller stores a Caller in the context.

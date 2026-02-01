@@ -1,6 +1,6 @@
 package dm
 
-import "github.com/gezibash/arc/pkg/reference"
+import "github.com/gezibash/arc/v2/pkg/reference"
 
 // Message represents a decrypted DM.
 type Message struct {

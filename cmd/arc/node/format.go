@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/gezibash/arc-node/pkg/client"
-	"github.com/gezibash/arc/pkg/reference"
+	"github.com/gezibash/arc/v2/pkg/reference"
 )
 
 var hexPattern = regexp.MustCompile(`^[0-9a-fA-F]{64}$`)

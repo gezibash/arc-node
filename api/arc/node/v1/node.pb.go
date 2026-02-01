@@ -67,11 +67,409 @@ func (Order) EnumDescriptor() ([]byte, []int) {
 	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{0}
 }
 
+type Pattern int32
+
+const (
+	Pattern_PATTERN_FIRE_AND_FORGET Pattern = 0
+	Pattern_PATTERN_REQ_REP         Pattern = 1
+	Pattern_PATTERN_PUB_SUB         Pattern = 2
+	Pattern_PATTERN_QUEUE           Pattern = 3
+	Pattern_PATTERN_STORE_ONLY      Pattern = 4
+)
+
+// Enum value maps for Pattern.
+var (
+	Pattern_name = map[int32]string{
+		0: "PATTERN_FIRE_AND_FORGET",
+		1: "PATTERN_REQ_REP",
+		2: "PATTERN_PUB_SUB",
+		3: "PATTERN_QUEUE",
+		4: "PATTERN_STORE_ONLY",
+	}
+	Pattern_value = map[string]int32{
+		"PATTERN_FIRE_AND_FORGET": 0,
+		"PATTERN_REQ_REP":         1,
+		"PATTERN_PUB_SUB":         2,
+		"PATTERN_QUEUE":           3,
+		"PATTERN_STORE_ONLY":      4,
+	}
+)
+
+func (x Pattern) Enum() *Pattern {
+	p := new(Pattern)
+	*p = x
+	return p
+}
+
+func (x Pattern) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (Pattern) Descriptor() protoreflect.EnumDescriptor {
+	return file_arc_node_v1_node_proto_enumTypes[1].Descriptor()
+}
+
+func (Pattern) Type() protoreflect.EnumType {
+	return &file_arc_node_v1_node_proto_enumTypes[1]
+}
+
+func (x Pattern) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use Pattern.Descriptor instead.
+func (Pattern) EnumDescriptor() ([]byte, []int) {
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{1}
+}
+
+type Delivery int32
+
+const (
+	Delivery_DELIVERY_AT_MOST_ONCE  Delivery = 0
+	Delivery_DELIVERY_AT_LEAST_ONCE Delivery = 1
+	Delivery_DELIVERY_EXACTLY_ONCE  Delivery = 2
+)
+
+// Enum value maps for Delivery.
+var (
+	Delivery_name = map[int32]string{
+		0: "DELIVERY_AT_MOST_ONCE",
+		1: "DELIVERY_AT_LEAST_ONCE",
+		2: "DELIVERY_EXACTLY_ONCE",
+	}
+	Delivery_value = map[string]int32{
+		"DELIVERY_AT_MOST_ONCE":  0,
+		"DELIVERY_AT_LEAST_ONCE": 1,
+		"DELIVERY_EXACTLY_ONCE":  2,
+	}
+)
+
+func (x Delivery) Enum() *Delivery {
+	p := new(Delivery)
+	*p = x
+	return p
+}
+
+func (x Delivery) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (Delivery) Descriptor() protoreflect.EnumDescriptor {
+	return file_arc_node_v1_node_proto_enumTypes[2].Descriptor()
+}
+
+func (Delivery) Type() protoreflect.EnumType {
+	return &file_arc_node_v1_node_proto_enumTypes[2]
+}
+
+func (x Delivery) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use Delivery.Descriptor instead.
+func (Delivery) EnumDescriptor() ([]byte, []int) {
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{2}
+}
+
+type Persistence int32
+
+const (
+	Persistence_PERSISTENCE_EPHEMERAL Persistence = 0
+	Persistence_PERSISTENCE_DURABLE   Persistence = 1
+)
+
+// Enum value maps for Persistence.
+var (
+	Persistence_name = map[int32]string{
+		0: "PERSISTENCE_EPHEMERAL",
+		1: "PERSISTENCE_DURABLE",
+	}
+	Persistence_value = map[string]int32{
+		"PERSISTENCE_EPHEMERAL": 0,
+		"PERSISTENCE_DURABLE":   1,
+	}
+)
+
+func (x Persistence) Enum() *Persistence {
+	p := new(Persistence)
+	*p = x
+	return p
+}
+
+func (x Persistence) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (Persistence) Descriptor() protoreflect.EnumDescriptor {
+	return file_arc_node_v1_node_proto_enumTypes[3].Descriptor()
+}
+
+func (Persistence) Type() protoreflect.EnumType {
+	return &file_arc_node_v1_node_proto_enumTypes[3]
+}
+
+func (x Persistence) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use Persistence.Descriptor instead.
+func (Persistence) EnumDescriptor() ([]byte, []int) {
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{3}
+}
+
+type Visibility int32
+
+const (
+	Visibility_VISIBILITY_PUBLIC       Visibility = 0
+	Visibility_VISIBILITY_PRIVATE      Visibility = 1
+	Visibility_VISIBILITY_LABEL_SCOPED Visibility = 2
+	Visibility_VISIBILITY_FEDERATED    Visibility = 3
+)
+
+// Enum value maps for Visibility.
+var (
+	Visibility_name = map[int32]string{
+		0: "VISIBILITY_PUBLIC",
+		1: "VISIBILITY_PRIVATE",
+		2: "VISIBILITY_LABEL_SCOPED",
+		3: "VISIBILITY_FEDERATED",
+	}
+	Visibility_value = map[string]int32{
+		"VISIBILITY_PUBLIC":       0,
+		"VISIBILITY_PRIVATE":      1,
+		"VISIBILITY_LABEL_SCOPED": 2,
+		"VISIBILITY_FEDERATED":    3,
+	}
+)
+
+func (x Visibility) Enum() *Visibility {
+	p := new(Visibility)
+	*p = x
+	return p
+}
+
+func (x Visibility) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (Visibility) Descriptor() protoreflect.EnumDescriptor {
+	return file_arc_node_v1_node_proto_enumTypes[4].Descriptor()
+}
+
+func (Visibility) Type() protoreflect.EnumType {
+	return &file_arc_node_v1_node_proto_enumTypes[4]
+}
+
+func (x Visibility) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use Visibility.Descriptor instead.
+func (Visibility) EnumDescriptor() ([]byte, []int) {
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{4}
+}
+
+type Ordering int32
+
+const (
+	Ordering_ORDERING_UNORDERED Ordering = 0
+	Ordering_ORDERING_FIFO      Ordering = 1
+	Ordering_ORDERING_CAUSAL    Ordering = 2
+)
+
+// Enum value maps for Ordering.
+var (
+	Ordering_name = map[int32]string{
+		0: "ORDERING_UNORDERED",
+		1: "ORDERING_FIFO",
+		2: "ORDERING_CAUSAL",
+	}
+	Ordering_value = map[string]int32{
+		"ORDERING_UNORDERED": 0,
+		"ORDERING_FIFO":      1,
+		"ORDERING_CAUSAL":    2,
+	}
+)
+
+func (x Ordering) Enum() *Ordering {
+	p := new(Ordering)
+	*p = x
+	return p
+}
+
+func (x Ordering) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (Ordering) Descriptor() protoreflect.EnumDescriptor {
+	return file_arc_node_v1_node_proto_enumTypes[5].Descriptor()
+}
+
+func (Ordering) Type() protoreflect.EnumType {
+	return &file_arc_node_v1_node_proto_enumTypes[5]
+}
+
+func (x Ordering) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use Ordering.Descriptor instead.
+func (Ordering) EnumDescriptor() ([]byte, []int) {
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{5}
+}
+
+type Affinity int32
+
+const (
+	Affinity_AFFINITY_NONE   Affinity = 0
+	Affinity_AFFINITY_SENDER Affinity = 1
+	Affinity_AFFINITY_KEY    Affinity = 2
+)
+
+// Enum value maps for Affinity.
+var (
+	Affinity_name = map[int32]string{
+		0: "AFFINITY_NONE",
+		1: "AFFINITY_SENDER",
+		2: "AFFINITY_KEY",
+	}
+	Affinity_value = map[string]int32{
+		"AFFINITY_NONE":   0,
+		"AFFINITY_SENDER": 1,
+		"AFFINITY_KEY":    2,
+	}
+)
+
+func (x Affinity) Enum() *Affinity {
+	p := new(Affinity)
+	*p = x
+	return p
+}
+
+func (x Affinity) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (Affinity) Descriptor() protoreflect.EnumDescriptor {
+	return file_arc_node_v1_node_proto_enumTypes[6].Descriptor()
+}
+
+func (Affinity) Type() protoreflect.EnumType {
+	return &file_arc_node_v1_node_proto_enumTypes[6]
+}
+
+func (x Affinity) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use Affinity.Descriptor instead.
+func (Affinity) EnumDescriptor() ([]byte, []int) {
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{6}
+}
+
+type Dedup int32
+
+const (
+	Dedup_DEDUP_NONE            Dedup = 0
+	Dedup_DEDUP_REF             Dedup = 1
+	Dedup_DEDUP_IDEMPOTENCY_KEY Dedup = 2
+)
+
+// Enum value maps for Dedup.
+var (
+	Dedup_name = map[int32]string{
+		0: "DEDUP_NONE",
+		1: "DEDUP_REF",
+		2: "DEDUP_IDEMPOTENCY_KEY",
+	}
+	Dedup_value = map[string]int32{
+		"DEDUP_NONE":            0,
+		"DEDUP_REF":             1,
+		"DEDUP_IDEMPOTENCY_KEY": 2,
+	}
+)
+
+func (x Dedup) Enum() *Dedup {
+	p := new(Dedup)
+	*p = x
+	return p
+}
+
+func (x Dedup) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (Dedup) Descriptor() protoreflect.EnumDescriptor {
+	return file_arc_node_v1_node_proto_enumTypes[7].Descriptor()
+}
+
+func (Dedup) Type() protoreflect.EnumType {
+	return &file_arc_node_v1_node_proto_enumTypes[7]
+}
+
+func (x Dedup) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use Dedup.Descriptor instead.
+func (Dedup) EnumDescriptor() ([]byte, []int) {
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{7}
+}
+
+type DeliveryComplete int32
+
+const (
+	DeliveryComplete_DELIVERY_COMPLETE_NONE   DeliveryComplete = 0
+	DeliveryComplete_DELIVERY_COMPLETE_N_OF_M DeliveryComplete = 1
+	DeliveryComplete_DELIVERY_COMPLETE_ALL    DeliveryComplete = 2
+)
+
+// Enum value maps for DeliveryComplete.
+var (
+	DeliveryComplete_name = map[int32]string{
+		0: "DELIVERY_COMPLETE_NONE",
+		1: "DELIVERY_COMPLETE_N_OF_M",
+		2: "DELIVERY_COMPLETE_ALL",
+	}
+	DeliveryComplete_value = map[string]int32{
+		"DELIVERY_COMPLETE_NONE":   0,
+		"DELIVERY_COMPLETE_N_OF_M": 1,
+		"DELIVERY_COMPLETE_ALL":    2,
+	}
+)
+
+func (x DeliveryComplete) Enum() *DeliveryComplete {
+	p := new(DeliveryComplete)
+	*p = x
+	return p
+}
+
+func (x DeliveryComplete) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (DeliveryComplete) Descriptor() protoreflect.EnumDescriptor {
+	return file_arc_node_v1_node_proto_enumTypes[8].Descriptor()
+}
+
+func (DeliveryComplete) Type() protoreflect.EnumType {
+	return &file_arc_node_v1_node_proto_enumTypes[8]
+}
+
+func (x DeliveryComplete) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use DeliveryComplete.Descriptor instead.
+func (DeliveryComplete) EnumDescriptor() ([]byte, []int) {
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{8}
+}
+
 type PeerDirection int32
 
 const (
-	PeerDirection_PEER_DIRECTION_OUTBOUND PeerDirection = 0 // we subscribe to them
-	PeerDirection_PEER_DIRECTION_INBOUND  PeerDirection = 1 // they subscribe to us
+	PeerDirection_PEER_DIRECTION_OUTBOUND PeerDirection = 0
+	PeerDirection_PEER_DIRECTION_INBOUND  PeerDirection = 1
 )
 
 // Enum value maps for PeerDirection.
@@ -97,11 +495,11 @@ func (x PeerDirection) String() string {
 }
 
 func (PeerDirection) Descriptor() protoreflect.EnumDescriptor {
-	return file_arc_node_v1_node_proto_enumTypes[1].Descriptor()
+	return file_arc_node_v1_node_proto_enumTypes[9].Descriptor()
 }
 
 func (PeerDirection) Type() protoreflect.EnumType {
-	return &file_arc_node_v1_node_proto_enumTypes[1]
+	return &file_arc_node_v1_node_proto_enumTypes[9]
 }
 
 func (x PeerDirection) Number() protoreflect.EnumNumber {
@@ -110,77 +508,92 @@ func (x PeerDirection) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use PeerDirection.Descriptor instead.
 func (PeerDirection) EnumDescriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{1}
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{9}
 }
 
-type ResolveGetResponse_Kind int32
+type ResolveGetResponseFrame_Kind int32
 
 const (
-	ResolveGetResponse_KIND_BLOB    ResolveGetResponse_Kind = 0
-	ResolveGetResponse_KIND_MESSAGE ResolveGetResponse_Kind = 1
+	ResolveGetResponseFrame_KIND_BLOB    ResolveGetResponseFrame_Kind = 0
+	ResolveGetResponseFrame_KIND_MESSAGE ResolveGetResponseFrame_Kind = 1
 )
 
-// Enum value maps for ResolveGetResponse_Kind.
+// Enum value maps for ResolveGetResponseFrame_Kind.
 var (
-	ResolveGetResponse_Kind_name = map[int32]string{
+	ResolveGetResponseFrame_Kind_name = map[int32]string{
 		0: "KIND_BLOB",
 		1: "KIND_MESSAGE",
 	}
-	ResolveGetResponse_Kind_value = map[string]int32{
+	ResolveGetResponseFrame_Kind_value = map[string]int32{
 		"KIND_BLOB":    0,
 		"KIND_MESSAGE": 1,
 	}
 )
 
-func (x ResolveGetResponse_Kind) Enum() *ResolveGetResponse_Kind {
-	p := new(ResolveGetResponse_Kind)
+func (x ResolveGetResponseFrame_Kind) Enum() *ResolveGetResponseFrame_Kind {
+	p := new(ResolveGetResponseFrame_Kind)
 	*p = x
 	return p
 }
 
-func (x ResolveGetResponse_Kind) String() string {
+func (x ResolveGetResponseFrame_Kind) String() string {
 	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
 }
 
-func (ResolveGetResponse_Kind) Descriptor() protoreflect.EnumDescriptor {
-	return file_arc_node_v1_node_proto_enumTypes[2].Descriptor()
+func (ResolveGetResponseFrame_Kind) Descriptor() protoreflect.EnumDescriptor {
+	return file_arc_node_v1_node_proto_enumTypes[10].Descriptor()
 }
 
-func (ResolveGetResponse_Kind) Type() protoreflect.EnumType {
-	return &file_arc_node_v1_node_proto_enumTypes[2]
+func (ResolveGetResponseFrame_Kind) Type() protoreflect.EnumType {
+	return &file_arc_node_v1_node_proto_enumTypes[10]
 }
 
-func (x ResolveGetResponse_Kind) Number() protoreflect.EnumNumber {
+func (x ResolveGetResponseFrame_Kind) Number() protoreflect.EnumNumber {
 	return protoreflect.EnumNumber(x)
 }
 
-// Deprecated: Use ResolveGetResponse_Kind.Descriptor instead.
-func (ResolveGetResponse_Kind) EnumDescriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{17, 0}
+// Deprecated: Use ResolveGetResponseFrame_Kind.Descriptor instead.
+func (ResolveGetResponseFrame_Kind) EnumDescriptor() ([]byte, []int) {
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{18, 0}
 }
 
-type PutContentRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Data          []byte                 `protobuf:"bytes,1,opt,name=data,proto3" json:"data,omitempty"`
-	ContentType   string                 `protobuf:"bytes,2,opt,name=content_type,json=contentType,proto3" json:"content_type,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+// Dimensions bundles all dimension enums and associated fields.
+type Dimensions struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Pattern        Pattern                `protobuf:"varint,1,opt,name=pattern,proto3,enum=arc.node.v1.Pattern" json:"pattern,omitempty"`
+	Delivery       Delivery               `protobuf:"varint,2,opt,name=delivery,proto3,enum=arc.node.v1.Delivery" json:"delivery,omitempty"`
+	Persistence    Persistence            `protobuf:"varint,3,opt,name=persistence,proto3,enum=arc.node.v1.Persistence" json:"persistence,omitempty"`
+	Visibility     Visibility             `protobuf:"varint,4,opt,name=visibility,proto3,enum=arc.node.v1.Visibility" json:"visibility,omitempty"`
+	Ordering       Ordering               `protobuf:"varint,5,opt,name=ordering,proto3,enum=arc.node.v1.Ordering" json:"ordering,omitempty"`
+	Affinity       Affinity               `protobuf:"varint,6,opt,name=affinity,proto3,enum=arc.node.v1.Affinity" json:"affinity,omitempty"`
+	Dedup          Dedup                  `protobuf:"varint,7,opt,name=dedup,proto3,enum=arc.node.v1.Dedup" json:"dedup,omitempty"`
+	Complete       DeliveryComplete       `protobuf:"varint,8,opt,name=complete,proto3,enum=arc.node.v1.DeliveryComplete" json:"complete,omitempty"`
+	TtlMs          int64                  `protobuf:"varint,10,opt,name=ttl_ms,json=ttlMs,proto3" json:"ttl_ms,omitempty"`
+	CompleteN      int32                  `protobuf:"varint,11,opt,name=complete_n,json=completeN,proto3" json:"complete_n,omitempty"`
+	AffinityKey    string                 `protobuf:"bytes,12,opt,name=affinity_key,json=affinityKey,proto3" json:"affinity_key,omitempty"`
+	IdempotencyKey string                 `protobuf:"bytes,13,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	Priority       int32                  `protobuf:"varint,14,opt,name=priority,proto3" json:"priority,omitempty"`
+	MaxRedelivery  int32                  `protobuf:"varint,15,opt,name=max_redelivery,json=maxRedelivery,proto3" json:"max_redelivery,omitempty"`
+	AckTimeoutMs   int64                  `protobuf:"varint,16,opt,name=ack_timeout_ms,json=ackTimeoutMs,proto3" json:"ack_timeout_ms,omitempty"`
+	Correlation    string                 `protobuf:"bytes,17,opt,name=correlation,proto3" json:"correlation,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
-func (x *PutContentRequest) Reset() {
-	*x = PutContentRequest{}
+func (x *Dimensions) Reset() {
+	*x = Dimensions{}
 	mi := &file_arc_node_v1_node_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *PutContentRequest) String() string {
+func (x *Dimensions) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*PutContentRequest) ProtoMessage() {}
+func (*Dimensions) ProtoMessage() {}
 
-func (x *PutContentRequest) ProtoReflect() protoreflect.Message {
+func (x *Dimensions) ProtoReflect() protoreflect.Message {
 	mi := &file_arc_node_v1_node_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -192,46 +605,146 @@ func (x *PutContentRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use PutContentRequest.ProtoReflect.Descriptor instead.
-func (*PutContentRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use Dimensions.ProtoReflect.Descriptor instead.
+func (*Dimensions) Descriptor() ([]byte, []int) {
 	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *PutContentRequest) GetData() []byte {
+func (x *Dimensions) GetPattern() Pattern {
 	if x != nil {
-		return x.Data
+		return x.Pattern
 	}
-	return nil
+	return Pattern_PATTERN_FIRE_AND_FORGET
 }
 
-func (x *PutContentRequest) GetContentType() string {
+func (x *Dimensions) GetDelivery() Delivery {
 	if x != nil {
-		return x.ContentType
+		return x.Delivery
+	}
+	return Delivery_DELIVERY_AT_MOST_ONCE
+}
+
+func (x *Dimensions) GetPersistence() Persistence {
+	if x != nil {
+		return x.Persistence
+	}
+	return Persistence_PERSISTENCE_EPHEMERAL
+}
+
+func (x *Dimensions) GetVisibility() Visibility {
+	if x != nil {
+		return x.Visibility
+	}
+	return Visibility_VISIBILITY_PUBLIC
+}
+
+func (x *Dimensions) GetOrdering() Ordering {
+	if x != nil {
+		return x.Ordering
+	}
+	return Ordering_ORDERING_UNORDERED
+}
+
+func (x *Dimensions) GetAffinity() Affinity {
+	if x != nil {
+		return x.Affinity
+	}
+	return Affinity_AFFINITY_NONE
+}
+
+func (x *Dimensions) GetDedup() Dedup {
+	if x != nil {
+		return x.Dedup
+	}
+	return Dedup_DEDUP_NONE
+}
+
+func (x *Dimensions) GetComplete() DeliveryComplete {
+	if x != nil {
+		return x.Complete
+	}
+	return DeliveryComplete_DELIVERY_COMPLETE_NONE
+}
+
+func (x *Dimensions) GetTtlMs() int64 {
+	if x != nil {
+		return x.TtlMs
+	}
+	return 0
+}
+
+func (x *Dimensions) GetCompleteN() int32 {
+	if x != nil {
+		return x.CompleteN
+	}
+	return 0
+}
+
+func (x *Dimensions) GetAffinityKey() string {
+	if x != nil {
+		return x.AffinityKey
 	}
 	return ""
 }
 
-type PutContentResponse struct {
+func (x *Dimensions) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
+func (x *Dimensions) GetPriority() int32 {
+	if x != nil {
+		return x.Priority
+	}
+	return 0
+}
+
+func (x *Dimensions) GetMaxRedelivery() int32 {
+	if x != nil {
+		return x.MaxRedelivery
+	}
+	return 0
+}
+
+func (x *Dimensions) GetAckTimeoutMs() int64 {
+	if x != nil {
+		return x.AckTimeoutMs
+	}
+	return 0
+}
+
+func (x *Dimensions) GetCorrelation() string {
+	if x != nil {
+		return x.Correlation
+	}
+	return ""
+}
+
+type PublishFrame struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Reference     []byte                 `protobuf:"bytes,1,opt,name=reference,proto3" json:"reference,omitempty"` // 32-byte SHA-256 hash
+	Message       []byte                 `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`
+	Labels        map[string]string      `protobuf:"bytes,2,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Dimensions    *Dimensions            `protobuf:"bytes,3,opt,name=dimensions,proto3" json:"dimensions,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *PutContentResponse) Reset() {
-	*x = PutContentResponse{}
+func (x *PublishFrame) Reset() {
+	*x = PublishFrame{}
 	mi := &file_arc_node_v1_node_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *PutContentResponse) String() string {
+func (x *PublishFrame) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*PutContentResponse) ProtoMessage() {}
+func (*PublishFrame) ProtoMessage() {}
 
-func (x *PutContentResponse) ProtoReflect() protoreflect.Message {
+func (x *PublishFrame) ProtoReflect() protoreflect.Message {
 	mi := &file_arc_node_v1_node_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -243,39 +756,58 @@ func (x *PutContentResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use PutContentResponse.ProtoReflect.Descriptor instead.
-func (*PutContentResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use PublishFrame.ProtoReflect.Descriptor instead.
+func (*PublishFrame) Descriptor() ([]byte, []int) {
 	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *PutContentResponse) GetReference() []byte {
+func (x *PublishFrame) GetMessage() []byte {
 	if x != nil {
-		return x.Reference
+		return x.Message
 	}
 	return nil
 }
 
-type GetContentRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Reference     []byte                 `protobuf:"bytes,1,opt,name=reference,proto3" json:"reference,omitempty"` // 32-byte SHA-256 hash
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+func (x *PublishFrame) GetLabels() map[string]string {
+	if x != nil {
+		return x.Labels
+	}
+	return nil
 }
 
-func (x *GetContentRequest) Reset() {
-	*x = GetContentRequest{}
+func (x *PublishFrame) GetDimensions() *Dimensions {
+	if x != nil {
+		return x.Dimensions
+	}
+	return nil
+}
+
+type SubscribeFrame struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Channel        string                 `protobuf:"bytes,1,opt,name=channel,proto3" json:"channel,omitempty"`
+	Labels         map[string]string      `protobuf:"bytes,2,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Expression     string                 `protobuf:"bytes,3,opt,name=expression,proto3" json:"expression,omitempty"`
+	Dimensions     *Dimensions            `protobuf:"bytes,4,opt,name=dimensions,proto3" json:"dimensions,omitempty"`
+	SubscriptionId string                 `protobuf:"bytes,5,opt,name=subscription_id,json=subscriptionId,proto3" json:"subscription_id,omitempty"`
+	Cursor         string                 `protobuf:"bytes,6,opt,name=cursor,proto3" json:"cursor,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *SubscribeFrame) Reset() {
+	*x = SubscribeFrame{}
 	mi := &file_arc_node_v1_node_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GetContentRequest) String() string {
+func (x *SubscribeFrame) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GetContentRequest) ProtoMessage() {}
+func (*SubscribeFrame) ProtoMessage() {}
 
-func (x *GetContentRequest) ProtoReflect() protoreflect.Message {
+func (x *SubscribeFrame) ProtoReflect() protoreflect.Message {
 	mi := &file_arc_node_v1_node_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -287,19 +819,286 @@ func (x *GetContentRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GetContentRequest.ProtoReflect.Descriptor instead.
-func (*GetContentRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use SubscribeFrame.ProtoReflect.Descriptor instead.
+func (*SubscribeFrame) Descriptor() ([]byte, []int) {
 	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *GetContentRequest) GetReference() []byte {
+func (x *SubscribeFrame) GetChannel() string {
+	if x != nil {
+		return x.Channel
+	}
+	return ""
+}
+
+func (x *SubscribeFrame) GetLabels() map[string]string {
+	if x != nil {
+		return x.Labels
+	}
+	return nil
+}
+
+func (x *SubscribeFrame) GetExpression() string {
+	if x != nil {
+		return x.Expression
+	}
+	return ""
+}
+
+func (x *SubscribeFrame) GetDimensions() *Dimensions {
+	if x != nil {
+		return x.Dimensions
+	}
+	return nil
+}
+
+func (x *SubscribeFrame) GetSubscriptionId() string {
+	if x != nil {
+		return x.SubscriptionId
+	}
+	return ""
+}
+
+func (x *SubscribeFrame) GetCursor() string {
+	if x != nil {
+		return x.Cursor
+	}
+	return ""
+}
+
+type UnsubscribeFrame struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Channel       string                 `protobuf:"bytes,1,opt,name=channel,proto3" json:"channel,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UnsubscribeFrame) Reset() {
+	*x = UnsubscribeFrame{}
+	mi := &file_arc_node_v1_node_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UnsubscribeFrame) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UnsubscribeFrame) ProtoMessage() {}
+
+func (x *UnsubscribeFrame) ProtoReflect() protoreflect.Message {
+	mi := &file_arc_node_v1_node_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UnsubscribeFrame.ProtoReflect.Descriptor instead.
+func (*UnsubscribeFrame) Descriptor() ([]byte, []int) {
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *UnsubscribeFrame) GetChannel() string {
+	if x != nil {
+		return x.Channel
+	}
+	return ""
+}
+
+type AckFrame struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Reference     []byte                 `protobuf:"bytes,1,opt,name=reference,proto3" json:"reference,omitempty"`
+	DeliveryId    int64                  `protobuf:"varint,2,opt,name=delivery_id,json=deliveryId,proto3" json:"delivery_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AckFrame) Reset() {
+	*x = AckFrame{}
+	mi := &file_arc_node_v1_node_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AckFrame) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AckFrame) ProtoMessage() {}
+
+func (x *AckFrame) ProtoReflect() protoreflect.Message {
+	mi := &file_arc_node_v1_node_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AckFrame.ProtoReflect.Descriptor instead.
+func (*AckFrame) Descriptor() ([]byte, []int) {
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *AckFrame) GetReference() []byte {
 	if x != nil {
 		return x.Reference
 	}
 	return nil
 }
 
-type GetContentResponse struct {
+func (x *AckFrame) GetDeliveryId() int64 {
+	if x != nil {
+		return x.DeliveryId
+	}
+	return 0
+}
+
+type SeekFrame struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Channel       string                 `protobuf:"bytes,1,opt,name=channel,proto3" json:"channel,omitempty"`
+	Timestamp     int64                  `protobuf:"varint,2,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	Cursor        string                 `protobuf:"bytes,3,opt,name=cursor,proto3" json:"cursor,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SeekFrame) Reset() {
+	*x = SeekFrame{}
+	mi := &file_arc_node_v1_node_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SeekFrame) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SeekFrame) ProtoMessage() {}
+
+func (x *SeekFrame) ProtoReflect() protoreflect.Message {
+	mi := &file_arc_node_v1_node_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SeekFrame.ProtoReflect.Descriptor instead.
+func (*SeekFrame) Descriptor() ([]byte, []int) {
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *SeekFrame) GetChannel() string {
+	if x != nil {
+		return x.Channel
+	}
+	return ""
+}
+
+func (x *SeekFrame) GetTimestamp() int64 {
+	if x != nil {
+		return x.Timestamp
+	}
+	return 0
+}
+
+func (x *SeekFrame) GetCursor() string {
+	if x != nil {
+		return x.Cursor
+	}
+	return ""
+}
+
+type QueryFrame struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Labels        map[string]string      `protobuf:"bytes,1,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Expression    string                 `protobuf:"bytes,2,opt,name=expression,proto3" json:"expression,omitempty"`
+	Limit         int32                  `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"`
+	Cursor        string                 `protobuf:"bytes,4,opt,name=cursor,proto3" json:"cursor,omitempty"`
+	Order         Order                  `protobuf:"varint,5,opt,name=order,proto3,enum=arc.node.v1.Order" json:"order,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *QueryFrame) Reset() {
+	*x = QueryFrame{}
+	mi := &file_arc_node_v1_node_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *QueryFrame) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*QueryFrame) ProtoMessage() {}
+
+func (x *QueryFrame) ProtoReflect() protoreflect.Message {
+	mi := &file_arc_node_v1_node_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use QueryFrame.ProtoReflect.Descriptor instead.
+func (*QueryFrame) Descriptor() ([]byte, []int) {
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *QueryFrame) GetLabels() map[string]string {
+	if x != nil {
+		return x.Labels
+	}
+	return nil
+}
+
+func (x *QueryFrame) GetExpression() string {
+	if x != nil {
+		return x.Expression
+	}
+	return ""
+}
+
+func (x *QueryFrame) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+func (x *QueryFrame) GetCursor() string {
+	if x != nil {
+		return x.Cursor
+	}
+	return ""
+}
+
+func (x *QueryFrame) GetOrder() Order {
+	if x != nil {
+		return x.Order
+	}
+	return Order_ORDER_ASCENDING
+}
+
+type PutFrame struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Data          []byte                 `protobuf:"bytes,1,opt,name=data,proto3" json:"data,omitempty"`
 	ContentType   string                 `protobuf:"bytes,2,opt,name=content_type,json=contentType,proto3" json:"content_type,omitempty"`
@@ -307,21 +1106,21 @@ type GetContentResponse struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GetContentResponse) Reset() {
-	*x = GetContentResponse{}
-	mi := &file_arc_node_v1_node_proto_msgTypes[3]
+func (x *PutFrame) Reset() {
+	*x = PutFrame{}
+	mi := &file_arc_node_v1_node_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GetContentResponse) String() string {
+func (x *PutFrame) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GetContentResponse) ProtoMessage() {}
+func (*PutFrame) ProtoMessage() {}
 
-func (x *GetContentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_node_v1_node_proto_msgTypes[3]
+func (x *PutFrame) ProtoReflect() protoreflect.Message {
+	mi := &file_arc_node_v1_node_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -332,37 +1131,1038 @@ func (x *GetContentResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GetContentResponse.ProtoReflect.Descriptor instead.
-func (*GetContentResponse) Descriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{3}
+// Deprecated: Use PutFrame.ProtoReflect.Descriptor instead.
+func (*PutFrame) Descriptor() ([]byte, []int) {
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{7}
 }
 
-func (x *GetContentResponse) GetData() []byte {
+func (x *PutFrame) GetData() []byte {
 	if x != nil {
 		return x.Data
 	}
 	return nil
 }
 
-func (x *GetContentResponse) GetContentType() string {
+func (x *PutFrame) GetContentType() string {
 	if x != nil {
 		return x.ContentType
 	}
 	return ""
 }
+
+type GetFrame struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Reference     []byte                 `protobuf:"bytes,1,opt,name=reference,proto3" json:"reference,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetFrame) Reset() {
+	*x = GetFrame{}
+	mi := &file_arc_node_v1_node_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetFrame) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetFrame) ProtoMessage() {}
+
+func (x *GetFrame) ProtoReflect() protoreflect.Message {
+	mi := &file_arc_node_v1_node_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetFrame.ProtoReflect.Descriptor instead.
+func (*GetFrame) Descriptor() ([]byte, []int) {
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *GetFrame) GetReference() []byte {
+	if x != nil {
+		return x.Reference
+	}
+	return nil
+}
+
+type FederateFrame struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Peer          string                 `protobuf:"bytes,1,opt,name=peer,proto3" json:"peer,omitempty"`
+	Labels        map[string]string      `protobuf:"bytes,2,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FederateFrame) Reset() {
+	*x = FederateFrame{}
+	mi := &file_arc_node_v1_node_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FederateFrame) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FederateFrame) ProtoMessage() {}
+
+func (x *FederateFrame) ProtoReflect() protoreflect.Message {
+	mi := &file_arc_node_v1_node_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FederateFrame.ProtoReflect.Descriptor instead.
+func (*FederateFrame) Descriptor() ([]byte, []int) {
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *FederateFrame) GetPeer() string {
+	if x != nil {
+		return x.Peer
+	}
+	return ""
+}
+
+func (x *FederateFrame) GetLabels() map[string]string {
+	if x != nil {
+		return x.Labels
+	}
+	return nil
+}
+
+type ListPeersFrame struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListPeersFrame) Reset() {
+	*x = ListPeersFrame{}
+	mi := &file_arc_node_v1_node_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListPeersFrame) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListPeersFrame) ProtoMessage() {}
+
+func (x *ListPeersFrame) ProtoReflect() protoreflect.Message {
+	mi := &file_arc_node_v1_node_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListPeersFrame.ProtoReflect.Descriptor instead.
+func (*ListPeersFrame) Descriptor() ([]byte, []int) {
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{10}
+}
+
+type ResolveGetFrame struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Prefix        string                 `protobuf:"bytes,1,opt,name=prefix,proto3" json:"prefix,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResolveGetFrame) Reset() {
+	*x = ResolveGetFrame{}
+	mi := &file_arc_node_v1_node_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResolveGetFrame) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResolveGetFrame) ProtoMessage() {}
+
+func (x *ResolveGetFrame) ProtoReflect() protoreflect.Message {
+	mi := &file_arc_node_v1_node_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResolveGetFrame.ProtoReflect.Descriptor instead.
+func (*ResolveGetFrame) Descriptor() ([]byte, []int) {
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *ResolveGetFrame) GetPrefix() string {
+	if x != nil {
+		return x.Prefix
+	}
+	return ""
+}
+
+type DeliveryFrame struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Channel       string                 `protobuf:"bytes,1,opt,name=channel,proto3" json:"channel,omitempty"`
+	Entry         *IndexEntry            `protobuf:"bytes,2,opt,name=entry,proto3" json:"entry,omitempty"`
+	DeliveryId    int64                  `protobuf:"varint,3,opt,name=delivery_id,json=deliveryId,proto3" json:"delivery_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeliveryFrame) Reset() {
+	*x = DeliveryFrame{}
+	mi := &file_arc_node_v1_node_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeliveryFrame) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeliveryFrame) ProtoMessage() {}
+
+func (x *DeliveryFrame) ProtoReflect() protoreflect.Message {
+	mi := &file_arc_node_v1_node_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeliveryFrame.ProtoReflect.Descriptor instead.
+func (*DeliveryFrame) Descriptor() ([]byte, []int) {
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *DeliveryFrame) GetChannel() string {
+	if x != nil {
+		return x.Channel
+	}
+	return ""
+}
+
+func (x *DeliveryFrame) GetEntry() *IndexEntry {
+	if x != nil {
+		return x.Entry
+	}
+	return nil
+}
+
+func (x *DeliveryFrame) GetDeliveryId() int64 {
+	if x != nil {
+		return x.DeliveryId
+	}
+	return 0
+}
+
+type ReceiptFrame struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Reference     []byte                 `protobuf:"bytes,1,opt,name=reference,proto3" json:"reference,omitempty"`
+	Ok            bool                   `protobuf:"varint,2,opt,name=ok,proto3" json:"ok,omitempty"`
+	Error         string                 `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReceiptFrame) Reset() {
+	*x = ReceiptFrame{}
+	mi := &file_arc_node_v1_node_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReceiptFrame) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReceiptFrame) ProtoMessage() {}
+
+func (x *ReceiptFrame) ProtoReflect() protoreflect.Message {
+	mi := &file_arc_node_v1_node_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReceiptFrame.ProtoReflect.Descriptor instead.
+func (*ReceiptFrame) Descriptor() ([]byte, []int) {
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *ReceiptFrame) GetReference() []byte {
+	if x != nil {
+		return x.Reference
+	}
+	return nil
+}
+
+func (x *ReceiptFrame) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+func (x *ReceiptFrame) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+type ResponseFrame struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Data          []byte                 `protobuf:"bytes,1,opt,name=data,proto3" json:"data,omitempty"`
+	ContentType   string                 `protobuf:"bytes,2,opt,name=content_type,json=contentType,proto3" json:"content_type,omitempty"`
+	Entries       []*IndexEntry          `protobuf:"bytes,3,rep,name=entries,proto3" json:"entries,omitempty"`
+	NextCursor    string                 `protobuf:"bytes,4,opt,name=next_cursor,json=nextCursor,proto3" json:"next_cursor,omitempty"`
+	HasMore       bool                   `protobuf:"varint,5,opt,name=has_more,json=hasMore,proto3" json:"has_more,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResponseFrame) Reset() {
+	*x = ResponseFrame{}
+	mi := &file_arc_node_v1_node_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResponseFrame) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResponseFrame) ProtoMessage() {}
+
+func (x *ResponseFrame) ProtoReflect() protoreflect.Message {
+	mi := &file_arc_node_v1_node_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResponseFrame.ProtoReflect.Descriptor instead.
+func (*ResponseFrame) Descriptor() ([]byte, []int) {
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *ResponseFrame) GetData() []byte {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+func (x *ResponseFrame) GetContentType() string {
+	if x != nil {
+		return x.ContentType
+	}
+	return ""
+}
+
+func (x *ResponseFrame) GetEntries() []*IndexEntry {
+	if x != nil {
+		return x.Entries
+	}
+	return nil
+}
+
+func (x *ResponseFrame) GetNextCursor() string {
+	if x != nil {
+		return x.NextCursor
+	}
+	return ""
+}
+
+func (x *ResponseFrame) GetHasMore() bool {
+	if x != nil {
+		return x.HasMore
+	}
+	return false
+}
+
+type ErrorFrame struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Code          int32                  `protobuf:"varint,1,opt,name=code,proto3" json:"code,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ErrorFrame) Reset() {
+	*x = ErrorFrame{}
+	mi := &file_arc_node_v1_node_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ErrorFrame) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ErrorFrame) ProtoMessage() {}
+
+func (x *ErrorFrame) ProtoReflect() protoreflect.Message {
+	mi := &file_arc_node_v1_node_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ErrorFrame.ProtoReflect.Descriptor instead.
+func (*ErrorFrame) Descriptor() ([]byte, []int) {
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *ErrorFrame) GetCode() int32 {
+	if x != nil {
+		return x.Code
+	}
+	return 0
+}
+
+func (x *ErrorFrame) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+type FederateResponseFrame struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Status        string                 `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FederateResponseFrame) Reset() {
+	*x = FederateResponseFrame{}
+	mi := &file_arc_node_v1_node_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FederateResponseFrame) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FederateResponseFrame) ProtoMessage() {}
+
+func (x *FederateResponseFrame) ProtoReflect() protoreflect.Message {
+	mi := &file_arc_node_v1_node_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FederateResponseFrame.ProtoReflect.Descriptor instead.
+func (*FederateResponseFrame) Descriptor() ([]byte, []int) {
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *FederateResponseFrame) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *FederateResponseFrame) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+type ListPeersResponseFrame struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Peers         []*PeerInfo            `protobuf:"bytes,1,rep,name=peers,proto3" json:"peers,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListPeersResponseFrame) Reset() {
+	*x = ListPeersResponseFrame{}
+	mi := &file_arc_node_v1_node_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListPeersResponseFrame) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListPeersResponseFrame) ProtoMessage() {}
+
+func (x *ListPeersResponseFrame) ProtoReflect() protoreflect.Message {
+	mi := &file_arc_node_v1_node_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListPeersResponseFrame.ProtoReflect.Descriptor instead.
+func (*ListPeersResponseFrame) Descriptor() ([]byte, []int) {
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *ListPeersResponseFrame) GetPeers() []*PeerInfo {
+	if x != nil {
+		return x.Peers
+	}
+	return nil
+}
+
+type ResolveGetResponseFrame struct {
+	state         protoimpl.MessageState       `protogen:"open.v1"`
+	Kind          ResolveGetResponseFrame_Kind `protobuf:"varint,1,opt,name=kind,proto3,enum=arc.node.v1.ResolveGetResponseFrame_Kind" json:"kind,omitempty"`
+	Reference     []byte                       `protobuf:"bytes,2,opt,name=reference,proto3" json:"reference,omitempty"`
+	Data          []byte                       `protobuf:"bytes,3,opt,name=data,proto3" json:"data,omitempty"`
+	Labels        map[string]string            `protobuf:"bytes,4,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Timestamp     int64                        `protobuf:"varint,5,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResolveGetResponseFrame) Reset() {
+	*x = ResolveGetResponseFrame{}
+	mi := &file_arc_node_v1_node_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResolveGetResponseFrame) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResolveGetResponseFrame) ProtoMessage() {}
+
+func (x *ResolveGetResponseFrame) ProtoReflect() protoreflect.Message {
+	mi := &file_arc_node_v1_node_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResolveGetResponseFrame.ProtoReflect.Descriptor instead.
+func (*ResolveGetResponseFrame) Descriptor() ([]byte, []int) {
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *ResolveGetResponseFrame) GetKind() ResolveGetResponseFrame_Kind {
+	if x != nil {
+		return x.Kind
+	}
+	return ResolveGetResponseFrame_KIND_BLOB
+}
+
+func (x *ResolveGetResponseFrame) GetReference() []byte {
+	if x != nil {
+		return x.Reference
+	}
+	return nil
+}
+
+func (x *ResolveGetResponseFrame) GetData() []byte {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+func (x *ResolveGetResponseFrame) GetLabels() map[string]string {
+	if x != nil {
+		return x.Labels
+	}
+	return nil
+}
+
+func (x *ResolveGetResponseFrame) GetTimestamp() int64 {
+	if x != nil {
+		return x.Timestamp
+	}
+	return 0
+}
+
+type ClientFrame struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	RequestId uint64                 `protobuf:"varint,15,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	// Types that are valid to be assigned to Frame:
+	//
+	//	*ClientFrame_Publish
+	//	*ClientFrame_Subscribe
+	//	*ClientFrame_Unsubscribe
+	//	*ClientFrame_Ack
+	//	*ClientFrame_Seek
+	//	*ClientFrame_Query
+	//	*ClientFrame_Put
+	//	*ClientFrame_Get
+	//	*ClientFrame_Federate
+	//	*ClientFrame_ListPeers
+	//	*ClientFrame_ResolveGet
+	Frame         isClientFrame_Frame `protobuf_oneof:"frame"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClientFrame) Reset() {
+	*x = ClientFrame{}
+	mi := &file_arc_node_v1_node_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClientFrame) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClientFrame) ProtoMessage() {}
+
+func (x *ClientFrame) ProtoReflect() protoreflect.Message {
+	mi := &file_arc_node_v1_node_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClientFrame.ProtoReflect.Descriptor instead.
+func (*ClientFrame) Descriptor() ([]byte, []int) {
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *ClientFrame) GetRequestId() uint64 {
+	if x != nil {
+		return x.RequestId
+	}
+	return 0
+}
+
+func (x *ClientFrame) GetFrame() isClientFrame_Frame {
+	if x != nil {
+		return x.Frame
+	}
+	return nil
+}
+
+func (x *ClientFrame) GetPublish() *PublishFrame {
+	if x != nil {
+		if x, ok := x.Frame.(*ClientFrame_Publish); ok {
+			return x.Publish
+		}
+	}
+	return nil
+}
+
+func (x *ClientFrame) GetSubscribe() *SubscribeFrame {
+	if x != nil {
+		if x, ok := x.Frame.(*ClientFrame_Subscribe); ok {
+			return x.Subscribe
+		}
+	}
+	return nil
+}
+
+func (x *ClientFrame) GetUnsubscribe() *UnsubscribeFrame {
+	if x != nil {
+		if x, ok := x.Frame.(*ClientFrame_Unsubscribe); ok {
+			return x.Unsubscribe
+		}
+	}
+	return nil
+}
+
+func (x *ClientFrame) GetAck() *AckFrame {
+	if x != nil {
+		if x, ok := x.Frame.(*ClientFrame_Ack); ok {
+			return x.Ack
+		}
+	}
+	return nil
+}
+
+func (x *ClientFrame) GetSeek() *SeekFrame {
+	if x != nil {
+		if x, ok := x.Frame.(*ClientFrame_Seek); ok {
+			return x.Seek
+		}
+	}
+	return nil
+}
+
+func (x *ClientFrame) GetQuery() *QueryFrame {
+	if x != nil {
+		if x, ok := x.Frame.(*ClientFrame_Query); ok {
+			return x.Query
+		}
+	}
+	return nil
+}
+
+func (x *ClientFrame) GetPut() *PutFrame {
+	if x != nil {
+		if x, ok := x.Frame.(*ClientFrame_Put); ok {
+			return x.Put
+		}
+	}
+	return nil
+}
+
+func (x *ClientFrame) GetGet() *GetFrame {
+	if x != nil {
+		if x, ok := x.Frame.(*ClientFrame_Get); ok {
+			return x.Get
+		}
+	}
+	return nil
+}
+
+func (x *ClientFrame) GetFederate() *FederateFrame {
+	if x != nil {
+		if x, ok := x.Frame.(*ClientFrame_Federate); ok {
+			return x.Federate
+		}
+	}
+	return nil
+}
+
+func (x *ClientFrame) GetListPeers() *ListPeersFrame {
+	if x != nil {
+		if x, ok := x.Frame.(*ClientFrame_ListPeers); ok {
+			return x.ListPeers
+		}
+	}
+	return nil
+}
+
+func (x *ClientFrame) GetResolveGet() *ResolveGetFrame {
+	if x != nil {
+		if x, ok := x.Frame.(*ClientFrame_ResolveGet); ok {
+			return x.ResolveGet
+		}
+	}
+	return nil
+}
+
+type isClientFrame_Frame interface {
+	isClientFrame_Frame()
+}
+
+type ClientFrame_Publish struct {
+	Publish *PublishFrame `protobuf:"bytes,1,opt,name=publish,proto3,oneof"`
+}
+
+type ClientFrame_Subscribe struct {
+	Subscribe *SubscribeFrame `protobuf:"bytes,2,opt,name=subscribe,proto3,oneof"`
+}
+
+type ClientFrame_Unsubscribe struct {
+	Unsubscribe *UnsubscribeFrame `protobuf:"bytes,3,opt,name=unsubscribe,proto3,oneof"`
+}
+
+type ClientFrame_Ack struct {
+	Ack *AckFrame `protobuf:"bytes,4,opt,name=ack,proto3,oneof"`
+}
+
+type ClientFrame_Seek struct {
+	Seek *SeekFrame `protobuf:"bytes,5,opt,name=seek,proto3,oneof"`
+}
+
+type ClientFrame_Query struct {
+	Query *QueryFrame `protobuf:"bytes,6,opt,name=query,proto3,oneof"`
+}
+
+type ClientFrame_Put struct {
+	Put *PutFrame `protobuf:"bytes,7,opt,name=put,proto3,oneof"`
+}
+
+type ClientFrame_Get struct {
+	Get *GetFrame `protobuf:"bytes,8,opt,name=get,proto3,oneof"`
+}
+
+type ClientFrame_Federate struct {
+	Federate *FederateFrame `protobuf:"bytes,9,opt,name=federate,proto3,oneof"`
+}
+
+type ClientFrame_ListPeers struct {
+	ListPeers *ListPeersFrame `protobuf:"bytes,10,opt,name=list_peers,json=listPeers,proto3,oneof"`
+}
+
+type ClientFrame_ResolveGet struct {
+	ResolveGet *ResolveGetFrame `protobuf:"bytes,11,opt,name=resolve_get,json=resolveGet,proto3,oneof"`
+}
+
+func (*ClientFrame_Publish) isClientFrame_Frame() {}
+
+func (*ClientFrame_Subscribe) isClientFrame_Frame() {}
+
+func (*ClientFrame_Unsubscribe) isClientFrame_Frame() {}
+
+func (*ClientFrame_Ack) isClientFrame_Frame() {}
+
+func (*ClientFrame_Seek) isClientFrame_Frame() {}
+
+func (*ClientFrame_Query) isClientFrame_Frame() {}
+
+func (*ClientFrame_Put) isClientFrame_Frame() {}
+
+func (*ClientFrame_Get) isClientFrame_Frame() {}
+
+func (*ClientFrame_Federate) isClientFrame_Frame() {}
+
+func (*ClientFrame_ListPeers) isClientFrame_Frame() {}
+
+func (*ClientFrame_ResolveGet) isClientFrame_Frame() {}
+
+type ServerFrame struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	RequestId uint64                 `protobuf:"varint,15,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	// Types that are valid to be assigned to Frame:
+	//
+	//	*ServerFrame_Delivery
+	//	*ServerFrame_Receipt
+	//	*ServerFrame_Response
+	//	*ServerFrame_Error
+	//	*ServerFrame_FederateResponse
+	//	*ServerFrame_ListPeersResponse
+	//	*ServerFrame_ResolveGetResponse
+	Frame         isServerFrame_Frame `protobuf_oneof:"frame"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ServerFrame) Reset() {
+	*x = ServerFrame{}
+	mi := &file_arc_node_v1_node_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ServerFrame) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ServerFrame) ProtoMessage() {}
+
+func (x *ServerFrame) ProtoReflect() protoreflect.Message {
+	mi := &file_arc_node_v1_node_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ServerFrame.ProtoReflect.Descriptor instead.
+func (*ServerFrame) Descriptor() ([]byte, []int) {
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *ServerFrame) GetRequestId() uint64 {
+	if x != nil {
+		return x.RequestId
+	}
+	return 0
+}
+
+func (x *ServerFrame) GetFrame() isServerFrame_Frame {
+	if x != nil {
+		return x.Frame
+	}
+	return nil
+}
+
+func (x *ServerFrame) GetDelivery() *DeliveryFrame {
+	if x != nil {
+		if x, ok := x.Frame.(*ServerFrame_Delivery); ok {
+			return x.Delivery
+		}
+	}
+	return nil
+}
+
+func (x *ServerFrame) GetReceipt() *ReceiptFrame {
+	if x != nil {
+		if x, ok := x.Frame.(*ServerFrame_Receipt); ok {
+			return x.Receipt
+		}
+	}
+	return nil
+}
+
+func (x *ServerFrame) GetResponse() *ResponseFrame {
+	if x != nil {
+		if x, ok := x.Frame.(*ServerFrame_Response); ok {
+			return x.Response
+		}
+	}
+	return nil
+}
+
+func (x *ServerFrame) GetError() *ErrorFrame {
+	if x != nil {
+		if x, ok := x.Frame.(*ServerFrame_Error); ok {
+			return x.Error
+		}
+	}
+	return nil
+}
+
+func (x *ServerFrame) GetFederateResponse() *FederateResponseFrame {
+	if x != nil {
+		if x, ok := x.Frame.(*ServerFrame_FederateResponse); ok {
+			return x.FederateResponse
+		}
+	}
+	return nil
+}
+
+func (x *ServerFrame) GetListPeersResponse() *ListPeersResponseFrame {
+	if x != nil {
+		if x, ok := x.Frame.(*ServerFrame_ListPeersResponse); ok {
+			return x.ListPeersResponse
+		}
+	}
+	return nil
+}
+
+func (x *ServerFrame) GetResolveGetResponse() *ResolveGetResponseFrame {
+	if x != nil {
+		if x, ok := x.Frame.(*ServerFrame_ResolveGetResponse); ok {
+			return x.ResolveGetResponse
+		}
+	}
+	return nil
+}
+
+type isServerFrame_Frame interface {
+	isServerFrame_Frame()
+}
+
+type ServerFrame_Delivery struct {
+	Delivery *DeliveryFrame `protobuf:"bytes,1,opt,name=delivery,proto3,oneof"`
+}
+
+type ServerFrame_Receipt struct {
+	Receipt *ReceiptFrame `protobuf:"bytes,2,opt,name=receipt,proto3,oneof"`
+}
+
+type ServerFrame_Response struct {
+	Response *ResponseFrame `protobuf:"bytes,3,opt,name=response,proto3,oneof"`
+}
+
+type ServerFrame_Error struct {
+	Error *ErrorFrame `protobuf:"bytes,4,opt,name=error,proto3,oneof"`
+}
+
+type ServerFrame_FederateResponse struct {
+	FederateResponse *FederateResponseFrame `protobuf:"bytes,5,opt,name=federate_response,json=federateResponse,proto3,oneof"`
+}
+
+type ServerFrame_ListPeersResponse struct {
+	ListPeersResponse *ListPeersResponseFrame `protobuf:"bytes,6,opt,name=list_peers_response,json=listPeersResponse,proto3,oneof"`
+}
+
+type ServerFrame_ResolveGetResponse struct {
+	ResolveGetResponse *ResolveGetResponseFrame `protobuf:"bytes,7,opt,name=resolve_get_response,json=resolveGetResponse,proto3,oneof"`
+}
+
+func (*ServerFrame_Delivery) isServerFrame_Frame() {}
+
+func (*ServerFrame_Receipt) isServerFrame_Frame() {}
+
+func (*ServerFrame_Response) isServerFrame_Frame() {}
+
+func (*ServerFrame_Error) isServerFrame_Frame() {}
+
+func (*ServerFrame_FederateResponse) isServerFrame_Frame() {}
+
+func (*ServerFrame_ListPeersResponse) isServerFrame_Frame() {}
+
+func (*ServerFrame_ResolveGetResponse) isServerFrame_Frame() {}
 
 type IndexEntry struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Reference     []byte                 `protobuf:"bytes,1,opt,name=reference,proto3" json:"reference,omitempty"`
 	Labels        map[string]string      `protobuf:"bytes,2,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	Timestamp     int64                  `protobuf:"varint,3,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	Dimensions    *Dimensions            `protobuf:"bytes,4,opt,name=dimensions,proto3" json:"dimensions,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *IndexEntry) Reset() {
 	*x = IndexEntry{}
-	mi := &file_arc_node_v1_node_proto_msgTypes[4]
+	mi := &file_arc_node_v1_node_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -374,7 +2174,7 @@ func (x *IndexEntry) String() string {
 func (*IndexEntry) ProtoMessage() {}
 
 func (x *IndexEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_node_v1_node_proto_msgTypes[4]
+	mi := &file_arc_node_v1_node_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -387,7 +2187,7 @@ func (x *IndexEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IndexEntry.ProtoReflect.Descriptor instead.
 func (*IndexEntry) Descriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{4}
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *IndexEntry) GetReference() []byte {
@@ -411,482 +2211,11 @@ func (x *IndexEntry) GetTimestamp() int64 {
 	return 0
 }
 
-type SendMessageRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Message       []byte                 `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`                                                                         // canonical message bytes (from message.CanonicalBytes)
-	Labels        map[string]string      `protobuf:"bytes,2,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // indexing hints
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *SendMessageRequest) Reset() {
-	*x = SendMessageRequest{}
-	mi := &file_arc_node_v1_node_proto_msgTypes[5]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *SendMessageRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SendMessageRequest) ProtoMessage() {}
-
-func (x *SendMessageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_node_v1_node_proto_msgTypes[5]
+func (x *IndexEntry) GetDimensions() *Dimensions {
 	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SendMessageRequest.ProtoReflect.Descriptor instead.
-func (*SendMessageRequest) Descriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{5}
-}
-
-func (x *SendMessageRequest) GetMessage() []byte {
-	if x != nil {
-		return x.Message
+		return x.Dimensions
 	}
 	return nil
-}
-
-func (x *SendMessageRequest) GetLabels() map[string]string {
-	if x != nil {
-		return x.Labels
-	}
-	return nil
-}
-
-type SendMessageResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Reference     []byte                 `protobuf:"bytes,1,opt,name=reference,proto3" json:"reference,omitempty"` // message reference
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *SendMessageResponse) Reset() {
-	*x = SendMessageResponse{}
-	mi := &file_arc_node_v1_node_proto_msgTypes[6]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *SendMessageResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SendMessageResponse) ProtoMessage() {}
-
-func (x *SendMessageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_node_v1_node_proto_msgTypes[6]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SendMessageResponse.ProtoReflect.Descriptor instead.
-func (*SendMessageResponse) Descriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{6}
-}
-
-func (x *SendMessageResponse) GetReference() []byte {
-	if x != nil {
-		return x.Reference
-	}
-	return nil
-}
-
-type QueryMessagesRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Labels        map[string]string      `protobuf:"bytes,1,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	Limit         int32                  `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
-	Expression    string                 `protobuf:"bytes,4,opt,name=expression,proto3" json:"expression,omitempty"` // CEL filter
-	Cursor        string                 `protobuf:"bytes,5,opt,name=cursor,proto3" json:"cursor,omitempty"`
-	Order         Order                  `protobuf:"varint,6,opt,name=order,proto3,enum=arc.node.v1.Order" json:"order,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *QueryMessagesRequest) Reset() {
-	*x = QueryMessagesRequest{}
-	mi := &file_arc_node_v1_node_proto_msgTypes[7]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *QueryMessagesRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*QueryMessagesRequest) ProtoMessage() {}
-
-func (x *QueryMessagesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_node_v1_node_proto_msgTypes[7]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use QueryMessagesRequest.ProtoReflect.Descriptor instead.
-func (*QueryMessagesRequest) Descriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{7}
-}
-
-func (x *QueryMessagesRequest) GetLabels() map[string]string {
-	if x != nil {
-		return x.Labels
-	}
-	return nil
-}
-
-func (x *QueryMessagesRequest) GetLimit() int32 {
-	if x != nil {
-		return x.Limit
-	}
-	return 0
-}
-
-func (x *QueryMessagesRequest) GetExpression() string {
-	if x != nil {
-		return x.Expression
-	}
-	return ""
-}
-
-func (x *QueryMessagesRequest) GetCursor() string {
-	if x != nil {
-		return x.Cursor
-	}
-	return ""
-}
-
-func (x *QueryMessagesRequest) GetOrder() Order {
-	if x != nil {
-		return x.Order
-	}
-	return Order_ORDER_ASCENDING
-}
-
-type QueryMessagesResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Entries       []*IndexEntry          `protobuf:"bytes,1,rep,name=entries,proto3" json:"entries,omitempty"`
-	NextCursor    string                 `protobuf:"bytes,2,opt,name=next_cursor,json=nextCursor,proto3" json:"next_cursor,omitempty"`
-	HasMore       bool                   `protobuf:"varint,3,opt,name=has_more,json=hasMore,proto3" json:"has_more,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *QueryMessagesResponse) Reset() {
-	*x = QueryMessagesResponse{}
-	mi := &file_arc_node_v1_node_proto_msgTypes[8]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *QueryMessagesResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*QueryMessagesResponse) ProtoMessage() {}
-
-func (x *QueryMessagesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_node_v1_node_proto_msgTypes[8]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use QueryMessagesResponse.ProtoReflect.Descriptor instead.
-func (*QueryMessagesResponse) Descriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{8}
-}
-
-func (x *QueryMessagesResponse) GetEntries() []*IndexEntry {
-	if x != nil {
-		return x.Entries
-	}
-	return nil
-}
-
-func (x *QueryMessagesResponse) GetNextCursor() string {
-	if x != nil {
-		return x.NextCursor
-	}
-	return ""
-}
-
-func (x *QueryMessagesResponse) GetHasMore() bool {
-	if x != nil {
-		return x.HasMore
-	}
-	return false
-}
-
-type SubscribeMessagesRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Labels        map[string]string      `protobuf:"bytes,1,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	Expression    string                 `protobuf:"bytes,2,opt,name=expression,proto3" json:"expression,omitempty"` // CEL filter
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *SubscribeMessagesRequest) Reset() {
-	*x = SubscribeMessagesRequest{}
-	mi := &file_arc_node_v1_node_proto_msgTypes[9]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *SubscribeMessagesRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SubscribeMessagesRequest) ProtoMessage() {}
-
-func (x *SubscribeMessagesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_node_v1_node_proto_msgTypes[9]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SubscribeMessagesRequest.ProtoReflect.Descriptor instead.
-func (*SubscribeMessagesRequest) Descriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{9}
-}
-
-func (x *SubscribeMessagesRequest) GetLabels() map[string]string {
-	if x != nil {
-		return x.Labels
-	}
-	return nil
-}
-
-func (x *SubscribeMessagesRequest) GetExpression() string {
-	if x != nil {
-		return x.Expression
-	}
-	return ""
-}
-
-type SubscribeMessagesResponse struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	Entry *IndexEntry            `protobuf:"bytes,1,opt,name=entry,proto3" json:"entry,omitempty"`
-	// Server-side warning (e.g., "lagging", "disconnecting").
-	// Empty when there is no warning.
-	Warning       string `protobuf:"bytes,10,opt,name=warning,proto3" json:"warning,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *SubscribeMessagesResponse) Reset() {
-	*x = SubscribeMessagesResponse{}
-	mi := &file_arc_node_v1_node_proto_msgTypes[10]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *SubscribeMessagesResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SubscribeMessagesResponse) ProtoMessage() {}
-
-func (x *SubscribeMessagesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_node_v1_node_proto_msgTypes[10]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SubscribeMessagesResponse.ProtoReflect.Descriptor instead.
-func (*SubscribeMessagesResponse) Descriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{10}
-}
-
-func (x *SubscribeMessagesResponse) GetEntry() *IndexEntry {
-	if x != nil {
-		return x.Entry
-	}
-	return nil
-}
-
-func (x *SubscribeMessagesResponse) GetWarning() string {
-	if x != nil {
-		return x.Warning
-	}
-	return ""
-}
-
-type FederateRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Peer          string                 `protobuf:"bytes,1,opt,name=peer,proto3" json:"peer,omitempty"`
-	Labels        map[string]string      `protobuf:"bytes,2,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *FederateRequest) Reset() {
-	*x = FederateRequest{}
-	mi := &file_arc_node_v1_node_proto_msgTypes[11]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *FederateRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*FederateRequest) ProtoMessage() {}
-
-func (x *FederateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_node_v1_node_proto_msgTypes[11]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use FederateRequest.ProtoReflect.Descriptor instead.
-func (*FederateRequest) Descriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{11}
-}
-
-func (x *FederateRequest) GetPeer() string {
-	if x != nil {
-		return x.Peer
-	}
-	return ""
-}
-
-func (x *FederateRequest) GetLabels() map[string]string {
-	if x != nil {
-		return x.Labels
-	}
-	return nil
-}
-
-type FederateResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Status        string                 `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
-	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *FederateResponse) Reset() {
-	*x = FederateResponse{}
-	mi := &file_arc_node_v1_node_proto_msgTypes[12]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *FederateResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*FederateResponse) ProtoMessage() {}
-
-func (x *FederateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_node_v1_node_proto_msgTypes[12]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use FederateResponse.ProtoReflect.Descriptor instead.
-func (*FederateResponse) Descriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{12}
-}
-
-func (x *FederateResponse) GetStatus() string {
-	if x != nil {
-		return x.Status
-	}
-	return ""
-}
-
-func (x *FederateResponse) GetMessage() string {
-	if x != nil {
-		return x.Message
-	}
-	return ""
-}
-
-type ListPeersRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ListPeersRequest) Reset() {
-	*x = ListPeersRequest{}
-	mi := &file_arc_node_v1_node_proto_msgTypes[13]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListPeersRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListPeersRequest) ProtoMessage() {}
-
-func (x *ListPeersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_node_v1_node_proto_msgTypes[13]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListPeersRequest.ProtoReflect.Descriptor instead.
-func (*ListPeersRequest) Descriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{13}
 }
 
 type PeerInfo struct {
@@ -905,7 +2234,7 @@ type PeerInfo struct {
 
 func (x *PeerInfo) Reset() {
 	*x = PeerInfo{}
-	mi := &file_arc_node_v1_node_proto_msgTypes[14]
+	mi := &file_arc_node_v1_node_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -917,7 +2246,7 @@ func (x *PeerInfo) String() string {
 func (*PeerInfo) ProtoMessage() {}
 
 func (x *PeerInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_node_v1_node_proto_msgTypes[14]
+	mi := &file_arc_node_v1_node_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -930,7 +2259,7 @@ func (x *PeerInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PeerInfo.ProtoReflect.Descriptor instead.
 func (*PeerInfo) Descriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{14}
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *PeerInfo) GetAddress() string {
@@ -989,239 +2318,169 @@ func (x *PeerInfo) GetEntriesSent() int64 {
 	return 0
 }
 
-type ListPeersResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Peers         []*PeerInfo            `protobuf:"bytes,1,rep,name=peers,proto3" json:"peers,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ListPeersResponse) Reset() {
-	*x = ListPeersResponse{}
-	mi := &file_arc_node_v1_node_proto_msgTypes[15]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListPeersResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListPeersResponse) ProtoMessage() {}
-
-func (x *ListPeersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_node_v1_node_proto_msgTypes[15]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListPeersResponse.ProtoReflect.Descriptor instead.
-func (*ListPeersResponse) Descriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{15}
-}
-
-func (x *ListPeersResponse) GetPeers() []*PeerInfo {
-	if x != nil {
-		return x.Peers
-	}
-	return nil
-}
-
-type ResolveGetRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Prefix        string                 `protobuf:"bytes,1,opt,name=prefix,proto3" json:"prefix,omitempty"` // hex prefix (minimum 4 characters)
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ResolveGetRequest) Reset() {
-	*x = ResolveGetRequest{}
-	mi := &file_arc_node_v1_node_proto_msgTypes[16]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ResolveGetRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ResolveGetRequest) ProtoMessage() {}
-
-func (x *ResolveGetRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_node_v1_node_proto_msgTypes[16]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ResolveGetRequest.ProtoReflect.Descriptor instead.
-func (*ResolveGetRequest) Descriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{16}
-}
-
-func (x *ResolveGetRequest) GetPrefix() string {
-	if x != nil {
-		return x.Prefix
-	}
-	return ""
-}
-
-type ResolveGetResponse struct {
-	state         protoimpl.MessageState  `protogen:"open.v1"`
-	Kind          ResolveGetResponse_Kind `protobuf:"varint,1,opt,name=kind,proto3,enum=arc.node.v1.ResolveGetResponse_Kind" json:"kind,omitempty"`
-	Reference     []byte                  `protobuf:"bytes,2,opt,name=reference,proto3" json:"reference,omitempty"`                                                                     // full 32-byte SHA-256 reference
-	Data          []byte                  `protobuf:"bytes,3,opt,name=data,proto3" json:"data,omitempty"`                                                                               // blob content (KIND_BLOB only)
-	Labels        map[string]string       `protobuf:"bytes,4,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // message labels (KIND_MESSAGE only)
-	Timestamp     int64                   `protobuf:"varint,5,opt,name=timestamp,proto3" json:"timestamp,omitempty"`                                                                    // message timestamp (KIND_MESSAGE only)
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ResolveGetResponse) Reset() {
-	*x = ResolveGetResponse{}
-	mi := &file_arc_node_v1_node_proto_msgTypes[17]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ResolveGetResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ResolveGetResponse) ProtoMessage() {}
-
-func (x *ResolveGetResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_node_v1_node_proto_msgTypes[17]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ResolveGetResponse.ProtoReflect.Descriptor instead.
-func (*ResolveGetResponse) Descriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{17}
-}
-
-func (x *ResolveGetResponse) GetKind() ResolveGetResponse_Kind {
-	if x != nil {
-		return x.Kind
-	}
-	return ResolveGetResponse_KIND_BLOB
-}
-
-func (x *ResolveGetResponse) GetReference() []byte {
-	if x != nil {
-		return x.Reference
-	}
-	return nil
-}
-
-func (x *ResolveGetResponse) GetData() []byte {
-	if x != nil {
-		return x.Data
-	}
-	return nil
-}
-
-func (x *ResolveGetResponse) GetLabels() map[string]string {
-	if x != nil {
-		return x.Labels
-	}
-	return nil
-}
-
-func (x *ResolveGetResponse) GetTimestamp() int64 {
-	if x != nil {
-		return x.Timestamp
-	}
-	return 0
-}
-
 var File_arc_node_v1_node_proto protoreflect.FileDescriptor
 
 const file_arc_node_v1_node_proto_rawDesc = "" +
 	"\n" +
-	"\x16arc/node/v1/node.proto\x12\varc.node.v1\"J\n" +
-	"\x11PutContentRequest\x12\x12\n" +
+	"\x16arc/node/v1/node.proto\x12\varc.node.v1\"\xbc\x05\n" +
+	"\n" +
+	"Dimensions\x12.\n" +
+	"\apattern\x18\x01 \x01(\x0e2\x14.arc.node.v1.PatternR\apattern\x121\n" +
+	"\bdelivery\x18\x02 \x01(\x0e2\x15.arc.node.v1.DeliveryR\bdelivery\x12:\n" +
+	"\vpersistence\x18\x03 \x01(\x0e2\x18.arc.node.v1.PersistenceR\vpersistence\x127\n" +
+	"\n" +
+	"visibility\x18\x04 \x01(\x0e2\x17.arc.node.v1.VisibilityR\n" +
+	"visibility\x121\n" +
+	"\bordering\x18\x05 \x01(\x0e2\x15.arc.node.v1.OrderingR\bordering\x121\n" +
+	"\baffinity\x18\x06 \x01(\x0e2\x15.arc.node.v1.AffinityR\baffinity\x12(\n" +
+	"\x05dedup\x18\a \x01(\x0e2\x12.arc.node.v1.DedupR\x05dedup\x129\n" +
+	"\bcomplete\x18\b \x01(\x0e2\x1d.arc.node.v1.DeliveryCompleteR\bcomplete\x12\x15\n" +
+	"\x06ttl_ms\x18\n" +
+	" \x01(\x03R\x05ttlMs\x12\x1d\n" +
+	"\n" +
+	"complete_n\x18\v \x01(\x05R\tcompleteN\x12!\n" +
+	"\faffinity_key\x18\f \x01(\tR\vaffinityKey\x12'\n" +
+	"\x0fidempotency_key\x18\r \x01(\tR\x0eidempotencyKey\x12\x1a\n" +
+	"\bpriority\x18\x0e \x01(\x05R\bpriority\x12%\n" +
+	"\x0emax_redelivery\x18\x0f \x01(\x05R\rmaxRedelivery\x12$\n" +
+	"\x0eack_timeout_ms\x18\x10 \x01(\x03R\fackTimeoutMs\x12 \n" +
+	"\vcorrelation\x18\x11 \x01(\tR\vcorrelation\"\xdb\x01\n" +
+	"\fPublishFrame\x12\x18\n" +
+	"\amessage\x18\x01 \x01(\fR\amessage\x12=\n" +
+	"\x06labels\x18\x02 \x03(\v2%.arc.node.v1.PublishFrame.LabelsEntryR\x06labels\x127\n" +
+	"\n" +
+	"dimensions\x18\x03 \x01(\v2\x17.arc.node.v1.DimensionsR\n" +
+	"dimensions\x1a9\n" +
+	"\vLabelsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xc0\x02\n" +
+	"\x0eSubscribeFrame\x12\x18\n" +
+	"\achannel\x18\x01 \x01(\tR\achannel\x12?\n" +
+	"\x06labels\x18\x02 \x03(\v2'.arc.node.v1.SubscribeFrame.LabelsEntryR\x06labels\x12\x1e\n" +
+	"\n" +
+	"expression\x18\x03 \x01(\tR\n" +
+	"expression\x127\n" +
+	"\n" +
+	"dimensions\x18\x04 \x01(\v2\x17.arc.node.v1.DimensionsR\n" +
+	"dimensions\x12'\n" +
+	"\x0fsubscription_id\x18\x05 \x01(\tR\x0esubscriptionId\x12\x16\n" +
+	"\x06cursor\x18\x06 \x01(\tR\x06cursor\x1a9\n" +
+	"\vLabelsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\",\n" +
+	"\x10UnsubscribeFrame\x12\x18\n" +
+	"\achannel\x18\x01 \x01(\tR\achannel\"I\n" +
+	"\bAckFrame\x12\x1c\n" +
+	"\treference\x18\x01 \x01(\fR\treference\x12\x1f\n" +
+	"\vdelivery_id\x18\x02 \x01(\x03R\n" +
+	"deliveryId\"[\n" +
+	"\tSeekFrame\x12\x18\n" +
+	"\achannel\x18\x01 \x01(\tR\achannel\x12\x1c\n" +
+	"\ttimestamp\x18\x02 \x01(\x03R\ttimestamp\x12\x16\n" +
+	"\x06cursor\x18\x03 \x01(\tR\x06cursor\"\xfc\x01\n" +
+	"\n" +
+	"QueryFrame\x12;\n" +
+	"\x06labels\x18\x01 \x03(\v2#.arc.node.v1.QueryFrame.LabelsEntryR\x06labels\x12\x1e\n" +
+	"\n" +
+	"expression\x18\x02 \x01(\tR\n" +
+	"expression\x12\x14\n" +
+	"\x05limit\x18\x03 \x01(\x05R\x05limit\x12\x16\n" +
+	"\x06cursor\x18\x04 \x01(\tR\x06cursor\x12(\n" +
+	"\x05order\x18\x05 \x01(\x0e2\x12.arc.node.v1.OrderR\x05order\x1a9\n" +
+	"\vLabelsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"A\n" +
+	"\bPutFrame\x12\x12\n" +
 	"\x04data\x18\x01 \x01(\fR\x04data\x12!\n" +
-	"\fcontent_type\x18\x02 \x01(\tR\vcontentType\"2\n" +
-	"\x12PutContentResponse\x12\x1c\n" +
-	"\treference\x18\x01 \x01(\fR\treference\"1\n" +
-	"\x11GetContentRequest\x12\x1c\n" +
-	"\treference\x18\x01 \x01(\fR\treference\"K\n" +
-	"\x12GetContentResponse\x12\x12\n" +
+	"\fcontent_type\x18\x02 \x01(\tR\vcontentType\"(\n" +
+	"\bGetFrame\x12\x1c\n" +
+	"\treference\x18\x01 \x01(\fR\treference\"\x9e\x01\n" +
+	"\rFederateFrame\x12\x12\n" +
+	"\x04peer\x18\x01 \x01(\tR\x04peer\x12>\n" +
+	"\x06labels\x18\x02 \x03(\v2&.arc.node.v1.FederateFrame.LabelsEntryR\x06labels\x1a9\n" +
+	"\vLabelsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x10\n" +
+	"\x0eListPeersFrame\")\n" +
+	"\x0fResolveGetFrame\x12\x16\n" +
+	"\x06prefix\x18\x01 \x01(\tR\x06prefix\"y\n" +
+	"\rDeliveryFrame\x12\x18\n" +
+	"\achannel\x18\x01 \x01(\tR\achannel\x12-\n" +
+	"\x05entry\x18\x02 \x01(\v2\x17.arc.node.v1.IndexEntryR\x05entry\x12\x1f\n" +
+	"\vdelivery_id\x18\x03 \x01(\x03R\n" +
+	"deliveryId\"R\n" +
+	"\fReceiptFrame\x12\x1c\n" +
+	"\treference\x18\x01 \x01(\fR\treference\x12\x0e\n" +
+	"\x02ok\x18\x02 \x01(\bR\x02ok\x12\x14\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error\"\xb5\x01\n" +
+	"\rResponseFrame\x12\x12\n" +
 	"\x04data\x18\x01 \x01(\fR\x04data\x12!\n" +
-	"\fcontent_type\x18\x02 \x01(\tR\vcontentType\"\xc0\x01\n" +
+	"\fcontent_type\x18\x02 \x01(\tR\vcontentType\x121\n" +
+	"\aentries\x18\x03 \x03(\v2\x17.arc.node.v1.IndexEntryR\aentries\x12\x1f\n" +
+	"\vnext_cursor\x18\x04 \x01(\tR\n" +
+	"nextCursor\x12\x19\n" +
+	"\bhas_more\x18\x05 \x01(\bR\ahasMore\":\n" +
+	"\n" +
+	"ErrorFrame\x12\x12\n" +
+	"\x04code\x18\x01 \x01(\x05R\x04code\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"I\n" +
+	"\x15FederateResponseFrame\x12\x16\n" +
+	"\x06status\x18\x01 \x01(\tR\x06status\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"E\n" +
+	"\x16ListPeersResponseFrame\x12+\n" +
+	"\x05peers\x18\x01 \x03(\v2\x15.arc.node.v1.PeerInfoR\x05peers\"\xd6\x02\n" +
+	"\x17ResolveGetResponseFrame\x12=\n" +
+	"\x04kind\x18\x01 \x01(\x0e2).arc.node.v1.ResolveGetResponseFrame.KindR\x04kind\x12\x1c\n" +
+	"\treference\x18\x02 \x01(\fR\treference\x12\x12\n" +
+	"\x04data\x18\x03 \x01(\fR\x04data\x12H\n" +
+	"\x06labels\x18\x04 \x03(\v20.arc.node.v1.ResolveGetResponseFrame.LabelsEntryR\x06labels\x12\x1c\n" +
+	"\ttimestamp\x18\x05 \x01(\x03R\ttimestamp\x1a9\n" +
+	"\vLabelsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"'\n" +
+	"\x04Kind\x12\r\n" +
+	"\tKIND_BLOB\x10\x00\x12\x10\n" +
+	"\fKIND_MESSAGE\x10\x01\"\x85\x05\n" +
+	"\vClientFrame\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x0f \x01(\x04R\trequestId\x125\n" +
+	"\apublish\x18\x01 \x01(\v2\x19.arc.node.v1.PublishFrameH\x00R\apublish\x12;\n" +
+	"\tsubscribe\x18\x02 \x01(\v2\x1b.arc.node.v1.SubscribeFrameH\x00R\tsubscribe\x12A\n" +
+	"\vunsubscribe\x18\x03 \x01(\v2\x1d.arc.node.v1.UnsubscribeFrameH\x00R\vunsubscribe\x12)\n" +
+	"\x03ack\x18\x04 \x01(\v2\x15.arc.node.v1.AckFrameH\x00R\x03ack\x12,\n" +
+	"\x04seek\x18\x05 \x01(\v2\x16.arc.node.v1.SeekFrameH\x00R\x04seek\x12/\n" +
+	"\x05query\x18\x06 \x01(\v2\x17.arc.node.v1.QueryFrameH\x00R\x05query\x12)\n" +
+	"\x03put\x18\a \x01(\v2\x15.arc.node.v1.PutFrameH\x00R\x03put\x12)\n" +
+	"\x03get\x18\b \x01(\v2\x15.arc.node.v1.GetFrameH\x00R\x03get\x128\n" +
+	"\bfederate\x18\t \x01(\v2\x1a.arc.node.v1.FederateFrameH\x00R\bfederate\x12<\n" +
+	"\n" +
+	"list_peers\x18\n" +
+	" \x01(\v2\x1b.arc.node.v1.ListPeersFrameH\x00R\tlistPeers\x12?\n" +
+	"\vresolve_get\x18\v \x01(\v2\x1c.arc.node.v1.ResolveGetFrameH\x00R\n" +
+	"resolveGetB\a\n" +
+	"\x05frame\"\x95\x04\n" +
+	"\vServerFrame\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x0f \x01(\x04R\trequestId\x128\n" +
+	"\bdelivery\x18\x01 \x01(\v2\x1a.arc.node.v1.DeliveryFrameH\x00R\bdelivery\x125\n" +
+	"\areceipt\x18\x02 \x01(\v2\x19.arc.node.v1.ReceiptFrameH\x00R\areceipt\x128\n" +
+	"\bresponse\x18\x03 \x01(\v2\x1a.arc.node.v1.ResponseFrameH\x00R\bresponse\x12/\n" +
+	"\x05error\x18\x04 \x01(\v2\x17.arc.node.v1.ErrorFrameH\x00R\x05error\x12Q\n" +
+	"\x11federate_response\x18\x05 \x01(\v2\".arc.node.v1.FederateResponseFrameH\x00R\x10federateResponse\x12U\n" +
+	"\x13list_peers_response\x18\x06 \x01(\v2#.arc.node.v1.ListPeersResponseFrameH\x00R\x11listPeersResponse\x12X\n" +
+	"\x14resolve_get_response\x18\a \x01(\v2$.arc.node.v1.ResolveGetResponseFrameH\x00R\x12resolveGetResponseB\a\n" +
+	"\x05frame\"\xf9\x01\n" +
 	"\n" +
 	"IndexEntry\x12\x1c\n" +
 	"\treference\x18\x01 \x01(\fR\treference\x12;\n" +
 	"\x06labels\x18\x02 \x03(\v2#.arc.node.v1.IndexEntry.LabelsEntryR\x06labels\x12\x1c\n" +
-	"\ttimestamp\x18\x03 \x01(\x03R\ttimestamp\x1a9\n" +
-	"\vLabelsEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xae\x01\n" +
-	"\x12SendMessageRequest\x12\x18\n" +
-	"\amessage\x18\x01 \x01(\fR\amessage\x12C\n" +
-	"\x06labels\x18\x02 \x03(\v2+.arc.node.v1.SendMessageRequest.LabelsEntryR\x06labels\x1a9\n" +
-	"\vLabelsEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"3\n" +
-	"\x13SendMessageResponse\x12\x1c\n" +
-	"\treference\x18\x01 \x01(\fR\treference\"\x90\x02\n" +
-	"\x14QueryMessagesRequest\x12E\n" +
-	"\x06labels\x18\x01 \x03(\v2-.arc.node.v1.QueryMessagesRequest.LabelsEntryR\x06labels\x12\x14\n" +
-	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x1e\n" +
+	"\ttimestamp\x18\x03 \x01(\x03R\ttimestamp\x127\n" +
 	"\n" +
-	"expression\x18\x04 \x01(\tR\n" +
-	"expression\x12\x16\n" +
-	"\x06cursor\x18\x05 \x01(\tR\x06cursor\x12(\n" +
-	"\x05order\x18\x06 \x01(\x0e2\x12.arc.node.v1.OrderR\x05order\x1a9\n" +
+	"dimensions\x18\x04 \x01(\v2\x17.arc.node.v1.DimensionsR\n" +
+	"dimensions\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x86\x01\n" +
-	"\x15QueryMessagesResponse\x121\n" +
-	"\aentries\x18\x01 \x03(\v2\x17.arc.node.v1.IndexEntryR\aentries\x12\x1f\n" +
-	"\vnext_cursor\x18\x02 \x01(\tR\n" +
-	"nextCursor\x12\x19\n" +
-	"\bhas_more\x18\x03 \x01(\bR\ahasMore\"\xc0\x01\n" +
-	"\x18SubscribeMessagesRequest\x12I\n" +
-	"\x06labels\x18\x01 \x03(\v21.arc.node.v1.SubscribeMessagesRequest.LabelsEntryR\x06labels\x12\x1e\n" +
-	"\n" +
-	"expression\x18\x02 \x01(\tR\n" +
-	"expression\x1a9\n" +
-	"\vLabelsEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"d\n" +
-	"\x19SubscribeMessagesResponse\x12-\n" +
-	"\x05entry\x18\x01 \x01(\v2\x17.arc.node.v1.IndexEntryR\x05entry\x12\x18\n" +
-	"\awarning\x18\n" +
-	" \x01(\tR\awarning\"\xa2\x01\n" +
-	"\x0fFederateRequest\x12\x12\n" +
-	"\x04peer\x18\x01 \x01(\tR\x04peer\x12@\n" +
-	"\x06labels\x18\x02 \x03(\v2(.arc.node.v1.FederateRequest.LabelsEntryR\x06labels\x1a9\n" +
-	"\vLabelsEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"D\n" +
-	"\x10FederateResponse\x12\x16\n" +
-	"\x06status\x18\x01 \x01(\tR\x06status\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"\x12\n" +
-	"\x10ListPeersRequest\"\x8b\x03\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x8b\x03\n" +
 	"\bPeerInfo\x12\x18\n" +
 	"\aaddress\x18\x01 \x01(\tR\aaddress\x129\n" +
 	"\x06labels\x18\x02 \x03(\v2!.arc.node.v1.PeerInfo.LabelsEntryR\x06labels\x12%\n" +
@@ -1235,41 +2494,51 @@ const file_arc_node_v1_node_proto_rawDesc = "" +
 	"\fentries_sent\x18\b \x01(\x03R\ventriesSent\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"@\n" +
-	"\x11ListPeersResponse\x12+\n" +
-	"\x05peers\x18\x01 \x03(\v2\x15.arc.node.v1.PeerInfoR\x05peers\"+\n" +
-	"\x11ResolveGetRequest\x12\x16\n" +
-	"\x06prefix\x18\x01 \x01(\tR\x06prefix\"\xc7\x02\n" +
-	"\x12ResolveGetResponse\x128\n" +
-	"\x04kind\x18\x01 \x01(\x0e2$.arc.node.v1.ResolveGetResponse.KindR\x04kind\x12\x1c\n" +
-	"\treference\x18\x02 \x01(\fR\treference\x12\x12\n" +
-	"\x04data\x18\x03 \x01(\fR\x04data\x12C\n" +
-	"\x06labels\x18\x04 \x03(\v2+.arc.node.v1.ResolveGetResponse.LabelsEntryR\x06labels\x12\x1c\n" +
-	"\ttimestamp\x18\x05 \x01(\x03R\ttimestamp\x1a9\n" +
-	"\vLabelsEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"'\n" +
-	"\x04Kind\x12\r\n" +
-	"\tKIND_BLOB\x10\x00\x12\x10\n" +
-	"\fKIND_MESSAGE\x10\x01*2\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01*2\n" +
 	"\x05Order\x12\x13\n" +
 	"\x0fORDER_ASCENDING\x10\x00\x12\x14\n" +
-	"\x10ORDER_DESCENDING\x10\x01*H\n" +
+	"\x10ORDER_DESCENDING\x10\x01*{\n" +
+	"\aPattern\x12\x1b\n" +
+	"\x17PATTERN_FIRE_AND_FORGET\x10\x00\x12\x13\n" +
+	"\x0fPATTERN_REQ_REP\x10\x01\x12\x13\n" +
+	"\x0fPATTERN_PUB_SUB\x10\x02\x12\x11\n" +
+	"\rPATTERN_QUEUE\x10\x03\x12\x16\n" +
+	"\x12PATTERN_STORE_ONLY\x10\x04*\\\n" +
+	"\bDelivery\x12\x19\n" +
+	"\x15DELIVERY_AT_MOST_ONCE\x10\x00\x12\x1a\n" +
+	"\x16DELIVERY_AT_LEAST_ONCE\x10\x01\x12\x19\n" +
+	"\x15DELIVERY_EXACTLY_ONCE\x10\x02*A\n" +
+	"\vPersistence\x12\x19\n" +
+	"\x15PERSISTENCE_EPHEMERAL\x10\x00\x12\x17\n" +
+	"\x13PERSISTENCE_DURABLE\x10\x01*r\n" +
+	"\n" +
+	"Visibility\x12\x15\n" +
+	"\x11VISIBILITY_PUBLIC\x10\x00\x12\x16\n" +
+	"\x12VISIBILITY_PRIVATE\x10\x01\x12\x1b\n" +
+	"\x17VISIBILITY_LABEL_SCOPED\x10\x02\x12\x18\n" +
+	"\x14VISIBILITY_FEDERATED\x10\x03*J\n" +
+	"\bOrdering\x12\x16\n" +
+	"\x12ORDERING_UNORDERED\x10\x00\x12\x11\n" +
+	"\rORDERING_FIFO\x10\x01\x12\x13\n" +
+	"\x0fORDERING_CAUSAL\x10\x02*D\n" +
+	"\bAffinity\x12\x11\n" +
+	"\rAFFINITY_NONE\x10\x00\x12\x13\n" +
+	"\x0fAFFINITY_SENDER\x10\x01\x12\x10\n" +
+	"\fAFFINITY_KEY\x10\x02*A\n" +
+	"\x05Dedup\x12\x0e\n" +
+	"\n" +
+	"DEDUP_NONE\x10\x00\x12\r\n" +
+	"\tDEDUP_REF\x10\x01\x12\x19\n" +
+	"\x15DEDUP_IDEMPOTENCY_KEY\x10\x02*g\n" +
+	"\x10DeliveryComplete\x12\x1a\n" +
+	"\x16DELIVERY_COMPLETE_NONE\x10\x00\x12\x1c\n" +
+	"\x18DELIVERY_COMPLETE_N_OF_M\x10\x01\x12\x19\n" +
+	"\x15DELIVERY_COMPLETE_ALL\x10\x02*H\n" +
 	"\rPeerDirection\x12\x1b\n" +
 	"\x17PEER_DIRECTION_OUTBOUND\x10\x00\x12\x1a\n" +
-	"\x16PEER_DIRECTION_INBOUND\x10\x012\x9f\x05\n" +
-	"\vNodeService\x12M\n" +
-	"\n" +
-	"PutContent\x12\x1e.arc.node.v1.PutContentRequest\x1a\x1f.arc.node.v1.PutContentResponse\x12M\n" +
-	"\n" +
-	"GetContent\x12\x1e.arc.node.v1.GetContentRequest\x1a\x1f.arc.node.v1.GetContentResponse\x12P\n" +
-	"\vSendMessage\x12\x1f.arc.node.v1.SendMessageRequest\x1a .arc.node.v1.SendMessageResponse\x12V\n" +
-	"\rQueryMessages\x12!.arc.node.v1.QueryMessagesRequest\x1a\".arc.node.v1.QueryMessagesResponse\x12d\n" +
-	"\x11SubscribeMessages\x12%.arc.node.v1.SubscribeMessagesRequest\x1a&.arc.node.v1.SubscribeMessagesResponse0\x01\x12G\n" +
-	"\bFederate\x12\x1c.arc.node.v1.FederateRequest\x1a\x1d.arc.node.v1.FederateResponse\x12J\n" +
-	"\tListPeers\x12\x1d.arc.node.v1.ListPeersRequest\x1a\x1e.arc.node.v1.ListPeersResponse\x12M\n" +
-	"\n" +
-	"ResolveGet\x12\x1e.arc.node.v1.ResolveGetRequest\x1a\x1f.arc.node.v1.ResolveGetResponseB5Z3github.com/gezibash/arc-node/api/arc/node/v1;nodev1b\x06proto3"
+	"\x16PEER_DIRECTION_INBOUND\x10\x012P\n" +
+	"\vNodeService\x12A\n" +
+	"\aChannel\x12\x18.arc.node.v1.ClientFrame\x1a\x18.arc.node.v1.ServerFrame(\x010\x01B5Z3github.com/gezibash/arc-node/api/arc/node/v1;nodev1b\x06proto3"
 
 var (
 	file_arc_node_v1_node_proto_rawDescOnce sync.Once
@@ -1283,73 +2552,101 @@ func file_arc_node_v1_node_proto_rawDescGZIP() []byte {
 	return file_arc_node_v1_node_proto_rawDescData
 }
 
-var file_arc_node_v1_node_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_arc_node_v1_node_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
+var file_arc_node_v1_node_proto_enumTypes = make([]protoimpl.EnumInfo, 11)
+var file_arc_node_v1_node_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
 var file_arc_node_v1_node_proto_goTypes = []any{
 	(Order)(0),                        // 0: arc.node.v1.Order
-	(PeerDirection)(0),                // 1: arc.node.v1.PeerDirection
-	(ResolveGetResponse_Kind)(0),      // 2: arc.node.v1.ResolveGetResponse.Kind
-	(*PutContentRequest)(nil),         // 3: arc.node.v1.PutContentRequest
-	(*PutContentResponse)(nil),        // 4: arc.node.v1.PutContentResponse
-	(*GetContentRequest)(nil),         // 5: arc.node.v1.GetContentRequest
-	(*GetContentResponse)(nil),        // 6: arc.node.v1.GetContentResponse
-	(*IndexEntry)(nil),                // 7: arc.node.v1.IndexEntry
-	(*SendMessageRequest)(nil),        // 8: arc.node.v1.SendMessageRequest
-	(*SendMessageResponse)(nil),       // 9: arc.node.v1.SendMessageResponse
-	(*QueryMessagesRequest)(nil),      // 10: arc.node.v1.QueryMessagesRequest
-	(*QueryMessagesResponse)(nil),     // 11: arc.node.v1.QueryMessagesResponse
-	(*SubscribeMessagesRequest)(nil),  // 12: arc.node.v1.SubscribeMessagesRequest
-	(*SubscribeMessagesResponse)(nil), // 13: arc.node.v1.SubscribeMessagesResponse
-	(*FederateRequest)(nil),           // 14: arc.node.v1.FederateRequest
-	(*FederateResponse)(nil),          // 15: arc.node.v1.FederateResponse
-	(*ListPeersRequest)(nil),          // 16: arc.node.v1.ListPeersRequest
-	(*PeerInfo)(nil),                  // 17: arc.node.v1.PeerInfo
-	(*ListPeersResponse)(nil),         // 18: arc.node.v1.ListPeersResponse
-	(*ResolveGetRequest)(nil),         // 19: arc.node.v1.ResolveGetRequest
-	(*ResolveGetResponse)(nil),        // 20: arc.node.v1.ResolveGetResponse
-	nil,                               // 21: arc.node.v1.IndexEntry.LabelsEntry
-	nil,                               // 22: arc.node.v1.SendMessageRequest.LabelsEntry
-	nil,                               // 23: arc.node.v1.QueryMessagesRequest.LabelsEntry
-	nil,                               // 24: arc.node.v1.SubscribeMessagesRequest.LabelsEntry
-	nil,                               // 25: arc.node.v1.FederateRequest.LabelsEntry
-	nil,                               // 26: arc.node.v1.PeerInfo.LabelsEntry
-	nil,                               // 27: arc.node.v1.ResolveGetResponse.LabelsEntry
+	(Pattern)(0),                      // 1: arc.node.v1.Pattern
+	(Delivery)(0),                     // 2: arc.node.v1.Delivery
+	(Persistence)(0),                  // 3: arc.node.v1.Persistence
+	(Visibility)(0),                   // 4: arc.node.v1.Visibility
+	(Ordering)(0),                     // 5: arc.node.v1.Ordering
+	(Affinity)(0),                     // 6: arc.node.v1.Affinity
+	(Dedup)(0),                        // 7: arc.node.v1.Dedup
+	(DeliveryComplete)(0),             // 8: arc.node.v1.DeliveryComplete
+	(PeerDirection)(0),                // 9: arc.node.v1.PeerDirection
+	(ResolveGetResponseFrame_Kind)(0), // 10: arc.node.v1.ResolveGetResponseFrame.Kind
+	(*Dimensions)(nil),                // 11: arc.node.v1.Dimensions
+	(*PublishFrame)(nil),              // 12: arc.node.v1.PublishFrame
+	(*SubscribeFrame)(nil),            // 13: arc.node.v1.SubscribeFrame
+	(*UnsubscribeFrame)(nil),          // 14: arc.node.v1.UnsubscribeFrame
+	(*AckFrame)(nil),                  // 15: arc.node.v1.AckFrame
+	(*SeekFrame)(nil),                 // 16: arc.node.v1.SeekFrame
+	(*QueryFrame)(nil),                // 17: arc.node.v1.QueryFrame
+	(*PutFrame)(nil),                  // 18: arc.node.v1.PutFrame
+	(*GetFrame)(nil),                  // 19: arc.node.v1.GetFrame
+	(*FederateFrame)(nil),             // 20: arc.node.v1.FederateFrame
+	(*ListPeersFrame)(nil),            // 21: arc.node.v1.ListPeersFrame
+	(*ResolveGetFrame)(nil),           // 22: arc.node.v1.ResolveGetFrame
+	(*DeliveryFrame)(nil),             // 23: arc.node.v1.DeliveryFrame
+	(*ReceiptFrame)(nil),              // 24: arc.node.v1.ReceiptFrame
+	(*ResponseFrame)(nil),             // 25: arc.node.v1.ResponseFrame
+	(*ErrorFrame)(nil),                // 26: arc.node.v1.ErrorFrame
+	(*FederateResponseFrame)(nil),     // 27: arc.node.v1.FederateResponseFrame
+	(*ListPeersResponseFrame)(nil),    // 28: arc.node.v1.ListPeersResponseFrame
+	(*ResolveGetResponseFrame)(nil),   // 29: arc.node.v1.ResolveGetResponseFrame
+	(*ClientFrame)(nil),               // 30: arc.node.v1.ClientFrame
+	(*ServerFrame)(nil),               // 31: arc.node.v1.ServerFrame
+	(*IndexEntry)(nil),                // 32: arc.node.v1.IndexEntry
+	(*PeerInfo)(nil),                  // 33: arc.node.v1.PeerInfo
+	nil,                               // 34: arc.node.v1.PublishFrame.LabelsEntry
+	nil,                               // 35: arc.node.v1.SubscribeFrame.LabelsEntry
+	nil,                               // 36: arc.node.v1.QueryFrame.LabelsEntry
+	nil,                               // 37: arc.node.v1.FederateFrame.LabelsEntry
+	nil,                               // 38: arc.node.v1.ResolveGetResponseFrame.LabelsEntry
+	nil,                               // 39: arc.node.v1.IndexEntry.LabelsEntry
+	nil,                               // 40: arc.node.v1.PeerInfo.LabelsEntry
 }
 var file_arc_node_v1_node_proto_depIdxs = []int32{
-	21, // 0: arc.node.v1.IndexEntry.labels:type_name -> arc.node.v1.IndexEntry.LabelsEntry
-	22, // 1: arc.node.v1.SendMessageRequest.labels:type_name -> arc.node.v1.SendMessageRequest.LabelsEntry
-	23, // 2: arc.node.v1.QueryMessagesRequest.labels:type_name -> arc.node.v1.QueryMessagesRequest.LabelsEntry
-	0,  // 3: arc.node.v1.QueryMessagesRequest.order:type_name -> arc.node.v1.Order
-	7,  // 4: arc.node.v1.QueryMessagesResponse.entries:type_name -> arc.node.v1.IndexEntry
-	24, // 5: arc.node.v1.SubscribeMessagesRequest.labels:type_name -> arc.node.v1.SubscribeMessagesRequest.LabelsEntry
-	7,  // 6: arc.node.v1.SubscribeMessagesResponse.entry:type_name -> arc.node.v1.IndexEntry
-	25, // 7: arc.node.v1.FederateRequest.labels:type_name -> arc.node.v1.FederateRequest.LabelsEntry
-	26, // 8: arc.node.v1.PeerInfo.labels:type_name -> arc.node.v1.PeerInfo.LabelsEntry
-	1,  // 9: arc.node.v1.PeerInfo.direction:type_name -> arc.node.v1.PeerDirection
-	17, // 10: arc.node.v1.ListPeersResponse.peers:type_name -> arc.node.v1.PeerInfo
-	2,  // 11: arc.node.v1.ResolveGetResponse.kind:type_name -> arc.node.v1.ResolveGetResponse.Kind
-	27, // 12: arc.node.v1.ResolveGetResponse.labels:type_name -> arc.node.v1.ResolveGetResponse.LabelsEntry
-	3,  // 13: arc.node.v1.NodeService.PutContent:input_type -> arc.node.v1.PutContentRequest
-	5,  // 14: arc.node.v1.NodeService.GetContent:input_type -> arc.node.v1.GetContentRequest
-	8,  // 15: arc.node.v1.NodeService.SendMessage:input_type -> arc.node.v1.SendMessageRequest
-	10, // 16: arc.node.v1.NodeService.QueryMessages:input_type -> arc.node.v1.QueryMessagesRequest
-	12, // 17: arc.node.v1.NodeService.SubscribeMessages:input_type -> arc.node.v1.SubscribeMessagesRequest
-	14, // 18: arc.node.v1.NodeService.Federate:input_type -> arc.node.v1.FederateRequest
-	16, // 19: arc.node.v1.NodeService.ListPeers:input_type -> arc.node.v1.ListPeersRequest
-	19, // 20: arc.node.v1.NodeService.ResolveGet:input_type -> arc.node.v1.ResolveGetRequest
-	4,  // 21: arc.node.v1.NodeService.PutContent:output_type -> arc.node.v1.PutContentResponse
-	6,  // 22: arc.node.v1.NodeService.GetContent:output_type -> arc.node.v1.GetContentResponse
-	9,  // 23: arc.node.v1.NodeService.SendMessage:output_type -> arc.node.v1.SendMessageResponse
-	11, // 24: arc.node.v1.NodeService.QueryMessages:output_type -> arc.node.v1.QueryMessagesResponse
-	13, // 25: arc.node.v1.NodeService.SubscribeMessages:output_type -> arc.node.v1.SubscribeMessagesResponse
-	15, // 26: arc.node.v1.NodeService.Federate:output_type -> arc.node.v1.FederateResponse
-	18, // 27: arc.node.v1.NodeService.ListPeers:output_type -> arc.node.v1.ListPeersResponse
-	20, // 28: arc.node.v1.NodeService.ResolveGet:output_type -> arc.node.v1.ResolveGetResponse
-	21, // [21:29] is the sub-list for method output_type
-	13, // [13:21] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	1,  // 0: arc.node.v1.Dimensions.pattern:type_name -> arc.node.v1.Pattern
+	2,  // 1: arc.node.v1.Dimensions.delivery:type_name -> arc.node.v1.Delivery
+	3,  // 2: arc.node.v1.Dimensions.persistence:type_name -> arc.node.v1.Persistence
+	4,  // 3: arc.node.v1.Dimensions.visibility:type_name -> arc.node.v1.Visibility
+	5,  // 4: arc.node.v1.Dimensions.ordering:type_name -> arc.node.v1.Ordering
+	6,  // 5: arc.node.v1.Dimensions.affinity:type_name -> arc.node.v1.Affinity
+	7,  // 6: arc.node.v1.Dimensions.dedup:type_name -> arc.node.v1.Dedup
+	8,  // 7: arc.node.v1.Dimensions.complete:type_name -> arc.node.v1.DeliveryComplete
+	34, // 8: arc.node.v1.PublishFrame.labels:type_name -> arc.node.v1.PublishFrame.LabelsEntry
+	11, // 9: arc.node.v1.PublishFrame.dimensions:type_name -> arc.node.v1.Dimensions
+	35, // 10: arc.node.v1.SubscribeFrame.labels:type_name -> arc.node.v1.SubscribeFrame.LabelsEntry
+	11, // 11: arc.node.v1.SubscribeFrame.dimensions:type_name -> arc.node.v1.Dimensions
+	36, // 12: arc.node.v1.QueryFrame.labels:type_name -> arc.node.v1.QueryFrame.LabelsEntry
+	0,  // 13: arc.node.v1.QueryFrame.order:type_name -> arc.node.v1.Order
+	37, // 14: arc.node.v1.FederateFrame.labels:type_name -> arc.node.v1.FederateFrame.LabelsEntry
+	32, // 15: arc.node.v1.DeliveryFrame.entry:type_name -> arc.node.v1.IndexEntry
+	32, // 16: arc.node.v1.ResponseFrame.entries:type_name -> arc.node.v1.IndexEntry
+	33, // 17: arc.node.v1.ListPeersResponseFrame.peers:type_name -> arc.node.v1.PeerInfo
+	10, // 18: arc.node.v1.ResolveGetResponseFrame.kind:type_name -> arc.node.v1.ResolveGetResponseFrame.Kind
+	38, // 19: arc.node.v1.ResolveGetResponseFrame.labels:type_name -> arc.node.v1.ResolveGetResponseFrame.LabelsEntry
+	12, // 20: arc.node.v1.ClientFrame.publish:type_name -> arc.node.v1.PublishFrame
+	13, // 21: arc.node.v1.ClientFrame.subscribe:type_name -> arc.node.v1.SubscribeFrame
+	14, // 22: arc.node.v1.ClientFrame.unsubscribe:type_name -> arc.node.v1.UnsubscribeFrame
+	15, // 23: arc.node.v1.ClientFrame.ack:type_name -> arc.node.v1.AckFrame
+	16, // 24: arc.node.v1.ClientFrame.seek:type_name -> arc.node.v1.SeekFrame
+	17, // 25: arc.node.v1.ClientFrame.query:type_name -> arc.node.v1.QueryFrame
+	18, // 26: arc.node.v1.ClientFrame.put:type_name -> arc.node.v1.PutFrame
+	19, // 27: arc.node.v1.ClientFrame.get:type_name -> arc.node.v1.GetFrame
+	20, // 28: arc.node.v1.ClientFrame.federate:type_name -> arc.node.v1.FederateFrame
+	21, // 29: arc.node.v1.ClientFrame.list_peers:type_name -> arc.node.v1.ListPeersFrame
+	22, // 30: arc.node.v1.ClientFrame.resolve_get:type_name -> arc.node.v1.ResolveGetFrame
+	23, // 31: arc.node.v1.ServerFrame.delivery:type_name -> arc.node.v1.DeliveryFrame
+	24, // 32: arc.node.v1.ServerFrame.receipt:type_name -> arc.node.v1.ReceiptFrame
+	25, // 33: arc.node.v1.ServerFrame.response:type_name -> arc.node.v1.ResponseFrame
+	26, // 34: arc.node.v1.ServerFrame.error:type_name -> arc.node.v1.ErrorFrame
+	27, // 35: arc.node.v1.ServerFrame.federate_response:type_name -> arc.node.v1.FederateResponseFrame
+	28, // 36: arc.node.v1.ServerFrame.list_peers_response:type_name -> arc.node.v1.ListPeersResponseFrame
+	29, // 37: arc.node.v1.ServerFrame.resolve_get_response:type_name -> arc.node.v1.ResolveGetResponseFrame
+	39, // 38: arc.node.v1.IndexEntry.labels:type_name -> arc.node.v1.IndexEntry.LabelsEntry
+	11, // 39: arc.node.v1.IndexEntry.dimensions:type_name -> arc.node.v1.Dimensions
+	40, // 40: arc.node.v1.PeerInfo.labels:type_name -> arc.node.v1.PeerInfo.LabelsEntry
+	9,  // 41: arc.node.v1.PeerInfo.direction:type_name -> arc.node.v1.PeerDirection
+	30, // 42: arc.node.v1.NodeService.Channel:input_type -> arc.node.v1.ClientFrame
+	31, // 43: arc.node.v1.NodeService.Channel:output_type -> arc.node.v1.ServerFrame
+	43, // [43:44] is the sub-list for method output_type
+	42, // [42:43] is the sub-list for method input_type
+	42, // [42:42] is the sub-list for extension type_name
+	42, // [42:42] is the sub-list for extension extendee
+	0,  // [0:42] is the sub-list for field type_name
 }
 
 func init() { file_arc_node_v1_node_proto_init() }
@@ -1357,13 +2654,35 @@ func file_arc_node_v1_node_proto_init() {
 	if File_arc_node_v1_node_proto != nil {
 		return
 	}
+	file_arc_node_v1_node_proto_msgTypes[19].OneofWrappers = []any{
+		(*ClientFrame_Publish)(nil),
+		(*ClientFrame_Subscribe)(nil),
+		(*ClientFrame_Unsubscribe)(nil),
+		(*ClientFrame_Ack)(nil),
+		(*ClientFrame_Seek)(nil),
+		(*ClientFrame_Query)(nil),
+		(*ClientFrame_Put)(nil),
+		(*ClientFrame_Get)(nil),
+		(*ClientFrame_Federate)(nil),
+		(*ClientFrame_ListPeers)(nil),
+		(*ClientFrame_ResolveGet)(nil),
+	}
+	file_arc_node_v1_node_proto_msgTypes[20].OneofWrappers = []any{
+		(*ServerFrame_Delivery)(nil),
+		(*ServerFrame_Receipt)(nil),
+		(*ServerFrame_Response)(nil),
+		(*ServerFrame_Error)(nil),
+		(*ServerFrame_FederateResponse)(nil),
+		(*ServerFrame_ListPeersResponse)(nil),
+		(*ServerFrame_ResolveGetResponse)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_arc_node_v1_node_proto_rawDesc), len(file_arc_node_v1_node_proto_rawDesc)),
-			NumEnums:      3,
-			NumMessages:   25,
+			NumEnums:      11,
+			NumMessages:   30,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

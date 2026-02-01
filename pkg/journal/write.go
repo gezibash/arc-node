@@ -6,9 +6,9 @@ import (
 
 	"encoding/hex"
 
-	"github.com/gezibash/arc/pkg/identity"
-	"github.com/gezibash/arc/pkg/message"
-	"github.com/gezibash/arc/pkg/reference"
+	"github.com/gezibash/arc/v2/pkg/identity"
+	"github.com/gezibash/arc/v2/pkg/message"
+	"github.com/gezibash/arc/v2/pkg/reference"
 )
 
 // Write encrypts plaintext and publishes it as a journal entry with the given labels.

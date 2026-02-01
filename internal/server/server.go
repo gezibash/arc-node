@@ -11,7 +11,7 @@ import (
 	"github.com/gezibash/arc-node/internal/indexstore"
 	"github.com/gezibash/arc-node/internal/middleware"
 	"github.com/gezibash/arc-node/internal/observability"
-	"github.com/gezibash/arc/pkg/identity"
+	"github.com/gezibash/arc/v2/pkg/identity"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	grpc_health_v1 "google.golang.org/grpc/health/grpc_health_v1"
@@ -33,7 +33,6 @@ func New(addr string, obs *observability.Observability, enableReflection bool, k
 	}
 
 	mw := &middleware.Chain{}
-	mw.Pre = append(mw.Pre, adminOnlyHook(kp.PublicKey(), adminMethods))
 
 	meta := map[string]string{}
 	if obs != nil {
@@ -46,10 +45,6 @@ func New(addr string, obs *observability.Observability, enableReflection bool, k
 	}
 
 	serverOpts := []grpc.ServerOption{
-		grpc.ChainUnaryInterceptor(
-			observability.UnaryServerInterceptor(obs.Metrics),
-			envelope.UnaryServerInterceptor(kp, mw, meta),
-		),
 		grpc.ChainStreamInterceptor(
 			observability.StreamServerInterceptor(obs.Metrics),
 			envelope.StreamServerInterceptor(kp, mw),
@@ -64,7 +59,12 @@ func New(addr string, obs *observability.Observability, enableReflection bool, k
 	grpc_health_v1.RegisterHealthServer(grpcServer, hs)
 	hs.SetServingStatus("", grpc_health_v1.HealthCheckResponse_NOT_SERVING)
 
-	federator := newFederationManager(blobs, index, kp)
+	// Wire group cache and visibility filter.
+	gc := newGroupCache()
+	vc := newVisibilityChecker(gc)
+	index.SetVisibilityFilter(vc.Check)
+
+	federator := newFederationManager(blobs, index, kp, gc)
 	if obs != nil && obs.Shutdown != nil {
 		obs.Shutdown.Register("federation", func(ctx context.Context) error {
 			federator.StopAll()
@@ -78,6 +78,9 @@ func New(addr string, obs *observability.Observability, enableReflection bool, k
 		metrics:     obs.Metrics,
 		federator:   federator,
 		subscribers: newSubscriberTracker(),
+		visCheck:    vc.Check,
+		groupCache:  gc,
+		adminKey:    kp.PublicKey(),
 	})
 
 	if enableReflection {

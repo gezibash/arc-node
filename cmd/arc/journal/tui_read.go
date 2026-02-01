@@ -11,7 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/gezibash/arc-node/cmd/arc/tui"
 	"github.com/gezibash/arc-node/pkg/journal"
-	"github.com/gezibash/arc/pkg/reference"
+	"github.com/gezibash/arc/v2/pkg/reference"
 )
 
 // readView owns only UI-local state. Content loading is handled by journalApp.

@@ -5,7 +5,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/gezibash/arc/pkg/reference"
+	"github.com/gezibash/arc/v2/pkg/reference"
 )
 
 var (

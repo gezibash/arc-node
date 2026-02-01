@@ -8,9 +8,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	"sort"
+
 	"github.com/google/uuid"
 
-	"github.com/gezibash/arc/pkg/reference"
+	"github.com/gezibash/arc/v2/pkg/reference"
 
 	celeval "github.com/gezibash/arc-node/internal/indexstore/cel"
 	"github.com/gezibash/arc-node/internal/indexstore/physical"
@@ -75,6 +77,7 @@ type Subscription interface {
 type subscription struct {
 	id         string
 	expression string
+	callerKey  [32]byte
 	entries    chan *physical.Entry
 	cancel     context.CancelFunc
 	err        error
@@ -85,9 +88,14 @@ type subscription struct {
 	totalDelivered   atomic.Int64
 	totalDropped     atomic.Int64
 	consecutiveDrops atomic.Int64
+
+	// FIFO ordering: tracks last delivered sequence per sender.
+	fifoMu      sync.Mutex
+	fifoLastSeq map[string]int64          // sender → last delivered sequence
+	fifoHeld    map[string][]*physical.Entry // sender → held-back entries sorted by sequence
 }
 
-func newSubscription(ctx context.Context, expression string, opts SubscriptionOptions) *subscription {
+func newSubscription(ctx context.Context, expression string, callerKey [32]byte, opts SubscriptionOptions) *subscription {
 	if opts.BufferSize <= 0 {
 		opts.BufferSize = defaultBufferSize
 	}
@@ -97,12 +105,15 @@ func newSubscription(ctx context.Context, expression string, opts SubscriptionOp
 
 	ctx, cancel := context.WithCancel(ctx)
 	s := &subscription{
-		id:         uuid.NewString(),
-		expression: expression,
-		entries:    make(chan *physical.Entry, opts.BufferSize),
-		cancel:     cancel,
-		done:       make(chan struct{}),
-		opts:       opts,
+		id:          uuid.NewString(),
+		expression:  expression,
+		callerKey:   callerKey,
+		entries:     make(chan *physical.Entry, opts.BufferSize),
+		cancel:      cancel,
+		done:        make(chan struct{}),
+		opts:        opts,
+		fifoLastSeq: make(map[string]int64),
+		fifoHeld:    make(map[string][]*physical.Entry),
 	}
 
 	go func() {
@@ -136,16 +147,22 @@ func (s *subscription) Health() SubscriptionHealth {
 	}
 }
 
+// VisibilityFilter decides whether an entry should be visible to a subscriber
+// identified by callerKey. Return true to allow delivery.
+type VisibilityFilter func(entry *physical.Entry, callerKey [32]byte) bool
+
 type subscriptionManager struct {
 	mu     sync.RWMutex
 	subs   map[string]*subscription
 	eval   *celeval.Evaluator
 	closed bool
 
-	intake chan *physical.Entry
-	wg     sync.WaitGroup
-	stop   chan struct{}
-	config SubscriptionConfig
+	intake           chan *physical.Entry
+	wg               sync.WaitGroup
+	stop             chan struct{}
+	config           SubscriptionConfig
+	visibilityFilter VisibilityFilter
+	rrCounter        atomic.Uint64
 }
 
 func newSubscriptionManager(eval *celeval.Evaluator, cfg SubscriptionConfig) *subscriptionManager {
@@ -175,6 +192,12 @@ func newSubscriptionManager(eval *celeval.Evaluator, cfg SubscriptionConfig) *su
 	return m
 }
 
+// SetVisibilityFilter sets the function used to check whether an entry
+// should be visible to a given subscriber.
+func (m *subscriptionManager) SetVisibilityFilter(f VisibilityFilter) {
+	m.visibilityFilter = f
+}
+
 func (m *subscriptionManager) fanoutWorker() {
 	defer m.wg.Done()
 	for {
@@ -191,9 +214,39 @@ func (m *subscriptionManager) fanoutWorker() {
 }
 
 func (m *subscriptionManager) dispatchEntry(entry *physical.Entry) {
+	matches := m.matchingSubs(entry)
+	if len(matches) == 0 {
+		return
+	}
+
+	switch entry.Pattern {
+	case 2: // PATTERN_QUEUE — fanone
+		target := m.selectOne(matches, entry)
+		if target != nil {
+			m.dispatchToSub(target, entry)
+		}
+	case 1: // PATTERN_REQ_REP — direct to "to" label subscriber
+		toHex := entry.Labels["to"]
+		for _, sub := range matches {
+			if fmt.Sprintf("%x", sub.callerKey) == toHex {
+				m.dispatchToSub(sub, entry)
+				return
+			}
+		}
+	default: // 0 (FIRE_AND_FORGET), 3 (PUB_SUB) — fanout
+		for _, sub := range matches {
+			m.dispatchToSub(sub, entry)
+		}
+	}
+}
+
+// matchingSubs returns subscriptions that match the entry's expression and pass
+// the visibility filter.
+func (m *subscriptionManager) matchingSubs(entry *physical.Entry) []*subscription {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
+	var matches []*subscription
 	for _, sub := range m.subs {
 		match, err := m.eval.Match(context.Background(), sub.expression, entry)
 		if err != nil {
@@ -204,12 +257,104 @@ func (m *subscriptionManager) dispatchEntry(entry *physical.Entry) {
 		if !match {
 			continue
 		}
+		if m.visibilityFilter != nil && !m.visibilityFilter(entry, sub.callerKey) {
+			continue
+		}
+		matches = append(matches, sub)
+	}
+	// Sort by ID for deterministic ordering (needed for consistent affinity routing).
+	sort.Slice(matches, func(i, j int) bool { return matches[i].id < matches[j].id })
+	return matches
+}
 
-		m.dispatchToSub(sub, entry)
+// selectOne picks a single subscriber for QUEUE pattern delivery.
+func (m *subscriptionManager) selectOne(subs []*subscription, entry *physical.Entry) *subscription {
+	if len(subs) == 0 {
+		return nil
+	}
+	if len(subs) == 1 {
+		return subs[0]
+	}
+
+	switch entry.Affinity {
+	case 1: // AFFINITY_SENDER — hash from label
+		key := entry.Labels["from"]
+		idx := hashToIndex(key, len(subs))
+		return subs[idx]
+	case 2: // AFFINITY_KEY — hash AffinityKey
+		idx := hashToIndex(entry.AffinityKey, len(subs))
+		return subs[idx]
+	default: // AFFINITY_NONE — round-robin
+		n := m.rrCounter.Add(1)
+		return subs[n%uint64(len(subs))]
 	}
 }
 
+// hashToIndex returns a deterministic index for a string key.
+func hashToIndex(key string, n int) int {
+	var h uint64
+	for i := 0; i < len(key); i++ {
+		h = h*31 + uint64(key[i])
+	}
+	return int(h % uint64(n))
+}
+
 func (m *subscriptionManager) dispatchToSub(sub *subscription, entry *physical.Entry) {
+	// FIFO ordering: hold back out-of-order entries.
+	if entry.Ordering == 1 || entry.Ordering == 2 { // FIFO or CAUSAL (treated same for now)
+		senderKey := entry.Labels["from"]
+		sub.fifoMu.Lock()
+		lastSeq := sub.fifoLastSeq[senderKey]
+		if lastSeq > 0 && entry.Sequence != lastSeq+1 {
+			// Out of order — hold back.
+			sub.fifoHeld[senderKey] = append(sub.fifoHeld[senderKey], entry)
+			// Sort held entries by sequence.
+			held := sub.fifoHeld[senderKey]
+			sort.Slice(held, func(i, j int) bool { return held[i].Sequence < held[j].Sequence })
+			sub.fifoMu.Unlock()
+			return
+		}
+		sub.fifoLastSeq[senderKey] = entry.Sequence
+		sub.fifoMu.Unlock()
+
+		// Deliver this entry, then drain any held entries that are now in order.
+		m.deliverToSub(sub, entry)
+		m.drainFIFOHeld(sub, senderKey)
+		return
+	}
+
+	m.deliverToSub(sub, entry)
+}
+
+// drainFIFOHeld delivers held-back entries that are now consecutive.
+func (m *subscriptionManager) drainFIFOHeld(sub *subscription, senderKey string) {
+	sub.fifoMu.Lock()
+	defer sub.fifoMu.Unlock()
+
+	for {
+		held := sub.fifoHeld[senderKey]
+		if len(held) == 0 {
+			break
+		}
+		lastSeq := sub.fifoLastSeq[senderKey]
+		if held[0].Sequence != lastSeq+1 {
+			break
+		}
+		// Deliver the next held entry.
+		next := held[0]
+		sub.fifoHeld[senderKey] = held[1:]
+		sub.fifoLastSeq[senderKey] = next.Sequence
+		// Unlock while delivering to avoid holding fifoMu during channel send.
+		sub.fifoMu.Unlock()
+		m.deliverToSub(sub, next)
+		sub.fifoMu.Lock()
+	}
+}
+
+// AckFIFO should be called when an entry is acked so held entries can be released.
+// For now, FIFO delivery is sequence-based, not ack-based, so this is a no-op placeholder.
+
+func (m *subscriptionManager) deliverToSub(sub *subscription, entry *physical.Entry) {
 	switch sub.opts.BackpressurePolicy {
 	case BackpressureBlock:
 		timer := time.NewTimer(sub.opts.BlockTimeout)
@@ -268,7 +413,7 @@ func (m *subscriptionManager) disconnectSub(sub *subscription, reason string) {
 	sub.Cancel()
 }
 
-func (m *subscriptionManager) Subscribe(ctx context.Context, expression string, opts *SubscriptionOptions) (Subscription, error) {
+func (m *subscriptionManager) Subscribe(ctx context.Context, expression string, callerKey [32]byte, opts *SubscriptionOptions) (Subscription, error) {
 	if err := m.eval.ValidateExpression(ctx, expression); err != nil {
 		return nil, err
 	}
@@ -284,7 +429,7 @@ func (m *subscriptionManager) Subscribe(ctx context.Context, expression string, 
 		opts = &SubscriptionOptions{}
 	}
 
-	sub := newSubscription(ctx, expression, *opts)
+	sub := newSubscription(ctx, expression, callerKey, *opts)
 	m.subs[sub.id] = sub
 
 	slog.Info("subscription registered",

@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/gezibash/arc-node/internal/indexstore/physical"
-	"github.com/gezibash/arc/pkg/reference"
+	"github.com/gezibash/arc/v2/pkg/reference"
 )
 
 // PartitionConfig configures time-based partitioning.

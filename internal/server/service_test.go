@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	nodev1 "github.com/gezibash/arc-node/api/arc/node/v1"
 	"github.com/gezibash/arc-node/internal/blobstore"
 	blobphysical "github.com/gezibash/arc-node/internal/blobstore/physical"
 	_ "github.com/gezibash/arc-node/internal/blobstore/physical/memory"
@@ -18,12 +17,10 @@ import (
 	_ "github.com/gezibash/arc-node/internal/indexstore/physical/memory"
 	"github.com/gezibash/arc-node/internal/observability"
 	"github.com/gezibash/arc-node/pkg/client"
-	"github.com/gezibash/arc/pkg/identity"
-	"github.com/gezibash/arc/pkg/message"
-	"github.com/gezibash/arc/pkg/reference"
-	"google.golang.org/grpc"
+	"github.com/gezibash/arc/v2/pkg/identity"
+	"github.com/gezibash/arc/v2/pkg/message"
+	"github.com/gezibash/arc/v2/pkg/reference"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 )
 
@@ -114,7 +111,7 @@ func makeMessage(t *testing.T, kp *identity.Keypair, contentType string) message
 	return msg
 }
 
-// --- PutContent / GetContent ---
+// --- PutContent / GetContent (via Channel) ---
 
 func TestPutAndGetContent(t *testing.T) {
 	_, kp, addr := newTestServer(t)
@@ -172,37 +169,6 @@ func TestGetContentNotFound(t *testing.T) {
 	}
 }
 
-func TestGetContentInvalidReference(t *testing.T) {
-	_, kp, addr := newTestServer(t)
-	ctx := context.Background()
-
-	// Dial directly without envelope — should be rejected as Unauthenticated
-	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("dial: %v", err)
-	}
-	defer conn.Close()
-
-	stub := nodev1.NewNodeServiceClient(conn)
-	_, err = stub.GetContent(ctx, &nodev1.GetContentRequest{Reference: []byte{1, 2, 3, 4, 5}})
-	if err == nil {
-		t.Fatal("expected error")
-	}
-	if s, ok := status.FromError(err); !ok || s.Code() != codes.Unauthenticated {
-		t.Errorf("code = %v, want Unauthenticated", err)
-	}
-
-	// Also verify the correct error through the envelope client
-	c, _ := newTestClient(t, addr, kp)
-	_, err = c.GetContent(ctx, reference.Reference{})
-	if err == nil {
-		t.Fatal("expected error")
-	}
-	if s, ok := status.FromError(err); !ok || s.Code() != codes.NotFound {
-		t.Errorf("code = %v, want NotFound", err)
-	}
-}
-
 // --- SendMessage ---
 
 func TestSendMessageValid(t *testing.T) {
@@ -218,29 +184,6 @@ func TestSendMessageValid(t *testing.T) {
 	if ref == (reference.Reference{}) {
 		t.Fatal("SendMessage returned zero reference")
 	}
-}
-
-func TestSendMessageEmptyBytes(t *testing.T) {
-	_, kp, addr := newTestServer(t)
-	ctx := context.Background()
-
-	// Dial directly without envelope — should be rejected as Unauthenticated
-	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("dial: %v", err)
-	}
-	defer conn.Close()
-
-	stub := nodev1.NewNodeServiceClient(conn)
-	_, err = stub.SendMessage(ctx, &nodev1.SendMessageRequest{})
-	if err == nil {
-		t.Fatal("expected error")
-	}
-	if s, ok := status.FromError(err); !ok || s.Code() != codes.Unauthenticated {
-		t.Errorf("code = %v, want Unauthenticated", err)
-	}
-
-	_ = kp // suppress unused
 }
 
 func TestSendMessageInvalidSignature(t *testing.T) {
@@ -485,10 +428,8 @@ func TestSubscribeMessagesBasic(t *testing.T) {
 		t.Fatalf("SubscribeMessages: %v", err)
 	}
 
-	// Allow the subscription stream to be fully established
 	time.Sleep(100 * time.Millisecond)
 
-	// Send a message after subscribing
 	msg := makeMessage(t, callerKP, "text/plain")
 	if _, err := c.SendMessage(ctx, msg, nil); err != nil {
 		t.Fatalf("SendMessage: %v", err)
@@ -517,16 +458,13 @@ func TestSubscribeMessagesWithLabels(t *testing.T) {
 		t.Fatalf("SubscribeMessages: %v", err)
 	}
 
-	// Allow the subscription stream to be fully established
 	time.Sleep(100 * time.Millisecond)
 
-	// Send non-matching message
 	msg1 := makeMessage(t, callerKP, "text/plain")
 	if _, err := c.SendMessage(ctx, msg1, map[string]string{"env": "dev"}); err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
 
-	// Send matching message
 	msg2 := makeMessage(t, callerKP, "text/plain")
 	if _, err := c.SendMessage(ctx, msg2, map[string]string{"env": "prod"}); err != nil {
 		t.Fatalf("SendMessage: %v", err)
@@ -558,7 +496,6 @@ func TestSubscribeMessagesCancelContext(t *testing.T) {
 
 	cancel()
 
-	// Channel should close
 	select {
 	case _, ok := <-entries:
 		if ok {
@@ -569,7 +506,7 @@ func TestSubscribeMessagesCancelContext(t *testing.T) {
 	}
 }
 
-// --- Federate ---
+// --- Federate (via Channel) ---
 
 func TestFederateRequiresAdmin(t *testing.T) {
 	_, kp, addr := newTestServer(t)

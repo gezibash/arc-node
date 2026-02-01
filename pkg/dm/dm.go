@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/gezibash/arc-node/pkg/client"
-	"github.com/gezibash/arc/pkg/identity"
+	"github.com/gezibash/arc/v2/pkg/identity"
 )
 
 const contentType = "application/x-arc-dm+encrypted"
