@@ -111,6 +111,8 @@ func (s *nodeService) Channel(stream nodev1.NodeService_ChannelServer) error {
 			s.handleResolveGet(ctx, writer, reqID, f.ResolveGet)
 		case *nodev1.ClientFrame_Nack:
 			s.handleNack(ctx, writer, reqID, f.Nack)
+		case *nodev1.ClientFrame_BatchPublish:
+			s.handleBatchPublish(ctx, writer, reqID, f.BatchPublish)
 		default:
 			sendErr(writer, reqID, codes.InvalidArgument, "unknown frame type")
 		}
@@ -612,6 +614,22 @@ func (s *nodeService) handleResolveGet(ctx context.Context, w *streamWriter, req
 	_ = w.send(&nodev1.ServerFrame{
 		RequestId: reqID,
 		Frame:     &nodev1.ServerFrame_ResolveGetResponse{ResolveGetResponse: resp},
+	})
+}
+
+func (s *nodeService) handleBatchPublish(ctx context.Context, w *streamWriter, reqID uint64, f *nodev1.BatchPublishFrame) {
+	results := make([]*nodev1.ReceiptEntry, len(f.Messages))
+	for i, pub := range f.Messages {
+		ref, err := s.doPublish(ctx, pub.Message, pub.Labels, pub.Dimensions)
+		if err != nil {
+			results[i] = &nodev1.ReceiptEntry{Ok: false, Error: err.Error()}
+		} else {
+			results[i] = &nodev1.ReceiptEntry{Reference: ref[:], Ok: true}
+		}
+	}
+	_ = w.send(&nodev1.ServerFrame{
+		RequestId: reqID,
+		Frame:     &nodev1.ServerFrame_BatchReceipt{BatchReceipt: &nodev1.BatchReceiptFrame{Results: results}},
 	})
 }
 

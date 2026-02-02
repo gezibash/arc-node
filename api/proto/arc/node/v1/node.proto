@@ -203,6 +203,22 @@ message ResolveGetResponseFrame {
   int64 timestamp = 5;
 }
 
+// Batch frames
+
+message BatchPublishFrame {
+  repeated PublishFrame messages = 1;
+}
+
+message ReceiptEntry {
+  bytes reference = 1;
+  bool ok = 2;
+  string error = 3;
+}
+
+message BatchReceiptFrame {
+  repeated ReceiptEntry results = 1;
+}
+
 // Oneofs wrapping client and server frames.
 
 message ClientFrame {
@@ -220,6 +236,7 @@ message ClientFrame {
     ListPeersFrame list_peers = 10;
     ResolveGetFrame resolve_get = 11;
     NackFrame nack = 12;
+    BatchPublishFrame batch_publish = 13;
   }
 }
 
@@ -233,6 +250,7 @@ message ServerFrame {
     FederateResponseFrame federate_response = 5;
     ListPeersResponseFrame list_peers_response = 6;
     ResolveGetResponseFrame resolve_get_response = 7;
+    BatchReceiptFrame batch_receipt = 8;
   }
 }
 

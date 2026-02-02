@@ -703,3 +703,50 @@ func TestQueryWithExpressionAndDimensions(t *testing.T) {
 		t.Errorf("correlation mismatch")
 	}
 }
+
+func TestBatchSendMessages(t *testing.T) {
+	addr, nodeKP := newTestServer(t)
+	c, kp := newTestClient(t, addr, nodeKP)
+	ctx := context.Background()
+
+	var msgs []client.BatchMessage
+	for i := 0; i < 3; i++ {
+		ref, err := c.PutContent(ctx, []byte(fmt.Sprintf("batch-content-%d", i)))
+		if err != nil {
+			t.Fatalf("PutContent: %v", err)
+		}
+		msg := makeMessage(t, kp, ref, "test/batch")
+		msgs = append(msgs, client.BatchMessage{
+			Message:    msg,
+			Labels:     map[string]string{"app": "batch-test", "i": fmt.Sprintf("%d", i)},
+			Dimensions: &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE},
+		})
+	}
+
+	results, err := c.BatchSendMessages(ctx, msgs)
+	if err != nil {
+		t.Fatalf("BatchSendMessages: %v", err)
+	}
+	if len(results) != 3 {
+		t.Fatalf("expected 3 results, got %d", len(results))
+	}
+	for i, r := range results {
+		if r.Err != nil {
+			t.Errorf("result[%d] error: %v", i, r.Err)
+		}
+		if r.Ref == (reference.Reference{}) {
+			t.Errorf("result[%d] zero ref", i)
+		}
+	}
+
+	// Verify queryable.
+	result, err := c.QueryMessages(ctx, &client.QueryOptions{
+		Labels: map[string]string{"app": "batch-test"},
+	})
+	if err != nil {
+		t.Fatalf("QueryMessages: %v", err)
+	}
+	if len(result.Entries) != 3 {
+		t.Fatalf("expected 3 entries, got %d", len(result.Entries))
+	}
+}

@@ -1806,6 +1806,154 @@ func (x *ResolveGetResponseFrame) GetTimestamp() int64 {
 	return 0
 }
 
+type BatchPublishFrame struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Messages      []*PublishFrame        `protobuf:"bytes,1,rep,name=messages,proto3" json:"messages,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BatchPublishFrame) Reset() {
+	*x = BatchPublishFrame{}
+	mi := &file_arc_node_v1_node_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BatchPublishFrame) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BatchPublishFrame) ProtoMessage() {}
+
+func (x *BatchPublishFrame) ProtoReflect() protoreflect.Message {
+	mi := &file_arc_node_v1_node_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BatchPublishFrame.ProtoReflect.Descriptor instead.
+func (*BatchPublishFrame) Descriptor() ([]byte, []int) {
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *BatchPublishFrame) GetMessages() []*PublishFrame {
+	if x != nil {
+		return x.Messages
+	}
+	return nil
+}
+
+type ReceiptEntry struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Reference     []byte                 `protobuf:"bytes,1,opt,name=reference,proto3" json:"reference,omitempty"`
+	Ok            bool                   `protobuf:"varint,2,opt,name=ok,proto3" json:"ok,omitempty"`
+	Error         string                 `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReceiptEntry) Reset() {
+	*x = ReceiptEntry{}
+	mi := &file_arc_node_v1_node_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReceiptEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReceiptEntry) ProtoMessage() {}
+
+func (x *ReceiptEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_arc_node_v1_node_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReceiptEntry.ProtoReflect.Descriptor instead.
+func (*ReceiptEntry) Descriptor() ([]byte, []int) {
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *ReceiptEntry) GetReference() []byte {
+	if x != nil {
+		return x.Reference
+	}
+	return nil
+}
+
+func (x *ReceiptEntry) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+func (x *ReceiptEntry) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+type BatchReceiptFrame struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Results       []*ReceiptEntry        `protobuf:"bytes,1,rep,name=results,proto3" json:"results,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BatchReceiptFrame) Reset() {
+	*x = BatchReceiptFrame{}
+	mi := &file_arc_node_v1_node_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BatchReceiptFrame) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BatchReceiptFrame) ProtoMessage() {}
+
+func (x *BatchReceiptFrame) ProtoReflect() protoreflect.Message {
+	mi := &file_arc_node_v1_node_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BatchReceiptFrame.ProtoReflect.Descriptor instead.
+func (*BatchReceiptFrame) Descriptor() ([]byte, []int) {
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *BatchReceiptFrame) GetResults() []*ReceiptEntry {
+	if x != nil {
+		return x.Results
+	}
+	return nil
+}
+
 type ClientFrame struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	RequestId uint64                 `protobuf:"varint,15,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
@@ -1823,6 +1971,7 @@ type ClientFrame struct {
 	//	*ClientFrame_ListPeers
 	//	*ClientFrame_ResolveGet
 	//	*ClientFrame_Nack
+	//	*ClientFrame_BatchPublish
 	Frame         isClientFrame_Frame `protobuf_oneof:"frame"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1830,7 +1979,7 @@ type ClientFrame struct {
 
 func (x *ClientFrame) Reset() {
 	*x = ClientFrame{}
-	mi := &file_arc_node_v1_node_proto_msgTypes[20]
+	mi := &file_arc_node_v1_node_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1842,7 +1991,7 @@ func (x *ClientFrame) String() string {
 func (*ClientFrame) ProtoMessage() {}
 
 func (x *ClientFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_node_v1_node_proto_msgTypes[20]
+	mi := &file_arc_node_v1_node_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1855,7 +2004,7 @@ func (x *ClientFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientFrame.ProtoReflect.Descriptor instead.
 func (*ClientFrame) Descriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{20}
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *ClientFrame) GetRequestId() uint64 {
@@ -1980,6 +2129,15 @@ func (x *ClientFrame) GetNack() *NackFrame {
 	return nil
 }
 
+func (x *ClientFrame) GetBatchPublish() *BatchPublishFrame {
+	if x != nil {
+		if x, ok := x.Frame.(*ClientFrame_BatchPublish); ok {
+			return x.BatchPublish
+		}
+	}
+	return nil
+}
+
 type isClientFrame_Frame interface {
 	isClientFrame_Frame()
 }
@@ -2032,6 +2190,10 @@ type ClientFrame_Nack struct {
 	Nack *NackFrame `protobuf:"bytes,12,opt,name=nack,proto3,oneof"`
 }
 
+type ClientFrame_BatchPublish struct {
+	BatchPublish *BatchPublishFrame `protobuf:"bytes,13,opt,name=batch_publish,json=batchPublish,proto3,oneof"`
+}
+
 func (*ClientFrame_Publish) isClientFrame_Frame() {}
 
 func (*ClientFrame_Subscribe) isClientFrame_Frame() {}
@@ -2056,6 +2218,8 @@ func (*ClientFrame_ResolveGet) isClientFrame_Frame() {}
 
 func (*ClientFrame_Nack) isClientFrame_Frame() {}
 
+func (*ClientFrame_BatchPublish) isClientFrame_Frame() {}
+
 type ServerFrame struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	RequestId uint64                 `protobuf:"varint,15,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
@@ -2068,6 +2232,7 @@ type ServerFrame struct {
 	//	*ServerFrame_FederateResponse
 	//	*ServerFrame_ListPeersResponse
 	//	*ServerFrame_ResolveGetResponse
+	//	*ServerFrame_BatchReceipt
 	Frame         isServerFrame_Frame `protobuf_oneof:"frame"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -2075,7 +2240,7 @@ type ServerFrame struct {
 
 func (x *ServerFrame) Reset() {
 	*x = ServerFrame{}
-	mi := &file_arc_node_v1_node_proto_msgTypes[21]
+	mi := &file_arc_node_v1_node_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2087,7 +2252,7 @@ func (x *ServerFrame) String() string {
 func (*ServerFrame) ProtoMessage() {}
 
 func (x *ServerFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_node_v1_node_proto_msgTypes[21]
+	mi := &file_arc_node_v1_node_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2100,7 +2265,7 @@ func (x *ServerFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServerFrame.ProtoReflect.Descriptor instead.
 func (*ServerFrame) Descriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{21}
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *ServerFrame) GetRequestId() uint64 {
@@ -2180,6 +2345,15 @@ func (x *ServerFrame) GetResolveGetResponse() *ResolveGetResponseFrame {
 	return nil
 }
 
+func (x *ServerFrame) GetBatchReceipt() *BatchReceiptFrame {
+	if x != nil {
+		if x, ok := x.Frame.(*ServerFrame_BatchReceipt); ok {
+			return x.BatchReceipt
+		}
+	}
+	return nil
+}
+
 type isServerFrame_Frame interface {
 	isServerFrame_Frame()
 }
@@ -2212,6 +2386,10 @@ type ServerFrame_ResolveGetResponse struct {
 	ResolveGetResponse *ResolveGetResponseFrame `protobuf:"bytes,7,opt,name=resolve_get_response,json=resolveGetResponse,proto3,oneof"`
 }
 
+type ServerFrame_BatchReceipt struct {
+	BatchReceipt *BatchReceiptFrame `protobuf:"bytes,8,opt,name=batch_receipt,json=batchReceipt,proto3,oneof"`
+}
+
 func (*ServerFrame_Delivery) isServerFrame_Frame() {}
 
 func (*ServerFrame_Receipt) isServerFrame_Frame() {}
@@ -2226,6 +2404,8 @@ func (*ServerFrame_ListPeersResponse) isServerFrame_Frame() {}
 
 func (*ServerFrame_ResolveGetResponse) isServerFrame_Frame() {}
 
+func (*ServerFrame_BatchReceipt) isServerFrame_Frame() {}
+
 type IndexEntry struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Reference     []byte                 `protobuf:"bytes,1,opt,name=reference,proto3" json:"reference,omitempty"`
@@ -2238,7 +2418,7 @@ type IndexEntry struct {
 
 func (x *IndexEntry) Reset() {
 	*x = IndexEntry{}
-	mi := &file_arc_node_v1_node_proto_msgTypes[22]
+	mi := &file_arc_node_v1_node_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2250,7 +2430,7 @@ func (x *IndexEntry) String() string {
 func (*IndexEntry) ProtoMessage() {}
 
 func (x *IndexEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_node_v1_node_proto_msgTypes[22]
+	mi := &file_arc_node_v1_node_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2263,7 +2443,7 @@ func (x *IndexEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IndexEntry.ProtoReflect.Descriptor instead.
 func (*IndexEntry) Descriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{22}
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *IndexEntry) GetReference() []byte {
@@ -2310,7 +2490,7 @@ type PeerInfo struct {
 
 func (x *PeerInfo) Reset() {
 	*x = PeerInfo{}
-	mi := &file_arc_node_v1_node_proto_msgTypes[23]
+	mi := &file_arc_node_v1_node_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2322,7 +2502,7 @@ func (x *PeerInfo) String() string {
 func (*PeerInfo) ProtoMessage() {}
 
 func (x *PeerInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_node_v1_node_proto_msgTypes[23]
+	mi := &file_arc_node_v1_node_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2335,7 +2515,7 @@ func (x *PeerInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PeerInfo.ProtoReflect.Descriptor instead.
 func (*PeerInfo) Descriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{23}
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *PeerInfo) GetAddress() string {
@@ -2522,7 +2702,15 @@ const file_arc_node_v1_node_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"'\n" +
 	"\x04Kind\x12\r\n" +
 	"\tKIND_BLOB\x10\x00\x12\x10\n" +
-	"\fKIND_MESSAGE\x10\x01\"\xb3\x05\n" +
+	"\fKIND_MESSAGE\x10\x01\"J\n" +
+	"\x11BatchPublishFrame\x125\n" +
+	"\bmessages\x18\x01 \x03(\v2\x19.arc.node.v1.PublishFrameR\bmessages\"R\n" +
+	"\fReceiptEntry\x12\x1c\n" +
+	"\treference\x18\x01 \x01(\fR\treference\x12\x0e\n" +
+	"\x02ok\x18\x02 \x01(\bR\x02ok\x12\x14\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error\"H\n" +
+	"\x11BatchReceiptFrame\x123\n" +
+	"\aresults\x18\x01 \x03(\v2\x19.arc.node.v1.ReceiptEntryR\aresults\"\xfa\x05\n" +
 	"\vClientFrame\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x0f \x01(\x04R\trequestId\x125\n" +
@@ -2540,8 +2728,9 @@ const file_arc_node_v1_node_proto_rawDesc = "" +
 	" \x01(\v2\x1b.arc.node.v1.ListPeersFrameH\x00R\tlistPeers\x12?\n" +
 	"\vresolve_get\x18\v \x01(\v2\x1c.arc.node.v1.ResolveGetFrameH\x00R\n" +
 	"resolveGet\x12,\n" +
-	"\x04nack\x18\f \x01(\v2\x16.arc.node.v1.NackFrameH\x00R\x04nackB\a\n" +
-	"\x05frame\"\x95\x04\n" +
+	"\x04nack\x18\f \x01(\v2\x16.arc.node.v1.NackFrameH\x00R\x04nack\x12E\n" +
+	"\rbatch_publish\x18\r \x01(\v2\x1e.arc.node.v1.BatchPublishFrameH\x00R\fbatchPublishB\a\n" +
+	"\x05frame\"\xdc\x04\n" +
 	"\vServerFrame\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x0f \x01(\x04R\trequestId\x128\n" +
@@ -2551,7 +2740,8 @@ const file_arc_node_v1_node_proto_rawDesc = "" +
 	"\x05error\x18\x04 \x01(\v2\x17.arc.node.v1.ErrorFrameH\x00R\x05error\x12Q\n" +
 	"\x11federate_response\x18\x05 \x01(\v2\".arc.node.v1.FederateResponseFrameH\x00R\x10federateResponse\x12U\n" +
 	"\x13list_peers_response\x18\x06 \x01(\v2#.arc.node.v1.ListPeersResponseFrameH\x00R\x11listPeersResponse\x12X\n" +
-	"\x14resolve_get_response\x18\a \x01(\v2$.arc.node.v1.ResolveGetResponseFrameH\x00R\x12resolveGetResponseB\a\n" +
+	"\x14resolve_get_response\x18\a \x01(\v2$.arc.node.v1.ResolveGetResponseFrameH\x00R\x12resolveGetResponse\x12E\n" +
+	"\rbatch_receipt\x18\b \x01(\v2\x1e.arc.node.v1.BatchReceiptFrameH\x00R\fbatchReceiptB\a\n" +
 	"\x05frame\"\xf9\x01\n" +
 	"\n" +
 	"IndexEntry\x12\x1c\n" +
@@ -2636,7 +2826,7 @@ func file_arc_node_v1_node_proto_rawDescGZIP() []byte {
 }
 
 var file_arc_node_v1_node_proto_enumTypes = make([]protoimpl.EnumInfo, 11)
-var file_arc_node_v1_node_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
+var file_arc_node_v1_node_proto_msgTypes = make([]protoimpl.MessageInfo, 34)
 var file_arc_node_v1_node_proto_goTypes = []any{
 	(Order)(0),                        // 0: arc.node.v1.Order
 	(Pattern)(0),                      // 1: arc.node.v1.Pattern
@@ -2669,17 +2859,20 @@ var file_arc_node_v1_node_proto_goTypes = []any{
 	(*FederateResponseFrame)(nil),     // 28: arc.node.v1.FederateResponseFrame
 	(*ListPeersResponseFrame)(nil),    // 29: arc.node.v1.ListPeersResponseFrame
 	(*ResolveGetResponseFrame)(nil),   // 30: arc.node.v1.ResolveGetResponseFrame
-	(*ClientFrame)(nil),               // 31: arc.node.v1.ClientFrame
-	(*ServerFrame)(nil),               // 32: arc.node.v1.ServerFrame
-	(*IndexEntry)(nil),                // 33: arc.node.v1.IndexEntry
-	(*PeerInfo)(nil),                  // 34: arc.node.v1.PeerInfo
-	nil,                               // 35: arc.node.v1.PublishFrame.LabelsEntry
-	nil,                               // 36: arc.node.v1.SubscribeFrame.LabelsEntry
-	nil,                               // 37: arc.node.v1.QueryFrame.LabelsEntry
-	nil,                               // 38: arc.node.v1.FederateFrame.LabelsEntry
-	nil,                               // 39: arc.node.v1.ResolveGetResponseFrame.LabelsEntry
-	nil,                               // 40: arc.node.v1.IndexEntry.LabelsEntry
-	nil,                               // 41: arc.node.v1.PeerInfo.LabelsEntry
+	(*BatchPublishFrame)(nil),         // 31: arc.node.v1.BatchPublishFrame
+	(*ReceiptEntry)(nil),              // 32: arc.node.v1.ReceiptEntry
+	(*BatchReceiptFrame)(nil),         // 33: arc.node.v1.BatchReceiptFrame
+	(*ClientFrame)(nil),               // 34: arc.node.v1.ClientFrame
+	(*ServerFrame)(nil),               // 35: arc.node.v1.ServerFrame
+	(*IndexEntry)(nil),                // 36: arc.node.v1.IndexEntry
+	(*PeerInfo)(nil),                  // 37: arc.node.v1.PeerInfo
+	nil,                               // 38: arc.node.v1.PublishFrame.LabelsEntry
+	nil,                               // 39: arc.node.v1.SubscribeFrame.LabelsEntry
+	nil,                               // 40: arc.node.v1.QueryFrame.LabelsEntry
+	nil,                               // 41: arc.node.v1.FederateFrame.LabelsEntry
+	nil,                               // 42: arc.node.v1.ResolveGetResponseFrame.LabelsEntry
+	nil,                               // 43: arc.node.v1.IndexEntry.LabelsEntry
+	nil,                               // 44: arc.node.v1.PeerInfo.LabelsEntry
 }
 var file_arc_node_v1_node_proto_depIdxs = []int32{
 	1,  // 0: arc.node.v1.Dimensions.pattern:type_name -> arc.node.v1.Pattern
@@ -2690,48 +2883,52 @@ var file_arc_node_v1_node_proto_depIdxs = []int32{
 	6,  // 5: arc.node.v1.Dimensions.affinity:type_name -> arc.node.v1.Affinity
 	7,  // 6: arc.node.v1.Dimensions.dedup:type_name -> arc.node.v1.Dedup
 	8,  // 7: arc.node.v1.Dimensions.complete:type_name -> arc.node.v1.DeliveryComplete
-	35, // 8: arc.node.v1.PublishFrame.labels:type_name -> arc.node.v1.PublishFrame.LabelsEntry
+	38, // 8: arc.node.v1.PublishFrame.labels:type_name -> arc.node.v1.PublishFrame.LabelsEntry
 	11, // 9: arc.node.v1.PublishFrame.dimensions:type_name -> arc.node.v1.Dimensions
-	36, // 10: arc.node.v1.SubscribeFrame.labels:type_name -> arc.node.v1.SubscribeFrame.LabelsEntry
+	39, // 10: arc.node.v1.SubscribeFrame.labels:type_name -> arc.node.v1.SubscribeFrame.LabelsEntry
 	11, // 11: arc.node.v1.SubscribeFrame.dimensions:type_name -> arc.node.v1.Dimensions
-	37, // 12: arc.node.v1.QueryFrame.labels:type_name -> arc.node.v1.QueryFrame.LabelsEntry
+	40, // 12: arc.node.v1.QueryFrame.labels:type_name -> arc.node.v1.QueryFrame.LabelsEntry
 	0,  // 13: arc.node.v1.QueryFrame.order:type_name -> arc.node.v1.Order
-	38, // 14: arc.node.v1.FederateFrame.labels:type_name -> arc.node.v1.FederateFrame.LabelsEntry
-	33, // 15: arc.node.v1.DeliveryFrame.entry:type_name -> arc.node.v1.IndexEntry
-	33, // 16: arc.node.v1.ResponseFrame.entries:type_name -> arc.node.v1.IndexEntry
-	34, // 17: arc.node.v1.ListPeersResponseFrame.peers:type_name -> arc.node.v1.PeerInfo
+	41, // 14: arc.node.v1.FederateFrame.labels:type_name -> arc.node.v1.FederateFrame.LabelsEntry
+	36, // 15: arc.node.v1.DeliveryFrame.entry:type_name -> arc.node.v1.IndexEntry
+	36, // 16: arc.node.v1.ResponseFrame.entries:type_name -> arc.node.v1.IndexEntry
+	37, // 17: arc.node.v1.ListPeersResponseFrame.peers:type_name -> arc.node.v1.PeerInfo
 	10, // 18: arc.node.v1.ResolveGetResponseFrame.kind:type_name -> arc.node.v1.ResolveGetResponseFrame.Kind
-	39, // 19: arc.node.v1.ResolveGetResponseFrame.labels:type_name -> arc.node.v1.ResolveGetResponseFrame.LabelsEntry
-	12, // 20: arc.node.v1.ClientFrame.publish:type_name -> arc.node.v1.PublishFrame
-	13, // 21: arc.node.v1.ClientFrame.subscribe:type_name -> arc.node.v1.SubscribeFrame
-	14, // 22: arc.node.v1.ClientFrame.unsubscribe:type_name -> arc.node.v1.UnsubscribeFrame
-	15, // 23: arc.node.v1.ClientFrame.ack:type_name -> arc.node.v1.AckFrame
-	17, // 24: arc.node.v1.ClientFrame.seek:type_name -> arc.node.v1.SeekFrame
-	18, // 25: arc.node.v1.ClientFrame.query:type_name -> arc.node.v1.QueryFrame
-	19, // 26: arc.node.v1.ClientFrame.put:type_name -> arc.node.v1.PutFrame
-	20, // 27: arc.node.v1.ClientFrame.get:type_name -> arc.node.v1.GetFrame
-	21, // 28: arc.node.v1.ClientFrame.federate:type_name -> arc.node.v1.FederateFrame
-	22, // 29: arc.node.v1.ClientFrame.list_peers:type_name -> arc.node.v1.ListPeersFrame
-	23, // 30: arc.node.v1.ClientFrame.resolve_get:type_name -> arc.node.v1.ResolveGetFrame
-	16, // 31: arc.node.v1.ClientFrame.nack:type_name -> arc.node.v1.NackFrame
-	24, // 32: arc.node.v1.ServerFrame.delivery:type_name -> arc.node.v1.DeliveryFrame
-	25, // 33: arc.node.v1.ServerFrame.receipt:type_name -> arc.node.v1.ReceiptFrame
-	26, // 34: arc.node.v1.ServerFrame.response:type_name -> arc.node.v1.ResponseFrame
-	27, // 35: arc.node.v1.ServerFrame.error:type_name -> arc.node.v1.ErrorFrame
-	28, // 36: arc.node.v1.ServerFrame.federate_response:type_name -> arc.node.v1.FederateResponseFrame
-	29, // 37: arc.node.v1.ServerFrame.list_peers_response:type_name -> arc.node.v1.ListPeersResponseFrame
-	30, // 38: arc.node.v1.ServerFrame.resolve_get_response:type_name -> arc.node.v1.ResolveGetResponseFrame
-	40, // 39: arc.node.v1.IndexEntry.labels:type_name -> arc.node.v1.IndexEntry.LabelsEntry
-	11, // 40: arc.node.v1.IndexEntry.dimensions:type_name -> arc.node.v1.Dimensions
-	41, // 41: arc.node.v1.PeerInfo.labels:type_name -> arc.node.v1.PeerInfo.LabelsEntry
-	9,  // 42: arc.node.v1.PeerInfo.direction:type_name -> arc.node.v1.PeerDirection
-	31, // 43: arc.node.v1.NodeService.Channel:input_type -> arc.node.v1.ClientFrame
-	32, // 44: arc.node.v1.NodeService.Channel:output_type -> arc.node.v1.ServerFrame
-	44, // [44:45] is the sub-list for method output_type
-	43, // [43:44] is the sub-list for method input_type
-	43, // [43:43] is the sub-list for extension type_name
-	43, // [43:43] is the sub-list for extension extendee
-	0,  // [0:43] is the sub-list for field type_name
+	42, // 19: arc.node.v1.ResolveGetResponseFrame.labels:type_name -> arc.node.v1.ResolveGetResponseFrame.LabelsEntry
+	12, // 20: arc.node.v1.BatchPublishFrame.messages:type_name -> arc.node.v1.PublishFrame
+	32, // 21: arc.node.v1.BatchReceiptFrame.results:type_name -> arc.node.v1.ReceiptEntry
+	12, // 22: arc.node.v1.ClientFrame.publish:type_name -> arc.node.v1.PublishFrame
+	13, // 23: arc.node.v1.ClientFrame.subscribe:type_name -> arc.node.v1.SubscribeFrame
+	14, // 24: arc.node.v1.ClientFrame.unsubscribe:type_name -> arc.node.v1.UnsubscribeFrame
+	15, // 25: arc.node.v1.ClientFrame.ack:type_name -> arc.node.v1.AckFrame
+	17, // 26: arc.node.v1.ClientFrame.seek:type_name -> arc.node.v1.SeekFrame
+	18, // 27: arc.node.v1.ClientFrame.query:type_name -> arc.node.v1.QueryFrame
+	19, // 28: arc.node.v1.ClientFrame.put:type_name -> arc.node.v1.PutFrame
+	20, // 29: arc.node.v1.ClientFrame.get:type_name -> arc.node.v1.GetFrame
+	21, // 30: arc.node.v1.ClientFrame.federate:type_name -> arc.node.v1.FederateFrame
+	22, // 31: arc.node.v1.ClientFrame.list_peers:type_name -> arc.node.v1.ListPeersFrame
+	23, // 32: arc.node.v1.ClientFrame.resolve_get:type_name -> arc.node.v1.ResolveGetFrame
+	16, // 33: arc.node.v1.ClientFrame.nack:type_name -> arc.node.v1.NackFrame
+	31, // 34: arc.node.v1.ClientFrame.batch_publish:type_name -> arc.node.v1.BatchPublishFrame
+	24, // 35: arc.node.v1.ServerFrame.delivery:type_name -> arc.node.v1.DeliveryFrame
+	25, // 36: arc.node.v1.ServerFrame.receipt:type_name -> arc.node.v1.ReceiptFrame
+	26, // 37: arc.node.v1.ServerFrame.response:type_name -> arc.node.v1.ResponseFrame
+	27, // 38: arc.node.v1.ServerFrame.error:type_name -> arc.node.v1.ErrorFrame
+	28, // 39: arc.node.v1.ServerFrame.federate_response:type_name -> arc.node.v1.FederateResponseFrame
+	29, // 40: arc.node.v1.ServerFrame.list_peers_response:type_name -> arc.node.v1.ListPeersResponseFrame
+	30, // 41: arc.node.v1.ServerFrame.resolve_get_response:type_name -> arc.node.v1.ResolveGetResponseFrame
+	33, // 42: arc.node.v1.ServerFrame.batch_receipt:type_name -> arc.node.v1.BatchReceiptFrame
+	43, // 43: arc.node.v1.IndexEntry.labels:type_name -> arc.node.v1.IndexEntry.LabelsEntry
+	11, // 44: arc.node.v1.IndexEntry.dimensions:type_name -> arc.node.v1.Dimensions
+	44, // 45: arc.node.v1.PeerInfo.labels:type_name -> arc.node.v1.PeerInfo.LabelsEntry
+	9,  // 46: arc.node.v1.PeerInfo.direction:type_name -> arc.node.v1.PeerDirection
+	34, // 47: arc.node.v1.NodeService.Channel:input_type -> arc.node.v1.ClientFrame
+	35, // 48: arc.node.v1.NodeService.Channel:output_type -> arc.node.v1.ServerFrame
+	48, // [48:49] is the sub-list for method output_type
+	47, // [47:48] is the sub-list for method input_type
+	47, // [47:47] is the sub-list for extension type_name
+	47, // [47:47] is the sub-list for extension extendee
+	0,  // [0:47] is the sub-list for field type_name
 }
 
 func init() { file_arc_node_v1_node_proto_init() }
@@ -2739,7 +2936,7 @@ func file_arc_node_v1_node_proto_init() {
 	if File_arc_node_v1_node_proto != nil {
 		return
 	}
-	file_arc_node_v1_node_proto_msgTypes[20].OneofWrappers = []any{
+	file_arc_node_v1_node_proto_msgTypes[23].OneofWrappers = []any{
 		(*ClientFrame_Publish)(nil),
 		(*ClientFrame_Subscribe)(nil),
 		(*ClientFrame_Unsubscribe)(nil),
@@ -2752,8 +2949,9 @@ func file_arc_node_v1_node_proto_init() {
 		(*ClientFrame_ListPeers)(nil),
 		(*ClientFrame_ResolveGet)(nil),
 		(*ClientFrame_Nack)(nil),
+		(*ClientFrame_BatchPublish)(nil),
 	}
-	file_arc_node_v1_node_proto_msgTypes[21].OneofWrappers = []any{
+	file_arc_node_v1_node_proto_msgTypes[24].OneofWrappers = []any{
 		(*ServerFrame_Delivery)(nil),
 		(*ServerFrame_Receipt)(nil),
 		(*ServerFrame_Response)(nil),
@@ -2761,6 +2959,7 @@ func file_arc_node_v1_node_proto_init() {
 		(*ServerFrame_FederateResponse)(nil),
 		(*ServerFrame_ListPeersResponse)(nil),
 		(*ServerFrame_ResolveGetResponse)(nil),
+		(*ServerFrame_BatchReceipt)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -2768,7 +2967,7 @@ func file_arc_node_v1_node_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_arc_node_v1_node_proto_rawDesc), len(file_arc_node_v1_node_proto_rawDesc)),
 			NumEnums:      11,
-			NumMessages:   31,
+			NumMessages:   34,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

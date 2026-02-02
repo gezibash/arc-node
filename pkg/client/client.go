@@ -287,6 +287,64 @@ func (c *Client) SendMessage(ctx context.Context, msg message.Message, labels ma
 	return ref, nil
 }
 
+// BatchMessage is a single message in a batch publish request.
+type BatchMessage struct {
+	Message    message.Message
+	Labels     map[string]string
+	Dimensions *nodev1.Dimensions
+}
+
+// BatchResult is the result of a single message in a batch publish.
+type BatchResult struct {
+	Ref reference.Reference
+	Err error
+}
+
+// BatchSendMessages publishes multiple messages in a single round-trip.
+// Individual messages may fail independently (partial success semantics).
+func (c *Client) BatchSendMessages(ctx context.Context, msgs []BatchMessage) ([]BatchResult, error) {
+	frames := make([]*nodev1.PublishFrame, len(msgs))
+	for i, m := range msgs {
+		canonical, err := message.CanonicalBytes(m.Message)
+		if err != nil {
+			return nil, fmt.Errorf("canonical bytes for message %d: %w", i, err)
+		}
+		frames[i] = &nodev1.PublishFrame{
+			Message:    canonical,
+			Labels:     m.Labels,
+			Dimensions: m.Dimensions,
+		}
+	}
+
+	mux, err := c.channel(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("channel unavailable: %w", err)
+	}
+	resp, err := mux.roundTrip(ctx, &nodev1.ClientFrame{
+		Frame: &nodev1.ClientFrame_BatchPublish{BatchPublish: &nodev1.BatchPublishFrame{
+			Messages: frames,
+		}},
+	})
+	if err != nil {
+		return nil, err
+	}
+	br, ok := resp.Frame.(*nodev1.ServerFrame_BatchReceipt)
+	if !ok {
+		return nil, fmt.Errorf("unexpected server frame type")
+	}
+	results := make([]BatchResult, len(br.BatchReceipt.Results))
+	for i, r := range br.BatchReceipt.Results {
+		if r.Ok {
+			var ref reference.Reference
+			copy(ref[:], r.Reference)
+			results[i] = BatchResult{Ref: ref}
+		} else {
+			results[i] = BatchResult{Err: fmt.Errorf("%s", r.Error)}
+		}
+	}
+	return results, nil
+}
+
 type QueryOptions struct {
 	Expression string
 	Labels     map[string]string
