@@ -667,14 +667,12 @@ func TestSubscriptionCancelAndErr(t *testing.T) {
 	}
 
 	sub.Cancel()
-	time.Sleep(100 * time.Millisecond)
 
-	// Channel should be closed.
-	_, ok := <-sub.Entries()
-	if ok {
-		// Drain buffered entries.
-		for range sub.Entries() {
-		}
+	// Done channel should be closed after cancel.
+	select {
+	case <-sub.Done():
+	case <-time.After(time.Second):
+		t.Fatal("Done() not closed after Cancel()")
 	}
 }
 
