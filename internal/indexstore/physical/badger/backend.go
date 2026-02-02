@@ -892,6 +892,9 @@ func (b *Backend) queryByLabel(opts *physical.QueryOptions) (*physical.QueryResu
 				built.MaxRedelivery = dm.MaxRedelivery
 				built.AckTimeoutMs = dm.AckTimeoutMs
 				built.Correlation = dm.Correlation
+				built.From = dm.From
+				built.To = dm.To
+				built.ContentType = dm.ContentType
 				entry = built
 				return nil
 			}); metaDecErr != nil {
@@ -1090,6 +1093,9 @@ func (b *Backend) queryByComposite(def physical.CompositeIndexDef, vals []string
 				built.MaxRedelivery = dm.MaxRedelivery
 				built.AckTimeoutMs = dm.AckTimeoutMs
 				built.Correlation = dm.Correlation
+				built.From = dm.From
+				built.To = dm.To
+				built.ContentType = dm.ContentType
 				entry = built
 				return nil
 			}); metaDecErr != nil {
@@ -1557,7 +1563,7 @@ func encodeMeta(entry *physical.Entry) []byte {
 	for k, v := range entry.Labels {
 		size += 2 + len(k) + 2 + len(v)
 	}
-	size += dimBlockFixedSize + len(entry.AffinityKey) + len(entry.IdempotencyKey) + len(entry.Correlation)
+	size += dimBlockFixedSize + len(entry.AffinityKey) + len(entry.IdempotencyKey) + len(entry.Correlation) + 32 + 32 + 2 + len(entry.ContentType)
 	buf := make([]byte, size)
 	binary.BigEndian.PutUint64(buf[0:8], uint64(entry.ExpiresAt)) //nolint:gosec
 	binary.BigEndian.PutUint16(buf[8:10], uint16(len(entry.Labels)))
@@ -1609,6 +1615,15 @@ func encodeMeta(entry *physical.Entry) []byte {
 	binary.BigEndian.PutUint16(buf[off:off+2], uint16(len(entry.Correlation)))
 	off += 2
 	copy(buf[off:], entry.Correlation)
+	off += len(entry.Correlation)
+	// Promoted fields: From(32) + To(32) + ContentType(2+var)
+	copy(buf[off:], entry.From[:])
+	off += 32
+	copy(buf[off:], entry.To[:])
+	off += 32
+	binary.BigEndian.PutUint16(buf[off:off+2], uint16(len(entry.ContentType)))
+	off += 2
+	copy(buf[off:], entry.ContentType)
 	return buf
 }
 
@@ -1630,6 +1645,9 @@ type decodedMeta struct {
 	MaxRedelivery    int32
 	AckTimeoutMs     int64
 	Correlation      string
+	From             [32]byte
+	To               [32]byte
+	ContentType      string
 }
 
 func decodeMeta(data []byte) (labels map[string]string, err error) {
@@ -1723,6 +1741,19 @@ func decodeMetaFull(data []byte) (*decodedMeta, error) {
 		off += 2
 		if off+cl <= len(data) {
 			dm.Correlation = string(data[off : off+cl])
+			off += cl
+		}
+		// Promoted fields (backwards compat: old entries stop here).
+		if off+32+32+2 <= len(data) {
+			copy(dm.From[:], data[off:off+32])
+			off += 32
+			copy(dm.To[:], data[off:off+32])
+			off += 32
+			ctl := int(binary.BigEndian.Uint16(data[off : off+2]))
+			off += 2
+			if off+ctl <= len(data) {
+				dm.ContentType = string(data[off : off+ctl])
+			}
 		}
 	}
 	return dm, nil
@@ -1759,6 +1790,9 @@ func entryFromMetaBytes(suffix string, data []byte) (*physical.Entry, error) {
 	entry.MaxRedelivery = dm.MaxRedelivery
 	entry.AckTimeoutMs = dm.AckTimeoutMs
 	entry.Correlation = dm.Correlation
+	entry.From = dm.From
+	entry.To = dm.To
+	entry.ContentType = dm.ContentType
 	return entry, nil
 }
 

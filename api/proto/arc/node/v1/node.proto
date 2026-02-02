@@ -323,6 +323,10 @@ message IndexEntry {
   map<string, string> labels = 2;
   int64 timestamp = 3;
   Dimensions dimensions = 4;
+  bytes from = 5;
+  bytes to = 6;
+  string content_type = 7;
+  string correlation = 8;
 }
 
 enum PeerDirection {

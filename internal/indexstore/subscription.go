@@ -228,10 +228,9 @@ func (m *subscriptionManager) dispatchEntry(entry *physical.Entry) {
 		if target != nil {
 			m.dispatchToSub(target, entry)
 		}
-	case 1: // PATTERN_REQ_REP — direct to "to" label subscriber
-		toHex := entry.Labels["to"]
+	case 1: // PATTERN_REQ_REP — direct to "to" field subscriber
 		for _, sub := range matches {
-			if fmt.Sprintf("%x", sub.callerKey) == toHex {
+			if sub.callerKey == entry.To {
 				m.dispatchToSub(sub, entry)
 				return
 			}
@@ -280,8 +279,8 @@ func (m *subscriptionManager) selectOne(subs []*subscription, entry *physical.En
 	}
 
 	switch entry.Affinity {
-	case 1: // AFFINITY_SENDER — hash from label
-		key := entry.Labels["from"]
+	case 1: // AFFINITY_SENDER — hash from field
+		key := fmt.Sprintf("%x", entry.From)
 		idx := hashToIndex(key, len(subs))
 		return subs[idx]
 	case 2: // AFFINITY_KEY — hash AffinityKey
@@ -305,7 +304,7 @@ func hashToIndex(key string, n int) int {
 func (m *subscriptionManager) dispatchToSub(sub *subscription, entry *physical.Entry) {
 	// FIFO ordering: hold back out-of-order entries.
 	if entry.Ordering == 1 || entry.Ordering == 2 { // FIFO or CAUSAL (treated same for now)
-		senderKey := entry.Labels["from"]
+		senderKey := fmt.Sprintf("%x", entry.From)
 		sub.fifoMu.Lock()
 		lastSeq := sub.fifoLastSeq[senderKey]
 		if lastSeq > 0 && entry.Sequence != lastSeq+1 {

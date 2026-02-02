@@ -3030,6 +3030,10 @@ type IndexEntry struct {
 	Labels        map[string]string      `protobuf:"bytes,2,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	Timestamp     int64                  `protobuf:"varint,3,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	Dimensions    *Dimensions            `protobuf:"bytes,4,opt,name=dimensions,proto3" json:"dimensions,omitempty"`
+	From          []byte                 `protobuf:"bytes,5,opt,name=from,proto3" json:"from,omitempty"`
+	To            []byte                 `protobuf:"bytes,6,opt,name=to,proto3" json:"to,omitempty"`
+	ContentType   string                 `protobuf:"bytes,7,opt,name=content_type,json=contentType,proto3" json:"content_type,omitempty"`
+	Correlation   string                 `protobuf:"bytes,8,opt,name=correlation,proto3" json:"correlation,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3090,6 +3094,34 @@ func (x *IndexEntry) GetDimensions() *Dimensions {
 		return x.Dimensions
 	}
 	return nil
+}
+
+func (x *IndexEntry) GetFrom() []byte {
+	if x != nil {
+		return x.From
+	}
+	return nil
+}
+
+func (x *IndexEntry) GetTo() []byte {
+	if x != nil {
+		return x.To
+	}
+	return nil
+}
+
+func (x *IndexEntry) GetContentType() string {
+	if x != nil {
+		return x.ContentType
+	}
+	return ""
+}
+
+func (x *IndexEntry) GetCorrelation() string {
+	if x != nil {
+		return x.Correlation
+	}
+	return ""
 }
 
 type PeerInfo struct {
@@ -3408,7 +3440,7 @@ const file_arc_node_v1_node_proto_rawDesc = "" +
 	"\x0epresence_event\x18\n" +
 	" \x01(\v2\x1f.arc.node.v1.PresenceEventFrameH\x00R\rpresenceEvent\x12Q\n" +
 	"\x11presence_response\x18\v \x01(\v2\".arc.node.v1.PresenceResponseFrameH\x00R\x10presenceResponseB\a\n" +
-	"\x05frame\"\xf9\x01\n" +
+	"\x05frame\"\xe2\x02\n" +
 	"\n" +
 	"IndexEntry\x12\x1c\n" +
 	"\treference\x18\x01 \x01(\fR\treference\x12;\n" +
@@ -3416,7 +3448,11 @@ const file_arc_node_v1_node_proto_rawDesc = "" +
 	"\ttimestamp\x18\x03 \x01(\x03R\ttimestamp\x127\n" +
 	"\n" +
 	"dimensions\x18\x04 \x01(\v2\x17.arc.node.v1.DimensionsR\n" +
-	"dimensions\x1a9\n" +
+	"dimensions\x12\x12\n" +
+	"\x04from\x18\x05 \x01(\fR\x04from\x12\x0e\n" +
+	"\x02to\x18\x06 \x01(\fR\x02to\x12!\n" +
+	"\fcontent_type\x18\a \x01(\tR\vcontentType\x12 \n" +
+	"\vcorrelation\x18\b \x01(\tR\vcorrelation\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x8b\x03\n" +

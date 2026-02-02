@@ -90,9 +90,12 @@ func (s *nodeService) doPublish(ctx context.Context, msgBytes []byte, labels map
 	}
 
 	entry := &physical.Entry{
-		Ref:       msgRef,
-		Labels:    merged,
-		Timestamp: msg.Timestamp,
+		Ref:         msgRef,
+		Labels:      merged,
+		Timestamp:   msg.Timestamp,
+		From:        [32]byte(msg.From),
+		To:          [32]byte(msg.To),
+		ContentType: msg.ContentType,
 	}
 
 	// Default to durable.
@@ -266,10 +269,14 @@ func entryToProtoDims(e *physical.Entry) *nodev1.Dimensions {
 
 func entryToProto(e *physical.Entry) *nodev1.IndexEntry {
 	return &nodev1.IndexEntry{
-		Reference:  e.Ref[:],
-		Labels:     e.Labels,
-		Timestamp:  e.Timestamp,
-		Dimensions: entryToProtoDims(e),
+		Reference:   e.Ref[:],
+		Labels:      e.Labels,
+		Timestamp:   e.Timestamp,
+		Dimensions:  entryToProtoDims(e),
+		From:        e.From[:],
+		To:          e.To[:],
+		ContentType: e.ContentType,
+		Correlation: e.Correlation,
 	}
 }
 

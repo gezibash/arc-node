@@ -31,6 +31,8 @@ func TestVisibilityPrivate(t *testing.T) {
 
 	entry := &physical.Entry{
 		Visibility: 1, // PRIVATE
+		From:       senderKey,
+		To:         recipientKey,
 		Labels: map[string]string{
 			"from": fmt.Sprintf("%x", senderKey),
 			"to":   fmt.Sprintf("%x", recipientKey),
@@ -53,6 +55,8 @@ func TestVisibilityPrivateReject(t *testing.T) {
 
 	entry := &physical.Entry{
 		Visibility: 1, // PRIVATE
+		From:       senderKey,
+		To:         recipientKey,
 		Labels: map[string]string{
 			"from": fmt.Sprintf("%x", senderKey),
 			"to":   fmt.Sprintf("%x", recipientKey),
