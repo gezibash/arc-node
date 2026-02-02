@@ -17,7 +17,7 @@ func newPutCmd(n *nodeCmd) *cobra.Command {
 		Short: "Store content and print its reference",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			data, err := readInput(args)
+			data, err := n.readInputFn(args)
 			if err != nil {
 				return err
 			}

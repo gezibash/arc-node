@@ -227,3 +227,239 @@ func TestClosedBackend(t *testing.T) {
 		t.Fatalf("Stats after close: got %v, want ErrClosed", err)
 	}
 }
+
+func TestDefaults(t *testing.T) {
+	d := Defaults()
+	if d[KeyPath] == "" {
+		t.Error("default path should not be empty")
+	}
+	if d[KeyDirPermissions] == "" {
+		t.Error("default dir permissions should not be empty")
+	}
+	if d[KeyFilePermissions] == "" {
+		t.Error("default file permissions should not be empty")
+	}
+}
+
+func TestNewFactoryEmptyPath(t *testing.T) {
+	_, err := NewFactory(context.Background(), map[string]string{
+		KeyPath: "",
+	})
+	if err == nil {
+		t.Fatal("expected error for empty path")
+	}
+}
+
+func TestNewFactoryNoPath(t *testing.T) {
+	_, err := NewFactory(context.Background(), map[string]string{})
+	if err == nil {
+		t.Fatal("expected error when path key is missing")
+	}
+}
+
+func TestNewFactoryInvalidDirPermissions(t *testing.T) {
+	_, err := NewFactory(context.Background(), map[string]string{
+		KeyPath:           t.TempDir(),
+		KeyDirPermissions: "not-octal",
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid dir permissions")
+	}
+}
+
+func TestNewFactoryInvalidFilePermissions(t *testing.T) {
+	_, err := NewFactory(context.Background(), map[string]string{
+		KeyPath:            t.TempDir(),
+		KeyFilePermissions: "not-octal",
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid file permissions")
+	}
+}
+
+func TestNewFactoryDefaultPermissions(t *testing.T) {
+	dir := t.TempDir()
+	b, err := NewFactory(context.Background(), map[string]string{
+		KeyPath: dir,
+	})
+	if err != nil {
+		t.Fatalf("NewFactory: %v", err)
+	}
+	be := b.(*Backend)
+	if be.dirPerms != 0o700 {
+		t.Errorf("dirPerms = %04o, want 0700", be.dirPerms)
+	}
+	if be.filePerms != 0o600 {
+		t.Errorf("filePerms = %04o, want 0600", be.filePerms)
+	}
+}
+
+func TestNewFactoryCreatesNestedDirectory(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "nested", "dir")
+	b, err := NewFactory(context.Background(), map[string]string{
+		KeyPath: dir,
+	})
+	if err != nil {
+		t.Fatalf("NewFactory: %v", err)
+	}
+	b.Close()
+	if _, err := os.Stat(dir); err != nil {
+		t.Fatalf("directory not created: %v", err)
+	}
+}
+
+func TestPutToReadOnlyDir(t *testing.T) {
+	b := newTestBackend(t)
+	ctx := context.Background()
+
+	// Make root read-only so MkdirAll for shard dir fails
+	if err := os.Chmod(b.rootPath, 0o444); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(b.rootPath, 0o700) })
+
+	data := []byte("readonly test")
+	ref := testRef(data)
+	err := b.Put(ctx, ref, data)
+	if err == nil {
+		t.Fatal("expected error putting to read-only dir")
+	}
+}
+
+func TestGetNonReadableFile(t *testing.T) {
+	b := newTestBackend(t)
+	ctx := context.Background()
+	data := []byte("unreadable")
+	ref := testRef(data)
+
+	if err := b.Put(ctx, ref, data); err != nil {
+		t.Fatal(err)
+	}
+	// Make the file unreadable
+	if err := os.Chmod(b.blobPath(ref), 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(b.blobPath(ref), 0o600) })
+
+	_, err := b.Get(ctx, ref)
+	if err == nil {
+		t.Fatal("expected error reading unreadable file")
+	}
+	// Should NOT be ErrNotFound
+	if errors.Is(err, physical.ErrNotFound) {
+		t.Fatal("should not be ErrNotFound for permission error")
+	}
+}
+
+func TestExistsPermissionError(t *testing.T) {
+	b := newTestBackend(t)
+	ctx := context.Background()
+	data := []byte("perm-exists")
+	ref := testRef(data)
+
+	if err := b.Put(ctx, ref, data); err != nil {
+		t.Fatal(err)
+	}
+	hex := reference.Hex(ref)
+	shardDir := filepath.Join(b.rootPath, hex[:2])
+	if err := os.Chmod(shardDir, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(shardDir, 0o700) })
+
+	_, err := b.Exists(ctx, ref)
+	if err == nil {
+		t.Fatal("expected error for permission-denied stat")
+	}
+}
+
+func TestDeletePermissionError(t *testing.T) {
+	b := newTestBackend(t)
+	ctx := context.Background()
+	data := []byte("perm-delete")
+	ref := testRef(data)
+
+	if err := b.Put(ctx, ref, data); err != nil {
+		t.Fatal(err)
+	}
+	hex := reference.Hex(ref)
+	shardDir := filepath.Join(b.rootPath, hex[:2])
+	if err := os.Chmod(shardDir, 0o444); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(shardDir, 0o700) })
+
+	err := b.Delete(ctx, ref)
+	if err == nil {
+		t.Fatal("expected error for permission-denied delete")
+	}
+}
+
+func TestStatsWithWalkError(t *testing.T) {
+	b := newTestBackend(t)
+	ctx := context.Background()
+	data := []byte("walk-error")
+	ref := testRef(data)
+
+	if err := b.Put(ctx, ref, data); err != nil {
+		t.Fatal(err)
+	}
+
+	hex := reference.Hex(ref)
+	shardDir := filepath.Join(b.rootPath, hex[:2])
+	if err := os.Chmod(shardDir, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(shardDir, 0o700) })
+
+	_, err := b.Stats(ctx)
+	if err == nil {
+		t.Fatal("expected error from Stats with unreadable directory")
+	}
+}
+
+func TestPutRenameFailure(t *testing.T) {
+	b := newTestBackend(t)
+	ctx := context.Background()
+	data := []byte("rename fail")
+	ref := testRef(data)
+
+	// Pre-create the target path as a directory so rename fails
+	targetPath := b.blobPath(ref)
+	if err := os.MkdirAll(targetPath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	err := b.Put(ctx, ref, data)
+	if err == nil {
+		t.Fatal("expected error when rename target is a directory")
+	}
+}
+
+func TestPutChmodFailure(t *testing.T) {
+	// This test creates a scenario where chmod on the temp file fails
+	// by removing the temp file between creation and chmod.
+	// We can't easily do this without modifying the code, so instead
+	// we test that writing to a directory with no write permission fails
+	// at the CreateTemp stage.
+	b := newTestBackend(t)
+	ctx := context.Background()
+	data := []byte("chmod fail")
+	ref := testRef(data)
+
+	// Create the shard dir, then make it read-only
+	hex := reference.Hex(ref)
+	shardDir := filepath.Join(b.rootPath, hex[:2])
+	if err := os.MkdirAll(shardDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(shardDir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(shardDir, 0o700) })
+
+	err := b.Put(ctx, ref, data)
+	if err == nil {
+		t.Fatal("expected error when shard dir is read-only")
+	}
+}

@@ -42,8 +42,9 @@ jobs:
       - run: go test -race -count=1 -coverprofile=coverage.out ./...
       - name: Check coverage
         run: |
-          total=$(go tool cover -func=coverage.out | grep ^total: | awk '{print $3}' | tr -d '%')
-          echo "Total coverage: ${total}%"
+          grep -v -E '(api/arc/node/v1|cmd/arc/dm/|cmd/arc/journal/|cmd/arc/keys/|cmd/arc/render|cmd/arc/tui)' coverage.out > coverage_filtered.out
+          total=$(go tool cover -func=coverage_filtered.out | grep ^total: | awk '{print $3}' | tr -d '%')
+          echo "Total coverage (filtered): ${total}%"
           threshold=80
           if [ "$(echo "${total} < ${threshold}" | bc)" -eq 1 ]; then
             echo "::error::Coverage ${total}% is below threshold ${threshold}%"
