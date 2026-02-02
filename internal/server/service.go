@@ -50,32 +50,32 @@ func (s *nodeService) doGet(ctx context.Context, ref reference.Reference) ([]byt
 	return data, nil
 }
 
-func (s *nodeService) doPublish(ctx context.Context, msgBytes []byte, labels map[string]string, dims *nodev1.Dimensions) (reference.Reference, error) {
+func (s *nodeService) doPublish(ctx context.Context, msgBytes []byte, labels map[string]string, dims *nodev1.Dimensions) (reference.Reference, int64, uint64, error) {
 	if len(msgBytes) == 0 {
-		return reference.Reference{}, fmt.Errorf("message required")
+		return reference.Reference{}, 0, 0, fmt.Errorf("message required")
 	}
 
 	msg, err := message.FromCanonicalBytes(msgBytes)
 	if err != nil {
-		return reference.Reference{}, fmt.Errorf("parse message: %w", err)
+		return reference.Reference{}, 0, 0, fmt.Errorf("parse message: %w", err)
 	}
 
 	ok, err := message.Verify(msg)
 	if err != nil || !ok {
-		return reference.Reference{}, fmt.Errorf("invalid signature")
+		return reference.Reference{}, 0, 0, fmt.Errorf("invalid signature")
 	}
 
 	if caller, hasCaller := envelope.GetCaller(ctx); hasCaller {
 		if caller.PublicKey != msg.From {
 			if !s.canPublishFor(ctx, caller.PublicKey, msg.From, msg.ContentType, msg.Content) {
-				return reference.Reference{}, fmt.Errorf("envelope signer does not match message author")
+				return reference.Reference{}, 0, 0, fmt.Errorf("envelope signer does not match message author")
 			}
 		}
 	}
 
 	msgRef, err := message.Ref(msg)
 	if err != nil {
-		return reference.Reference{}, fmt.Errorf("compute reference: %w", err)
+		return reference.Reference{}, 0, 0, fmt.Errorf("compute reference: %w", err)
 	}
 
 	merged := make(map[string]string)
@@ -144,7 +144,7 @@ func (s *nodeService) doPublish(ctx context.Context, msgBytes []byte, labels map
 	}
 
 	if err := s.index.Index(ctx, entry); err != nil {
-		return reference.Reference{}, fmt.Errorf("index message: %w", err)
+		return reference.Reference{}, 0, 0, fmt.Errorf("index message: %w", err)
 	}
 
 	// Auto-update group cache when a manifest is published.
@@ -156,7 +156,7 @@ func (s *nodeService) doPublish(ctx context.Context, msgBytes []byte, labels map
 		}
 	}
 
-	return msgRef, nil
+	return msgRef, entry.Timestamp, uint64(entry.Sequence), nil
 }
 
 func publishErrToStatus(err error) error {

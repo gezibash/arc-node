@@ -228,11 +228,11 @@ func TestSendMessageValid(t *testing.T) {
 	ctx := context.Background()
 
 	msg := makeMessage(t, callerKP, "text/plain")
-	ref, err := c.SendMessage(ctx, msg, nil, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE})
+	result, err := c.SendMessage(ctx, msg, nil, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE})
 	if err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
-	if ref == (reference.Reference{}) {
+	if result.Ref == (reference.Reference{}) {
 		t.Fatal("SendMessage returned zero reference")
 	}
 }
@@ -768,11 +768,11 @@ func TestSendMessageDimensionsRoundTrip(t *testing.T) {
 		TtlMs:       30000,
 		Ordering:    nodev1.Ordering_ORDERING_FIFO,
 	}
-	ref, err := c.SendMessage(ctx, msg, map[string]string{"drt": "test"}, dims)
+	pubResult, err := c.SendMessage(ctx, msg, map[string]string{"drt": "test"}, dims)
 	if err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
-	if ref == (reference.Reference{}) {
+	if pubResult.Ref == (reference.Reference{}) {
 		t.Fatal("zero reference")
 	}
 

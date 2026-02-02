@@ -78,7 +78,7 @@ func (j *Journal) Edit(ctx context.Context, oldEntryRef reference.Reference, new
 	newEntryRef := ComputeEntryRef(newContentRef, msg.Timestamp, pub)
 	labelMap["entry"] = reference.Hex(newEntryRef)
 
-	ref, err := j.client.SendMessage(ctx, msg, labelMap, &nodev1.Dimensions{
+	result, err := j.client.SendMessage(ctx, msg, labelMap, &nodev1.Dimensions{
 		Persistence: nodev1.Persistence_PERSISTENCE_DURABLE,
 		Visibility:  nodev1.Visibility_VISIBILITY_PRIVATE,
 	})
@@ -91,5 +91,5 @@ func (j *Journal) Edit(ctx context.Context, oldEntryRef reference.Reference, new
 		_ = j.search.Index(ctx, newContentRef, newEntryRef, string(newPlaintext), msg.Timestamp)
 	}
 
-	return &EditResult{Ref: ref, EntryRef: newEntryRef}, nil
+	return &EditResult{Ref: result.Ref, EntryRef: newEntryRef}, nil
 }

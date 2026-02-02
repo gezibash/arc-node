@@ -31,7 +31,7 @@ func (d *DM) Send(ctx context.Context, plaintext []byte, labels map[string]strin
 
 	labelMap := d.conversationLabels(labels)
 
-	ref, err := d.client.SendMessage(ctx, msg, labelMap, &nodev1.Dimensions{
+	result, err := d.client.SendMessage(ctx, msg, labelMap, &nodev1.Dimensions{
 		Persistence: nodev1.Persistence_PERSISTENCE_DURABLE,
 		Visibility:  nodev1.Visibility_VISIBILITY_PRIVATE,
 	})
@@ -40,10 +40,10 @@ func (d *DM) Send(ctx context.Context, plaintext []byte, labels map[string]strin
 	}
 
 	if d.search != nil {
-		_ = d.search.Index(ctx, contentRef, ref, string(plaintext), msg.Timestamp)
+		_ = d.search.Index(ctx, contentRef, result.Ref, string(plaintext), msg.Timestamp)
 	}
 
-	return &SendResult{Ref: ref}, nil
+	return &SendResult{Ref: result.Ref}, nil
 }
 
 func (d *DM) conversationLabels(extra map[string]string) map[string]string {

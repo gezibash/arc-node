@@ -88,16 +88,16 @@ func newPublishCmd(n *nodeCmd) *cobra.Command {
 			}
 
 			slog.DebugContext(cmd.Context(), "sending message", "content_ref", reference.Hex(contentRef), "labels", labelMap)
-			ref, err := n.client.SendMessage(cmd.Context(), msg, labelMap, &nodev1.Dimensions{
+			result, err := n.client.SendMessage(cmd.Context(), msg, labelMap, &nodev1.Dimensions{
 				Persistence: nodev1.Persistence_PERSISTENCE_DURABLE,
 			})
 			if err != nil {
 				return fmt.Errorf("send message: %w", err)
 			}
 			if output == "json" {
-				return writeJSON(os.Stdout, map[string]string{"reference": reference.Hex(ref)})
+				return writeJSON(os.Stdout, map[string]string{"reference": reference.Hex(result.Ref)})
 			}
-			fmt.Println(reference.Hex(ref))
+			fmt.Println(reference.Hex(result.Ref))
 			return nil
 		},
 	}

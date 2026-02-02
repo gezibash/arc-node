@@ -292,13 +292,13 @@ func TestResolveGet(t *testing.T) {
 		"type":    "resolve",
 		"content": reference.Hex(contentRef),
 	}
-	msgRef, err := c.SendMessage(ctx, msg, labels, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE})
+	msgResult, err := c.SendMessage(ctx, msg, labels, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE})
 	if err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
 
 	// Resolve by message ref prefix.
-	msgPrefix := reference.Hex(msgRef)[:12]
+	msgPrefix := reference.Hex(msgResult.Ref)[:12]
 	result, err := c.ResolveGet(ctx, msgPrefix)
 	if err != nil {
 		t.Fatalf("ResolveGet(msg prefix): %v", err)
