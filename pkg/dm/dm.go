@@ -17,6 +17,7 @@ type DM struct {
 	peerPub   identity.PublicKey
 	sharedKey [32]byte
 	convID    string
+	search    *SearchIndex
 }
 
 // Option configures a DM.
@@ -25,6 +26,11 @@ type Option func(*DM)
 // WithNodeKey sets the node public key used as the message recipient.
 func WithNodeKey(pub identity.PublicKey) Option {
 	return func(d *DM) { d.nodeKey = &pub }
+}
+
+// WithSearchIndex attaches a search index for automatic indexing on send.
+func WithSearchIndex(idx *SearchIndex) Option {
+	return func(d *DM) { d.search = idx }
 }
 
 // New creates a DM session for the given keypair and peer public key.

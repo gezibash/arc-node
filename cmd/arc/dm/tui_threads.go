@@ -23,6 +23,11 @@ type threadsView struct {
 	spinner   spinner.Model
 	prompting bool
 	input     textinput.Model
+
+	// Search state.
+	searching     bool
+	searchInput   textinput.Model
+	searchResults []dm.SearchResult
 }
 
 func newThreadsView() threadsView {
@@ -35,16 +40,25 @@ func newThreadsView() threadsView {
 	ti.CharLimit = 64
 	ti.Width = 64
 
+	si := textinput.New()
+	si.Placeholder = "search messages..."
+	si.CharLimit = 256
+	si.Width = 40
+
 	return threadsView{
-		loading: true,
-		spinner: s,
-		input:   ti,
+		loading:     true,
+		spinner:     s,
+		input:       ti,
+		searchInput: si,
 	}
 }
 
 func (v threadsView) update(msg tea.Msg, threads []dm.Thread) (threadsView, tea.Cmd) {
 	if v.prompting {
 		return v.updatePrompt(msg)
+	}
+	if v.searching {
+		return v.updateSearch(msg)
 	}
 
 	switch msg := msg.(type) {
@@ -81,6 +95,11 @@ func (v threadsView) update(msg tea.Msg, threads []dm.Thread) (threadsView, tea.
 		case "r":
 			v.loading = true
 			return v, func() tea.Msg { return refreshThreadsMsg{} }
+		case "/":
+			v.searching = true
+			v.searchInput.Reset()
+			v.searchInput.Focus()
+			return v, textinput.Blink
 		}
 	}
 	return v, nil
@@ -115,7 +134,28 @@ func (v threadsView) updatePrompt(msg tea.Msg) (threadsView, tea.Cmd) {
 	return v, cmd
 }
 
-func (v threadsView) viewContent(threads []dm.Thread, self identity.PublicKey, _ bool, layout *tui.Layout) (string, string) {
+func (v threadsView) updateSearch(msg tea.Msg) (threadsView, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "esc":
+			v.searching = false
+			v.searchResults = nil
+			return v, func() tea.Msg { return clearSearchMsg{} }
+		case "enter":
+			query := strings.TrimSpace(v.searchInput.Value())
+			if query == "" {
+				return v, nil
+			}
+			return v, func() tea.Msg { return executeSearchMsg{query: query} }
+		}
+	}
+	var cmd tea.Cmd
+	v.searchInput, cmd = v.searchInput.Update(msg)
+	return v, cmd
+}
+
+func (v threadsView) viewContent(threads []dm.Thread, self identity.PublicKey, _ bool, unread map[string]int, layout *tui.Layout) (string, string) {
 	if v.prompting {
 		var b strings.Builder
 		b.WriteString(tui.SubtitleStyle.Render("new conversation"))
@@ -126,7 +166,28 @@ func (v threadsView) viewContent(threads []dm.Thread, self identity.PublicKey, _
 		return b.String(), "enter: open • esc: cancel"
 	}
 
-	helpText := "↑/k up • ↓/j down • enter: open • n: new • r: refresh • q: quit"
+	if v.searching {
+		var b strings.Builder
+		b.WriteString(tui.SubtitleStyle.Render("search"))
+		b.WriteString("\n\n")
+		b.WriteString(v.searchInput.View())
+		b.WriteString("\n\n")
+		if v.searchResults != nil {
+			if len(v.searchResults) == 0 {
+				b.WriteString(tui.PreviewStyle.Render("No results."))
+				b.WriteString("\n")
+			} else {
+				for _, r := range v.searchResults {
+					ts := time.UnixMilli(r.Timestamp)
+					b.WriteString(tui.AgeStyle.Render(ts.Format("Jan 2 15:04")) + "  " + r.Snippet)
+					b.WriteString("\n")
+				}
+			}
+		}
+		return b.String(), "enter: search • esc: cancel"
+	}
+
+	helpText := "↑/k up • ↓/j down • enter: open • n: new • /: search • r: refresh • esc: quit"
 
 	bodyWidth, bodyHeight := 80, 20
 	if layout != nil {
@@ -173,10 +234,15 @@ func (v threadsView) viewContent(threads []dm.Thread, self identity.PublicKey, _
 		ts := time.UnixMilli(th.LastMsg.Timestamp)
 		age := formatDuration(time.Since(ts).Truncate(time.Second)) + " ago"
 
+		unreadBadge := ""
+		if n := unread[th.ConvID]; n > 0 {
+			unreadBadge = "  " + lipgloss.NewStyle().Foreground(tui.AccentColor).Bold(true).Render(fmt.Sprintf("(%d)", n))
+		}
+
 		if idx == v.cursor {
-			b.WriteString(tui.CursorStyle.Render("▸") + " " + tui.RefStyle.Render(peerShort) + "  " + tui.AgeStyle.Render(age))
+			b.WriteString(tui.CursorStyle.Render("▸") + " " + tui.RefStyle.Render(peerShort) + "  " + tui.AgeStyle.Render(age) + unreadBadge)
 		} else {
-			b.WriteString("  " + tui.RefStyle.Render(peerShort) + "  " + tui.AgeStyle.Render(age))
+			b.WriteString("  " + tui.RefStyle.Render(peerShort) + "  " + tui.AgeStyle.Render(age) + unreadBadge)
 		}
 		b.WriteString("\n")
 

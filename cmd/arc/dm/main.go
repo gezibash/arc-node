@@ -1,9 +1,11 @@
 package dm
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/gezibash/arc-node/internal/config"
 	"github.com/gezibash/arc-node/internal/keyring"
@@ -16,10 +18,13 @@ import (
 )
 
 type dmCmd struct {
-	v       *viper.Viper
-	client  *client.Client
-	threads *dm.Threads
-	kp      *identity.Keypair
+	v          *viper.Viper
+	client     *client.Client
+	threads    *dm.Threads
+	kp         *identity.Keypair
+	search     *dm.SearchIndex
+	searchPath string
+	searchDir  string
 }
 
 func Entrypoint(v *viper.Viper) *cobra.Command {
@@ -32,6 +37,9 @@ func Entrypoint(v *viper.Viper) *cobra.Command {
 			return d.init(cmd)
 		},
 		PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
+			if d.search != nil {
+				_ = d.search.Close()
+			}
 			if d.client != nil {
 				return d.client.Close()
 			}
@@ -39,7 +47,7 @@ func Entrypoint(v *viper.Viper) *cobra.Command {
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if isatty.IsTerminal(os.Stdin.Fd()) || isatty.IsCygwinTerminal(os.Stdin.Fd()) {
-				return runTUI(cmd.Context(), d.client, d.threads, d.kp)
+				return runTUI(cmd.Context(), d.client, d.threads, d.kp, d.searchDir)
 			}
 			return runThreadsMarkdown(cmd.Context(), d.threads, d.kp, os.Stdout)
 		},
@@ -49,6 +57,12 @@ func Entrypoint(v *viper.Viper) *cobra.Command {
 		newSendCmd(d),
 		newListCmd(d),
 		newReadCmd(d),
+		newWatchCmd(d),
+		newSearchCmd(d),
+		newFetchCmd(d),
+		newPullCmd(d),
+		newPushCmd(d),
+		newReindexCmd(d),
 	)
 	return cmd
 }
@@ -61,7 +75,22 @@ func (d *dmCmd) init(cmd *cobra.Command) error {
 	d.client = c
 	d.kp = kp
 
+	dataDir := d.v.GetString("data_dir")
+	if dataDir == "" {
+		dataDir = config.DefaultDataDir()
+	}
+	pub := kp.PublicKey()
+	keyHex := hex.EncodeToString(pub[:])
+	d.searchDir = filepath.Join(dataDir, "dm", keyHex)
+	d.searchPath = filepath.Join(d.searchDir, "search.db")
+	idx, err := dm.OpenSearchIndex(context.Background(), d.searchPath)
+	if err != nil {
+		return fmt.Errorf("open search index: %w", err)
+	}
+	d.search = idx
+
 	d.threads = dm.NewThreads(c, kp)
+	d.threads.SetSearchIndex(idx)
 	return nil
 }
 

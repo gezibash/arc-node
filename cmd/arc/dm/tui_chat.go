@@ -27,6 +27,11 @@ type chatView struct {
 	sending   bool
 	loading   bool
 	inputRows int
+
+	// Browse mode fields.
+	browsing    bool
+	msgCursor   int
+	newMsgCount int
 }
 
 func newChatView(layout *tui.Layout) chatView {
@@ -93,20 +98,29 @@ func rebuildChatViewport(v chatView, msgs []dm.Message, previews map[reference.R
 		v.viewport.Width = vpW
 		v.viewport.Height = vpH
 	}
-	v.viewport.SetContent(renderMessages(msgs, previews, self, vpW))
-	if v.atBottom {
+
+	// Track whether we were at bottom before rebuild.
+	wasAtBottom := v.atBottom
+	v.viewport.SetContent(renderMessages(msgs, previews, self, vpW, v.msgCursor, v.browsing))
+	if wasAtBottom {
 		v.viewport.GotoBottom()
 	}
+
+	// Update atBottom: check if viewport is scrolled to bottom.
+	if v.ready {
+		v.atBottom = v.viewport.AtBottom()
+	}
+
 	return v
 }
 
-func renderMessages(msgs []dm.Message, previews map[reference.Reference]string, self identity.PublicKey, width int) string {
+func renderMessages(msgs []dm.Message, previews map[reference.Reference]string, self identity.PublicKey, width int, cursor int, browsing bool) string {
 	if len(msgs) == 0 {
 		return tui.PreviewStyle.Render("No messages yet. Start typing below.")
 	}
 
 	var b strings.Builder
-	for _, msg := range msgs {
+	for i, msg := range msgs {
 		ts := time.UnixMilli(msg.Timestamp)
 		timeStr := ts.Format("15:04")
 		sender := senderLabel(msg.From, self)
@@ -126,7 +140,13 @@ func renderMessages(msgs []dm.Message, previews map[reference.Reference]string, 
 		if msg.From == self {
 			senderStyle = tui.RefStyle
 		}
-		b.WriteString(tui.PreviewStyle.Render(timeStr+" ") + senderStyle.Render("["+sender+"]") + " " + preview)
+
+		prefix := "  "
+		if browsing && i == cursor {
+			prefix = tui.CursorStyle.Render("▸") + " "
+		}
+
+		b.WriteString(prefix + tui.PreviewStyle.Render(timeStr+" ") + senderStyle.Render("["+sender+"]") + " " + preview)
 		b.WriteString("\n")
 	}
 	return b.String()
@@ -138,7 +158,7 @@ type sendMsg struct{ text string }
 
 // update handles UI-only interactions. Returns updated view and a cmd;
 // domain mutations go through dmApp.Update() via messages.
-func (v chatView) update(msg tea.Msg) (chatView, tea.Cmd) {
+func (v chatView) update(msg tea.Msg, msgs []dm.Message) (chatView, tea.Cmd) {
 	switch msg := msg.(type) {
 	case spinner.TickMsg:
 		var cmd tea.Cmd
@@ -146,18 +166,36 @@ func (v chatView) update(msg tea.Msg) (chatView, tea.Cmd) {
 		return v, cmd
 
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "esc":
-			return v, func() tea.Msg { return backToThreadsMsg{} }
-		case "enter":
-			text := strings.TrimSpace(v.textarea.Value())
-			if text == "" || v.sending {
-				return v, nil
-			}
-			v.sending = true
-			v.textarea.Reset()
-			return v, func() tea.Msg { return sendMsg{text: text} }
+		if v.browsing {
+			return v.updateBrowse(msg, msgs)
 		}
+		return v.updateCompose(msg)
+	}
+
+	if !v.browsing {
+		var taCmd tea.Cmd
+		v.textarea, taCmd = v.textarea.Update(msg)
+		return v, taCmd
+	}
+	return v, nil
+}
+
+func (v chatView) updateCompose(msg tea.KeyMsg) (chatView, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		return v, func() tea.Msg { return backToThreadsMsg{} }
+	case "enter":
+		text := strings.TrimSpace(v.textarea.Value())
+		if text == "" || v.sending {
+			return v, nil
+		}
+		v.sending = true
+		v.textarea.Reset()
+		return v, func() tea.Msg { return sendMsg{text: text} }
+	case "ctrl+b":
+		v.browsing = true
+		v.textarea.Blur()
+		return v, nil
 	}
 
 	var taCmd tea.Cmd
@@ -165,8 +203,52 @@ func (v chatView) update(msg tea.Msg) (chatView, tea.Cmd) {
 	return v, taCmd
 }
 
+func (v chatView) updateBrowse(msg tea.KeyMsg, msgs []dm.Message) (chatView, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		v.browsing = false
+		v.textarea.Focus()
+		return v, v.textareaBlink()
+	case "j", "down":
+		if v.msgCursor < len(msgs)-1 {
+			v.msgCursor++
+		}
+		return v, nil
+	case "k", "up":
+		if v.msgCursor > 0 {
+			v.msgCursor--
+		}
+		return v, nil
+	case "G":
+		if len(msgs) > 0 {
+			v.msgCursor = len(msgs) - 1
+		}
+		v.newMsgCount = 0
+		v.atBottom = true
+		return v, nil
+	case "g":
+		v.msgCursor = 0
+		return v, nil
+	case "enter":
+		if len(msgs) > 0 && v.msgCursor < len(msgs) {
+			m := msgs[v.msgCursor]
+			return v, func() tea.Msg { return openMessageMsg{msg: m} }
+		}
+		return v, nil
+	}
+	return v, nil
+}
+
 func (v chatView) viewContent(_ []dm.Message, _ map[reference.Reference]string, _ identity.PublicKey, layout *tui.Layout) (string, string) {
-	helpText := "enter: send • esc: back • scroll: ↑/↓"
+	var helpText string
+	switch {
+	case v.sending:
+		helpText = "sending..."
+	case v.browsing:
+		helpText = "j/k: navigate · enter: open · G: latest · esc: compose"
+	default:
+		helpText = "enter: send · esc: back · ctrl+b: browse"
+	}
 
 	var b strings.Builder
 
@@ -177,6 +259,13 @@ func (v chatView) viewContent(_ []dm.Message, _ map[reference.Reference]string, 
 
 	if v.ready {
 		b.WriteString(v.viewport.View())
+	}
+
+	// New message indicator.
+	if v.newMsgCount > 0 && !v.atBottom {
+		indicator := fmt.Sprintf("↓ %d new messages (G to jump)", v.newMsgCount)
+		b.WriteString(lipgloss.NewStyle().Foreground(tui.AccentColor).Render(indicator))
+		b.WriteString("\n")
 	}
 
 	bodyWidth := 80

@@ -35,6 +35,10 @@ func (d *DM) Send(ctx context.Context, plaintext []byte, labels map[string]strin
 		return nil, fmt.Errorf("send message: %w", err)
 	}
 
+	if d.search != nil {
+		_ = d.search.Index(ctx, contentRef, ref, string(plaintext), msg.Timestamp)
+	}
+
 	return &SendResult{Ref: ref}, nil
 }
 

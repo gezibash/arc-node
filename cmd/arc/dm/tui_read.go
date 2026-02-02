@@ -74,7 +74,7 @@ func (v readView) update(msg tea.Msg) (readView, tea.Cmd) {
 		}
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "esc", "backspace", "q":
+		case "esc", "backspace":
 			return v, func() tea.Msg { return backToChatMsg{} }
 		}
 		if v.ready {
@@ -95,7 +95,7 @@ func (v readView) renderSubHeader() string {
 }
 
 func (v readView) viewContent() (string, string) {
-	helpText := "↑/↓: scroll • q/esc: back"
+	helpText := "↑/↓: scroll • esc: back"
 
 	var b strings.Builder
 

@@ -8,6 +8,7 @@ import (
 
 	"github.com/gezibash/arc-node/pkg/client"
 	"github.com/gezibash/arc/v2/pkg/identity"
+	"github.com/gezibash/arc/v2/pkg/reference"
 )
 
 // Threads provides cross-conversation DM operations without requiring a peer pubkey.
@@ -15,6 +16,7 @@ type Threads struct {
 	client  *client.Client
 	kp      *identity.Keypair
 	nodeKey *identity.PublicKey
+	search  *SearchIndex
 }
 
 // Thread represents a conversation with a peer, summarized by latest activity.
@@ -23,6 +25,14 @@ type Thread struct {
 	PeerPub identity.PublicKey
 	LastMsg Message
 	Preview string // lazily populated
+}
+
+// ThreadsOption configures a Threads instance.
+type ThreadsOption func(*Threads)
+
+// WithThreadsSearchIndex attaches a search index to a Threads instance.
+func WithThreadsSearchIndex(idx *SearchIndex) ThreadsOption {
+	return func(t *Threads) { t.search = idx }
 }
 
 // NewThreads creates a Threads instance for listing and subscribing across all conversations.
@@ -212,5 +222,99 @@ func (t *Threads) OpenConversation(peerPub identity.PublicKey) (*DM, error) {
 	if t.nodeKey != nil {
 		opts = append(opts, WithNodeKey(*t.nodeKey))
 	}
+	if t.search != nil {
+		opts = append(opts, WithSearchIndex(t.search))
+	}
 	return New(t.client, t.kp, peerPub, opts...)
+}
+
+// SearchIndex returns the attached search index, or nil.
+func (t *Threads) SearchIndex() *SearchIndex { return t.search }
+
+// SetSearchIndex replaces the attached search index.
+func (t *Threads) SetSearchIndex(idx *SearchIndex) { t.search = idx }
+
+// Search queries the local full-text search index.
+func (t *Threads) Search(ctx context.Context, query string, opts SearchOptions) (*SearchResponse, error) {
+	if t.search == nil {
+		return nil, fmt.Errorf("no search index configured")
+	}
+	return t.search.Search(ctx, query, opts)
+}
+
+// IndexMessage indexes a single decrypted message in the search index.
+func (t *Threads) IndexMessage(ctx context.Context, contentRef, msgRef reference.Reference, plaintext string, timestamp int64) {
+	if t.search != nil {
+		_ = t.search.Index(ctx, contentRef, msgRef, plaintext, timestamp)
+	}
+}
+
+// ReindexResult holds the outcome of a reindex operation.
+type ReindexResult struct {
+	Indexed int
+	Errors  int
+}
+
+// Reindex rebuilds the search index from all existing DM conversations.
+func (t *Threads) Reindex(ctx context.Context) (*ReindexResult, error) {
+	if t.search == nil {
+		return nil, fmt.Errorf("no search index configured")
+	}
+
+	if err := t.search.Clear(ctx); err != nil {
+		return nil, fmt.Errorf("clear search index: %w", err)
+	}
+
+	threads, err := t.ListThreads(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list threads: %w", err)
+	}
+
+	var result ReindexResult
+	for _, th := range threads {
+		sdk, err := t.OpenConversation(th.PeerPub)
+		if err != nil {
+			result.Errors++
+			continue
+		}
+
+		var cursor string
+		for {
+			lr, err := sdk.List(ctx, ListOptions{
+				Limit:      50,
+				Cursor:     cursor,
+				Descending: false,
+			})
+			if err != nil {
+				result.Errors++
+				break
+			}
+
+			for _, m := range lr.Messages {
+				contentHex := m.Labels["content"]
+				if contentHex == "" {
+					result.Errors++
+					continue
+				}
+				contentRef, err := reference.FromHex(contentHex)
+				if err != nil {
+					result.Errors++
+					continue
+				}
+				msg, err := sdk.Read(ctx, contentRef)
+				if err != nil {
+					result.Errors++
+					continue
+				}
+				_ = t.search.Index(ctx, contentRef, m.Ref, string(msg.Content), m.Timestamp)
+				result.Indexed++
+			}
+
+			if !lr.HasMore {
+				break
+			}
+			cursor = lr.NextCursor
+		}
+	}
+	return &result, nil
 }

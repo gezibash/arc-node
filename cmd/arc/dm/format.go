@@ -178,6 +178,148 @@ func buildDMMeta(command string, result *dm.ListResult) render.Metadata {
 	return meta
 }
 
+// --- Read formatters ---
+
+type jsonReadMessage struct {
+	Reference   string            `json:"reference"`
+	From        string            `json:"from,omitempty"`
+	To          string            `json:"to,omitempty"`
+	Labels      map[string]string `json:"labels,omitempty"`
+	Timestamp   int64             `json:"timestamp,omitempty"`
+	ContentType string            `json:"content_type,omitempty"`
+	Content     string            `json:"content"`
+}
+
+func formatReadJSON(w io.Writer, msg *dm.Message) error {
+	jm := jsonReadMessage{
+		Reference: reference.Hex(msg.Ref),
+		From:      hex.EncodeToString(msg.From[:]),
+		To:        hex.EncodeToString(msg.To[:]),
+		Labels:    msg.Labels,
+		Timestamp: msg.Timestamp,
+		Content:   string(msg.Content),
+	}
+	meta := render.Metadata{
+		Command:      "arc dm read",
+		TotalCount:   1,
+		ShowingCount: 1,
+	}
+	return render.JSONEnvelope(w, meta, jm)
+}
+
+func formatReadMarkdown(w io.Writer, msg *dm.Message) error {
+	meta := render.Metadata{
+		Command:      "arc dm read",
+		TotalCount:   1,
+		ShowingCount: 1,
+	}
+	return render.MarkdownWithFrontmatter(w, meta, func(w io.Writer) error {
+		ts := time.UnixMilli(msg.Timestamp)
+		_, _ = fmt.Fprintf(w, "## Message %s\n\n", reference.Hex(msg.Ref)[:8])
+		_, _ = fmt.Fprintf(w, "- **from**: `%s`\n", hex.EncodeToString(msg.From[:]))
+		_, _ = fmt.Fprintf(w, "- **to**: `%s`\n", hex.EncodeToString(msg.To[:]))
+		_, _ = fmt.Fprintf(w, "- **timestamp**: %s\n", ts.Format("2006-01-02 15:04:05"))
+		_, _ = fmt.Fprintln(w)
+		_, _ = fmt.Fprintln(w, string(msg.Content))
+		return nil
+	})
+}
+
+// --- Watch formatters ---
+
+func formatWatchText(w io.Writer, m dm.Message, self identity.PublicKey) {
+	short := reference.Hex(m.Ref)[:8]
+	ts := time.UnixMilli(m.Timestamp)
+	sender := senderLabel(m.From, self)
+	_, _ = fmt.Fprintf(w, "%s [%s] %s\n", ts.Format("15:04:05"), sender, short)
+}
+
+func formatWatchJSON(w io.Writer, m dm.Message, preview string, self identity.PublicKey) error {
+	jm := jsonMessage{
+		Reference: reference.Hex(m.Ref),
+		From:      senderLabel(m.From, self),
+		To:        senderLabel(m.To, self),
+		Labels:    m.Labels,
+		Timestamp: m.Timestamp,
+		Preview:   preview,
+	}
+	return writeJSON(w, jm)
+}
+
+func formatWatchMarkdown(w io.Writer, m dm.Message, preview string, self identity.PublicKey) {
+	ts := time.UnixMilli(m.Timestamp)
+	short := reference.Hex(m.Ref)[:8]
+	sender := senderLabel(m.From, self)
+	_, _ = fmt.Fprintf(w, "### %s — %s [%s]\n", sender, ts.Format("2006-01-02 15:04:05"), short)
+	if preview != "" {
+		_, _ = fmt.Fprintln(w)
+		_, _ = fmt.Fprintln(w, preview)
+	}
+	_, _ = fmt.Fprintln(w, "---")
+	_, _ = fmt.Fprintln(w)
+}
+
+// --- Search formatters ---
+
+func formatSearchText(w io.Writer, results []dm.SearchResult) {
+	for _, r := range results {
+		short := reference.Hex(r.Ref)[:8]
+		_, _ = fmt.Fprintf(w, "%-10s %s\n", short, r.Snippet)
+	}
+}
+
+func formatSearchJSON(w io.Writer, results []dm.SearchResult, totalCount int, query string, limit, offset int) error {
+	hasMore := totalCount > offset+len(results)
+	meta := render.Metadata{
+		Command:      fmt.Sprintf("arc dm search %q", query),
+		Query:        query,
+		TotalCount:   totalCount,
+		ShowingCount: len(results),
+		Limit:        limit,
+		Offset:       offset,
+		HasMore:      hasMore,
+	}
+	type jsonSearchResult struct {
+		MsgRef    string `json:"msg_ref"`
+		Snippet   string `json:"snippet"`
+		Timestamp int64  `json:"timestamp"`
+	}
+	var jr []jsonSearchResult
+	for _, r := range results {
+		jr = append(jr, jsonSearchResult{
+			MsgRef:    reference.Hex(r.Ref),
+			Snippet:   r.Snippet,
+			Timestamp: r.Timestamp,
+		})
+	}
+	return render.JSONEnvelope(w, meta, jr)
+}
+
+func formatSearchMarkdown(w io.Writer, results []dm.SearchResult, totalCount int, query string, limit, offset int) error {
+	hasMore := totalCount > offset+len(results)
+	meta := render.Metadata{
+		Command:      fmt.Sprintf("arc dm search %q", query),
+		Query:        query,
+		TotalCount:   totalCount,
+		ShowingCount: len(results),
+		Limit:        limit,
+		Offset:       offset,
+		HasMore:      hasMore,
+	}
+	return render.MarkdownWithFrontmatter(w, meta, func(w io.Writer) error {
+		_, _ = fmt.Fprintf(w, "## Search: %q\n\n", query)
+		for _, r := range results {
+			short := reference.Hex(r.Ref)[:8]
+			ts := time.UnixMilli(r.Timestamp)
+			_, _ = fmt.Fprintf(w, "### [%s] %s\n", short, ts.Format("Jan 2 15:04"))
+			_, _ = fmt.Fprintln(w, r.Snippet)
+			_, _ = fmt.Fprintln(w, "---")
+			_, _ = fmt.Fprintln(w)
+		}
+		return nil
+	})
+}
+
 // --- Helpers ---
 
 func truncateHexValue(v string) string {
