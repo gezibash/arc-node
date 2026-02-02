@@ -311,12 +311,21 @@ func (s *nodeService) handleSubscribe(ctx context.Context, w *streamWriter, reqI
 					deliveryID = s.index.Deliver(entry, sub.ID())
 				}
 
+				var attempt int32
+				var firstDeliveredAt int64
+				if deliveryID != 0 {
+					attempt = 1
+					firstDeliveredAt = time.Now().UnixNano()
+				}
+
 				if err := w.send(&nodev1.ServerFrame{
 					RequestId: 0, // unsolicited push
 					Frame: &nodev1.ServerFrame_Delivery{Delivery: &nodev1.DeliveryFrame{
-						Channel:    channel,
-						Entry:      entryToProto(entry),
-						DeliveryId: deliveryID,
+						Channel:          channel,
+						Entry:            entryToProto(entry),
+						DeliveryId:       deliveryID,
+						Attempt:          attempt,
+						FirstDeliveredAt: firstDeliveredAt,
 					}},
 				}); err != nil {
 					slog.Error("channel delivery send failed", "error", err)
@@ -387,12 +396,21 @@ func (s *nodeService) replayFromCursor(ctx context.Context, w *streamWriter, cha
 			deliveryID = s.index.Deliver(entry, cursorKey)
 		}
 
+		var attempt int32
+		var firstDeliveredAt int64
+		if deliveryID != 0 {
+			attempt = 1
+			firstDeliveredAt = time.Now().UnixNano()
+		}
+
 		if err := w.send(&nodev1.ServerFrame{
 			RequestId: 0,
 			Frame: &nodev1.ServerFrame_Delivery{Delivery: &nodev1.DeliveryFrame{
-				Channel:    channel,
-				Entry:      entryToProto(entry),
-				DeliveryId: deliveryID,
+				Channel:          channel,
+				Entry:            entryToProto(entry),
+				DeliveryId:       deliveryID,
+				Attempt:          attempt,
+				FirstDeliveredAt: firstDeliveredAt,
 			}},
 		}); err != nil {
 			slog.Error("cursor replay send failed", "error", err)
@@ -443,14 +461,18 @@ func (s *nodeService) redeliveryLoop(ctx context.Context, w *streamWriter, chann
 					continue
 				}
 
+				firstDelivered := d.FirstDeliveredAt
+				redeliverAttempt := int32(d.Attempt + 1)
 				newID := dt.Redeliver(d)
 				if d.Entry != nil {
 					_ = w.send(&nodev1.ServerFrame{
 						RequestId: 0,
 						Frame: &nodev1.ServerFrame_Delivery{Delivery: &nodev1.DeliveryFrame{
-							Channel:    channel,
-							Entry:      entryToProto(d.Entry),
-							DeliveryId: newID,
+							Channel:          channel,
+							Entry:            entryToProto(d.Entry),
+							DeliveryId:       newID,
+							Attempt:          redeliverAttempt,
+							FirstDeliveredAt: firstDelivered.UnixNano(),
 						}},
 					})
 				}

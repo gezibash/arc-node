@@ -1461,12 +1461,14 @@ func (x *ResolveGetFrame) GetPrefix() string {
 }
 
 type DeliveryFrame struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Channel       string                 `protobuf:"bytes,1,opt,name=channel,proto3" json:"channel,omitempty"`
-	Entry         *IndexEntry            `protobuf:"bytes,2,opt,name=entry,proto3" json:"entry,omitempty"`
-	DeliveryId    int64                  `protobuf:"varint,3,opt,name=delivery_id,json=deliveryId,proto3" json:"delivery_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Channel          string                 `protobuf:"bytes,1,opt,name=channel,proto3" json:"channel,omitempty"`
+	Entry            *IndexEntry            `protobuf:"bytes,2,opt,name=entry,proto3" json:"entry,omitempty"`
+	DeliveryId       int64                  `protobuf:"varint,3,opt,name=delivery_id,json=deliveryId,proto3" json:"delivery_id,omitempty"`
+	Attempt          int32                  `protobuf:"varint,4,opt,name=attempt,proto3" json:"attempt,omitempty"`
+	FirstDeliveredAt int64                  `protobuf:"varint,5,opt,name=first_delivered_at,json=firstDeliveredAt,proto3" json:"first_delivered_at,omitempty"` // unix nanos
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *DeliveryFrame) Reset() {
@@ -1516,6 +1518,20 @@ func (x *DeliveryFrame) GetEntry() *IndexEntry {
 func (x *DeliveryFrame) GetDeliveryId() int64 {
 	if x != nil {
 		return x.DeliveryId
+	}
+	return 0
+}
+
+func (x *DeliveryFrame) GetAttempt() int32 {
+	if x != nil {
+		return x.Attempt
+	}
+	return 0
+}
+
+func (x *DeliveryFrame) GetFirstDeliveredAt() int64 {
+	if x != nil {
+		return x.FirstDeliveredAt
 	}
 	return 0
 }
@@ -3286,12 +3302,14 @@ const file_arc_node_v1_node_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x10\n" +
 	"\x0eListPeersFrame\")\n" +
 	"\x0fResolveGetFrame\x12\x16\n" +
-	"\x06prefix\x18\x01 \x01(\tR\x06prefix\"y\n" +
+	"\x06prefix\x18\x01 \x01(\tR\x06prefix\"\xc1\x01\n" +
 	"\rDeliveryFrame\x12\x18\n" +
 	"\achannel\x18\x01 \x01(\tR\achannel\x12-\n" +
 	"\x05entry\x18\x02 \x01(\v2\x17.arc.node.v1.IndexEntryR\x05entry\x12\x1f\n" +
 	"\vdelivery_id\x18\x03 \x01(\x03R\n" +
-	"deliveryId\"R\n" +
+	"deliveryId\x12\x18\n" +
+	"\aattempt\x18\x04 \x01(\x05R\aattempt\x12,\n" +
+	"\x12first_delivered_at\x18\x05 \x01(\x03R\x10firstDeliveredAt\"R\n" +
 	"\fReceiptFrame\x12\x1c\n" +
 	"\treference\x18\x01 \x01(\fR\treference\x12\x0e\n" +
 	"\x02ok\x18\x02 \x01(\bR\x02ok\x12\x14\n" +
