@@ -43,7 +43,7 @@ func (m *mockClient) QueryMessages(ctx context.Context, opts *client.QueryOption
 	return m.queryMessagesFn(ctx, opts)
 }
 
-func (m *mockClient) SubscribeMessages(ctx context.Context, expression string, labels map[string]string) (<-chan *client.Entry, <-chan error, error) {
+func (m *mockClient) SubscribeMessages(ctx context.Context, expression string, labels map[string]string, opts ...client.SubscribeOption) (<-chan *client.Entry, <-chan error, error) {
 	return m.subscribeMessagesFn(ctx, expression, labels)
 }
 

@@ -490,34 +490,66 @@ func protoToQueryResult(entries []*nodev1.IndexEntry, nextCursor string, hasMore
 	}
 }
 
-func (c *Client) SubscribeMessages(ctx context.Context, expression string, labels map[string]string) (<-chan *Entry, <-chan error, error) {
+// SubscribeOption configures a subscription.
+type SubscribeOption func(*subscribeConfig)
+
+type subscribeConfig struct {
+	maxInflight  int32
+	prefetch     int32
+	backpressure nodev1.Backpressure
+}
+
+// WithMaxInflight sets the maximum number of in-flight (unacked) entries.
+func WithMaxInflight(n int32) SubscribeOption {
+	return func(c *subscribeConfig) { c.maxInflight = n }
+}
+
+// WithPrefetch sets the prefetch window hint.
+func WithPrefetch(n int32) SubscribeOption {
+	return func(c *subscribeConfig) { c.prefetch = n }
+}
+
+// WithBackpressure sets the backpressure policy for the subscription.
+func WithBackpressure(p nodev1.Backpressure) SubscribeOption {
+	return func(c *subscribeConfig) { c.backpressure = p }
+}
+
+func (c *Client) SubscribeMessages(ctx context.Context, expression string, labels map[string]string, opts ...SubscribeOption) (<-chan *Entry, <-chan error, error) {
 	mux, err := c.channel(ctx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("channel unavailable: %w", err)
 	}
-	return c.subscribeViaChannel(ctx, mux, expression, labels)
+	return c.subscribeViaChannel(ctx, mux, expression, labels, opts...)
 }
 
 // SubscribeChannel subscribes using only the Channel bidi stream.
-func (c *Client) SubscribeChannel(ctx context.Context, expression string, labels map[string]string) (<-chan *Entry, <-chan error, error) {
+func (c *Client) SubscribeChannel(ctx context.Context, expression string, labels map[string]string, opts ...SubscribeOption) (<-chan *Entry, <-chan error, error) {
 	mux, err := c.channel(ctx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("channel unavailable: %w", err)
 	}
-	return c.subscribeViaChannel(ctx, mux, expression, labels)
+	return c.subscribeViaChannel(ctx, mux, expression, labels, opts...)
 }
 
-func (c *Client) subscribeViaChannel(ctx context.Context, mux *channelMux, expression string, labels map[string]string) (<-chan *Entry, <-chan error, error) {
+func (c *Client) subscribeViaChannel(ctx context.Context, mux *channelMux, expression string, labels map[string]string, opts ...SubscribeOption) (<-chan *Entry, <-chan error, error) {
 	channel := "default"
+
+	var cfg subscribeConfig
+	for _, o := range opts {
+		o(&cfg)
+	}
 
 	// Register delivery channel before sending subscribe frame.
 	deliveries := mux.subscribe(channel)
 
 	_, err := mux.roundTrip(ctx, &nodev1.ClientFrame{
 		Frame: &nodev1.ClientFrame_Subscribe{Subscribe: &nodev1.SubscribeFrame{
-			Channel:    channel,
-			Labels:     labels,
-			Expression: expression,
+			Channel:      channel,
+			Labels:       labels,
+			Expression:   expression,
+			MaxInflight:  cfg.maxInflight,
+			Prefetch:     cfg.prefetch,
+			Backpressure: cfg.backpressure,
 		}},
 	})
 	if err != nil {

@@ -225,7 +225,21 @@ func (s *nodeService) handleSubscribe(ctx context.Context, w *streamWriter, reqI
 		callerKey = caller.PublicKey
 	}
 
-	sub, err := s.index.Subscribe(ctx, expr, callerKey)
+	var subOpts *indexstore.SubscriptionOptions
+	if f.MaxInflight > 0 || f.Backpressure != nodev1.Backpressure_BACKPRESSURE_DROP {
+		subOpts = &indexstore.SubscriptionOptions{}
+		if f.MaxInflight > 0 {
+			subOpts.BufferSize = int(f.MaxInflight)
+		}
+		switch f.Backpressure {
+		case nodev1.Backpressure_BACKPRESSURE_BLOCK:
+			subOpts.BackpressurePolicy = indexstore.BackpressureBlock
+		case nodev1.Backpressure_BACKPRESSURE_DISCONNECT:
+			subOpts.BackpressurePolicy = indexstore.BackpressureDisconnect
+		}
+	}
+
+	sub, err := s.index.Subscribe(ctx, expr, callerKey, subOpts)
 	if err != nil {
 		sendErr(w, reqID, codes.Internal, err.Error())
 		return
