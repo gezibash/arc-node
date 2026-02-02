@@ -565,9 +565,117 @@ func TestChannelUnavailable(t *testing.T) {
 		t.Error("expected error")
 	}
 
+	err = c.SetPresence(ctx, "online", false, nil, 0)
+	if err == nil {
+		t.Error("expected error")
+	}
+
+	_, err = c.QueryPresence(ctx, nil)
+	if err == nil {
+		t.Error("expected error")
+	}
+
+	_, err = c.SubscribePresence(ctx, nil)
+	if err == nil {
+		t.Error("expected error")
+	}
+
 	msg := testMinimalMessage()
 	_, err = c.SendMessage(ctx, msg, nil, nil)
 	if err == nil {
 		t.Error("expected error")
+	}
+}
+
+func TestProtoToPresenceEvent(t *testing.T) {
+	pk := [32]byte{1, 2, 3}
+	f := &nodev1.PresenceEventFrame{
+		PublicKey: pk[:],
+		Status:    "away",
+		Typing:    true,
+		Metadata:  map[string]string{"k": "v"},
+		UpdatedAt: 12345,
+		Removed:   true,
+	}
+	ev := protoToPresenceEvent(f)
+	if ev.PublicKey != pk {
+		t.Error("public key mismatch")
+	}
+	if ev.Status != "away" {
+		t.Errorf("expected away, got %s", ev.Status)
+	}
+	if !ev.Typing {
+		t.Error("expected typing")
+	}
+	if ev.Metadata["k"] != "v" {
+		t.Error("metadata mismatch")
+	}
+	if ev.UpdatedAt != 12345 {
+		t.Error("updated_at mismatch")
+	}
+	if !ev.Removed {
+		t.Error("expected removed")
+	}
+}
+
+func TestChannelMuxPresenceRouting(t *testing.T) {
+	stream := newMockStream()
+	mux := newChannelMux(stream)
+	defer close(stream.recvCh)
+	defer mux.close()
+
+	ch := mux.subscribePresence()
+
+	// Send an unsolicited presence event (request_id=0).
+	stream.recvCh <- &nodev1.ServerFrame{
+		RequestId: 0,
+		Frame: &nodev1.ServerFrame_PresenceEvent{PresenceEvent: &nodev1.PresenceEventFrame{
+			PublicKey: make([]byte, 32),
+			Status:    "online",
+		}},
+	}
+
+	select {
+	case ev := <-ch:
+		if ev.Status != "online" {
+			t.Errorf("expected online, got %s", ev.Status)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout")
+	}
+
+	mux.unsubscribePresence()
+}
+
+func TestPresenceSubscriptionEvents(t *testing.T) {
+	sub := &PresenceSubscription{
+		events: make(chan *PresenceEvent),
+		cancel: func() {},
+	}
+	if sub.Events() == nil {
+		t.Error("expected non-nil events channel")
+	}
+	sub.Close()
+}
+
+func TestQueryPresenceWrongFrameType(t *testing.T) {
+	stream := newMockStream()
+	mux := newChannelMux(stream)
+	defer close(stream.recvCh)
+	defer mux.close()
+
+	c := &Client{mux: mux}
+
+	go func() {
+		f := <-stream.sendCh
+		stream.recvCh <- &nodev1.ServerFrame{
+			RequestId: f.RequestId,
+			Frame:     &nodev1.ServerFrame_Receipt{Receipt: &nodev1.ReceiptFrame{Ok: true}},
+		}
+	}()
+
+	_, err := c.QueryPresence(context.Background(), nil)
+	if err == nil {
+		t.Error("expected error for wrong frame type")
 	}
 }

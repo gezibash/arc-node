@@ -1891,3 +1891,117 @@ func TestChannelPingPong(t *testing.T) {
 		t.Errorf("server time %v is too far from now", serverTime)
 	}
 }
+
+func TestChannelPresenceSetAndQuery(t *testing.T) {
+	_, kp, addr := newTestServer(t)
+	c, callerKP := newTestClient(t, addr, kp)
+	ctx := context.Background()
+
+	err := c.SetPresence(ctx, "online", false, map[string]string{"app": "test"}, 0)
+	if err != nil {
+		t.Fatalf("SetPresence: %v", err)
+	}
+
+	events, err := c.QueryPresence(ctx, nil)
+	if err != nil {
+		t.Fatalf("QueryPresence: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+	if events[0].PublicKey != callerKP.PublicKey() {
+		t.Error("public key mismatch")
+	}
+	if events[0].Status != "online" {
+		t.Errorf("expected status online, got %s", events[0].Status)
+	}
+	if events[0].Metadata["app"] != "test" {
+		t.Error("expected app=test metadata")
+	}
+}
+
+func TestChannelPresenceQueryByKey(t *testing.T) {
+	_, kp, addr := newTestServer(t)
+	c1, c1KP := newTestClient(t, addr, kp)
+	c2, _ := newTestClient(t, addr, kp)
+	ctx := context.Background()
+
+	_ = c1.SetPresence(ctx, "online", false, nil, 0)
+
+	// Query for specific key.
+	events, err := c2.QueryPresence(ctx, []identity.PublicKey{c1KP.PublicKey()})
+	if err != nil {
+		t.Fatalf("QueryPresence: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+
+	// Query for unknown key.
+	unknownKP, _ := identity.Generate()
+	events, err = c2.QueryPresence(ctx, []identity.PublicKey{unknownKP.PublicKey()})
+	if err != nil {
+		t.Fatalf("QueryPresence: %v", err)
+	}
+	if len(events) != 0 {
+		t.Fatalf("expected 0 events, got %d", len(events))
+	}
+}
+
+func TestChannelPresenceSubscribeReceivesUpdates(t *testing.T) {
+	_, kp, addr := newTestServer(t)
+	c1, _ := newTestClient(t, addr, kp)
+	c2, _ := newTestClient(t, addr, kp)
+	ctx := context.Background()
+
+	sub, err := c2.SubscribePresence(ctx, nil)
+	if err != nil {
+		t.Fatalf("SubscribePresence: %v", err)
+	}
+	defer sub.Close()
+
+	// Set presence from c1.
+	time.Sleep(50 * time.Millisecond) // Let subscription settle.
+	err = c1.SetPresence(ctx, "online", true, nil, 0)
+	if err != nil {
+		t.Fatalf("SetPresence: %v", err)
+	}
+
+	select {
+	case ev := <-sub.Events():
+		if ev.Status != "online" {
+			t.Errorf("expected status online, got %s", ev.Status)
+		}
+		if !ev.Typing {
+			t.Error("expected typing=true")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for presence event")
+	}
+}
+
+func TestChannelPresenceCleanupOnDisconnect(t *testing.T) {
+	_, kp, addr := newTestServer(t)
+	c1, _ := newTestClient(t, addr, kp)
+	c2, _ := newTestClient(t, addr, kp)
+	ctx := context.Background()
+
+	// c1 sets presence.
+	_ = c1.SetPresence(ctx, "online", false, nil, 0)
+
+	// Verify it's there.
+	events, _ := c2.QueryPresence(ctx, nil)
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+
+	// Close c1 — presence should be cleaned up.
+	c1.Close()
+	time.Sleep(200 * time.Millisecond) // Let cleanup propagate.
+
+	events, _ = c2.QueryPresence(ctx, nil)
+	// c2's own presence is not set, so should be 0.
+	if len(events) != 0 {
+		t.Fatalf("expected 0 events after disconnect, got %d", len(events))
+	}
+}

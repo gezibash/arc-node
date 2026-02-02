@@ -216,6 +216,38 @@ message PongFrame {
   google.protobuf.Timestamp server_time = 2;
 }
 
+// Presence frames
+
+message PresenceSetFrame {
+  string status = 1;
+  bool typing = 2;
+  map<string, string> metadata = 3;
+  int64 ttl_seconds = 4;
+}
+
+message PresenceQueryFrame {
+  repeated bytes public_keys = 1;
+}
+
+message PresenceSubscribeFrame {
+  repeated bytes public_keys = 1;
+}
+
+message PresenceUnsubscribeFrame {}
+
+message PresenceEventFrame {
+  bytes public_key = 1;
+  string status = 2;
+  bool typing = 3;
+  map<string, string> metadata = 4;
+  int64 updated_at = 5;
+  bool removed = 6;
+}
+
+message PresenceResponseFrame {
+  repeated PresenceEventFrame entries = 1;
+}
+
 // Batch frames
 
 message BatchPublishFrame {
@@ -251,6 +283,10 @@ message ClientFrame {
     NackFrame nack = 12;
     BatchPublishFrame batch_publish = 13;
     PingFrame ping = 14;
+    PresenceSetFrame presence_set = 16;
+    PresenceQueryFrame presence_query = 17;
+    PresenceSubscribeFrame presence_subscribe = 18;
+    PresenceUnsubscribeFrame presence_unsubscribe = 19;
   }
 }
 
@@ -266,6 +302,8 @@ message ServerFrame {
     ResolveGetResponseFrame resolve_get_response = 7;
     BatchReceiptFrame batch_receipt = 8;
     PongFrame pong = 9;
+    PresenceEventFrame presence_event = 10;
+    PresenceResponseFrame presence_response = 11;
   }
 }
 

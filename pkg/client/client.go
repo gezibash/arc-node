@@ -565,6 +565,161 @@ func (c *Client) subscribeViaChannel(ctx context.Context, mux *channelMux, expre
 	return entries, errs, nil
 }
 
+// PresenceEvent describes the presence state of a peer.
+type PresenceEvent struct {
+	PublicKey identity.PublicKey
+	Status    string
+	Typing    bool
+	Metadata  map[string]string
+	UpdatedAt int64
+	Removed   bool
+}
+
+func protoToPresenceEvent(f *nodev1.PresenceEventFrame) *PresenceEvent {
+	var pk identity.PublicKey
+	copy(pk[:], f.PublicKey)
+	return &PresenceEvent{
+		PublicKey: pk,
+		Status:    f.Status,
+		Typing:    f.Typing,
+		Metadata:  f.Metadata,
+		UpdatedAt: f.UpdatedAt,
+		Removed:   f.Removed,
+	}
+}
+
+// SetPresence announces the caller's presence state to the node.
+func (c *Client) SetPresence(ctx context.Context, status string, typing bool, metadata map[string]string, ttlSeconds int64) error {
+	mux, err := c.channel(ctx)
+	if err != nil {
+		return fmt.Errorf("channel unavailable: %w", err)
+	}
+	_, err = mux.roundTrip(ctx, &nodev1.ClientFrame{
+		Frame: &nodev1.ClientFrame_PresenceSet{PresenceSet: &nodev1.PresenceSetFrame{
+			Status:     status,
+			Typing:     typing,
+			Metadata:   metadata,
+			TtlSeconds: ttlSeconds,
+		}},
+	})
+	return err
+}
+
+// QueryPresence returns the current presence state for the given public keys.
+// Pass nil or empty slice to query all.
+func (c *Client) QueryPresence(ctx context.Context, publicKeys []identity.PublicKey) ([]*PresenceEvent, error) {
+	mux, err := c.channel(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("channel unavailable: %w", err)
+	}
+
+	rawKeys := make([][]byte, len(publicKeys))
+	for i, pk := range publicKeys {
+		rawKeys[i] = pk[:]
+	}
+
+	resp, err := mux.roundTrip(ctx, &nodev1.ClientFrame{
+		Frame: &nodev1.ClientFrame_PresenceQuery{PresenceQuery: &nodev1.PresenceQueryFrame{
+			PublicKeys: rawKeys,
+		}},
+	})
+	if err != nil {
+		return nil, err
+	}
+	pr, ok := resp.Frame.(*nodev1.ServerFrame_PresenceResponse)
+	if !ok {
+		return nil, fmt.Errorf("unexpected server frame type")
+	}
+	events := make([]*PresenceEvent, len(pr.PresenceResponse.Entries))
+	for i, e := range pr.PresenceResponse.Entries {
+		events[i] = protoToPresenceEvent(e)
+	}
+	return events, nil
+}
+
+// PresenceSubscription receives real-time presence updates.
+type PresenceSubscription struct {
+	events <-chan *PresenceEvent
+	cancel func()
+}
+
+// Events returns the channel of presence events.
+func (ps *PresenceSubscription) Events() <-chan *PresenceEvent {
+	return ps.events
+}
+
+// Close stops the subscription.
+func (ps *PresenceSubscription) Close() {
+	ps.cancel()
+}
+
+// SubscribePresence subscribes to presence changes for the given public keys.
+// Pass nil or empty slice to subscribe to all.
+func (c *Client) SubscribePresence(ctx context.Context, publicKeys []identity.PublicKey) (*PresenceSubscription, error) {
+	mux, err := c.channel(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("channel unavailable: %w", err)
+	}
+
+	rawKeys := make([][]byte, len(publicKeys))
+	for i, pk := range publicKeys {
+		rawKeys[i] = pk[:]
+	}
+
+	// Register for unsolicited presence events before the subscribe RPC.
+	presenceCh := mux.subscribePresence()
+
+	resp, err := mux.roundTrip(ctx, &nodev1.ClientFrame{
+		Frame: &nodev1.ClientFrame_PresenceSubscribe{PresenceSubscribe: &nodev1.PresenceSubscribeFrame{
+			PublicKeys: rawKeys,
+		}},
+	})
+	if err != nil {
+		mux.unsubscribePresence()
+		return nil, err
+	}
+
+	events := make(chan *PresenceEvent, 64)
+
+	// Emit initial snapshot from the response.
+	if pr, ok := resp.Frame.(*nodev1.ServerFrame_PresenceResponse); ok {
+		for _, e := range pr.PresenceResponse.Entries {
+			select {
+			case events <- protoToPresenceEvent(e):
+			default:
+			}
+		}
+	}
+
+	subCtx, cancel := context.WithCancel(ctx)
+
+	go func() {
+		defer close(events)
+		defer mux.unsubscribePresence()
+		for {
+			select {
+			case <-subCtx.Done():
+				// Best-effort unsubscribe.
+				_, _ = mux.roundTrip(context.Background(), &nodev1.ClientFrame{
+					Frame: &nodev1.ClientFrame_PresenceUnsubscribe{PresenceUnsubscribe: &nodev1.PresenceUnsubscribeFrame{}},
+				})
+				return
+			case pf, ok := <-presenceCh:
+				if !ok {
+					return
+				}
+				select {
+				case events <- protoToPresenceEvent(pf):
+				case <-subCtx.Done():
+					return
+				}
+			}
+		}
+	}()
+
+	return &PresenceSubscription{events: events, cancel: cancel}, nil
+}
+
 // PeerDirection indicates whether a peer is inbound or outbound.
 type PeerDirection int
 

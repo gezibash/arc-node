@@ -756,3 +756,131 @@ func TestBatchSendMessages(t *testing.T) {
 		t.Fatalf("expected 3 entries, got %d", len(result.Entries))
 	}
 }
+
+func TestSetAndQueryPresence(t *testing.T) {
+	addr, nodeKP := newTestServer(t)
+	c, kp := newTestClient(t, addr, nodeKP)
+	ctx := context.Background()
+
+	err := c.SetPresence(ctx, "online", true, map[string]string{"app": "test"}, 0)
+	if err != nil {
+		t.Fatalf("SetPresence: %v", err)
+	}
+
+	events, err := c.QueryPresence(ctx, nil)
+	if err != nil {
+		t.Fatalf("QueryPresence: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+	if events[0].PublicKey != kp.PublicKey() {
+		t.Error("public key mismatch")
+	}
+	if events[0].Status != "online" {
+		t.Errorf("expected online, got %s", events[0].Status)
+	}
+	if !events[0].Typing {
+		t.Error("expected typing=true")
+	}
+	if events[0].Metadata["app"] != "test" {
+		t.Error("expected app=test metadata")
+	}
+}
+
+func TestQueryPresenceByKey(t *testing.T) {
+	addr, nodeKP := newTestServer(t)
+	c1, c1KP := newTestClient(t, addr, nodeKP)
+	c2, _ := newTestClient(t, addr, nodeKP)
+	ctx := context.Background()
+
+	_ = c1.SetPresence(ctx, "online", false, nil, 0)
+
+	events, err := c2.QueryPresence(ctx, []identity.PublicKey{c1KP.PublicKey()})
+	if err != nil {
+		t.Fatalf("QueryPresence: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("expected 1, got %d", len(events))
+	}
+
+	unknownKP, _ := identity.Generate()
+	events, err = c2.QueryPresence(ctx, []identity.PublicKey{unknownKP.PublicKey()})
+	if err != nil {
+		t.Fatalf("QueryPresence: %v", err)
+	}
+	if len(events) != 0 {
+		t.Fatalf("expected 0, got %d", len(events))
+	}
+}
+
+func TestSubscribePresence(t *testing.T) {
+	addr, nodeKP := newTestServer(t)
+	c1, _ := newTestClient(t, addr, nodeKP)
+	c2, _ := newTestClient(t, addr, nodeKP)
+	ctx := context.Background()
+
+	sub, err := c2.SubscribePresence(ctx, nil)
+	if err != nil {
+		t.Fatalf("SubscribePresence: %v", err)
+	}
+	defer sub.Close()
+
+	time.Sleep(50 * time.Millisecond)
+	_ = c1.SetPresence(ctx, "busy", true, nil, 0)
+
+	select {
+	case ev := <-sub.Events():
+		if ev.Status != "busy" {
+			t.Errorf("expected busy, got %s", ev.Status)
+		}
+		if !ev.Typing {
+			t.Error("expected typing=true")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for presence event")
+	}
+}
+
+func TestSubscribePresenceClose(t *testing.T) {
+	addr, nodeKP := newTestServer(t)
+	c, _ := newTestClient(t, addr, nodeKP)
+	ctx := context.Background()
+
+	sub, err := c.SubscribePresence(ctx, nil)
+	if err != nil {
+		t.Fatalf("SubscribePresence: %v", err)
+	}
+
+	// Close should not panic.
+	sub.Close()
+
+	// Events channel should drain and close.
+	select {
+	case <-sub.Events():
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for events channel to close")
+	}
+}
+
+func TestPresenceCleanupOnDisconnect(t *testing.T) {
+	addr, nodeKP := newTestServer(t)
+	c1, _ := newTestClient(t, addr, nodeKP)
+	c2, _ := newTestClient(t, addr, nodeKP)
+	ctx := context.Background()
+
+	_ = c1.SetPresence(ctx, "online", false, nil, 0)
+
+	events, _ := c2.QueryPresence(ctx, nil)
+	if len(events) != 1 {
+		t.Fatalf("expected 1, got %d", len(events))
+	}
+
+	c1.Close()
+	time.Sleep(200 * time.Millisecond)
+
+	events, _ = c2.QueryPresence(ctx, nil)
+	if len(events) != 0 {
+		t.Fatalf("expected 0 after disconnect, got %d", len(events))
+	}
+}

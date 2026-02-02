@@ -15,13 +15,15 @@ import (
 
 // channelMux multiplexes operations over a single bidi Channel stream.
 type channelMux struct {
-	mu      sync.Mutex
-	stream  nodev1.NodeService_ChannelClient
-	nextID  atomic.Uint64
-	pending sync.Map // uint64 → chan *nodev1.ServerFrame
-	subs    sync.Map // string → chan *nodev1.DeliveryFrame
-	closed  atomic.Bool
-	done    chan struct{}
+	mu          sync.Mutex
+	stream      nodev1.NodeService_ChannelClient
+	nextID      atomic.Uint64
+	pending     sync.Map // uint64 → chan *nodev1.ServerFrame
+	subs        sync.Map // string → chan *nodev1.DeliveryFrame
+	presenceSub chan *nodev1.PresenceEventFrame
+	presenceMu  sync.Mutex
+	closed      atomic.Bool
+	done        chan struct{}
 }
 
 func newChannelMux(stream nodev1.NodeService_ChannelClient) *channelMux {
@@ -58,7 +60,7 @@ func (m *channelMux) recvLoop() {
 
 		reqID := frame.GetRequestId()
 
-		// Unsolicited push (delivery).
+		// Unsolicited push (delivery or presence event).
 		if reqID == 0 {
 			if df, ok := frame.Frame.(*nodev1.ServerFrame_Delivery); ok {
 				if ch, loaded := m.subs.Load(df.Delivery.Channel); loaded {
@@ -68,6 +70,17 @@ func (m *channelMux) recvLoop() {
 						default:
 							// Drop if subscriber is slow.
 						}
+					}
+				}
+			}
+			if pf, ok := frame.Frame.(*nodev1.ServerFrame_PresenceEvent); ok {
+				m.presenceMu.Lock()
+				ch := m.presenceSub
+				m.presenceMu.Unlock()
+				if ch != nil {
+					select {
+					case ch <- pf.PresenceEvent:
+					default:
 					}
 				}
 			}
@@ -134,6 +147,23 @@ func (m *channelMux) unsubscribe(channel string) {
 			close(ch)
 		}
 	}
+}
+
+func (m *channelMux) subscribePresence() <-chan *nodev1.PresenceEventFrame {
+	ch := make(chan *nodev1.PresenceEventFrame, 64)
+	m.presenceMu.Lock()
+	m.presenceSub = ch
+	m.presenceMu.Unlock()
+	return ch
+}
+
+func (m *channelMux) unsubscribePresence() {
+	m.presenceMu.Lock()
+	if m.presenceSub != nil {
+		close(m.presenceSub)
+		m.presenceSub = nil
+	}
+	m.presenceMu.Unlock()
 }
 
 func (m *channelMux) close() {

@@ -9,16 +9,20 @@ import (
 	"log/slog"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	nodev1 "github.com/gezibash/arc-node/api/arc/node/v1"
 	"github.com/gezibash/arc-node/internal/indexstore"
 	"github.com/gezibash/arc-node/internal/indexstore/physical"
 	"github.com/gezibash/arc-node/pkg/envelope"
+	"github.com/gezibash/arc/v2/pkg/identity"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+var connCounter atomic.Uint64
 
 // streamWriter serializes concurrent sends on a bidi stream.
 type streamWriter struct {
@@ -74,7 +78,9 @@ func (s *nodeService) Channel(stream nodev1.NodeService_ChannelServer) error {
 	ctx := stream.Context()
 	writer := &streamWriter{stream: stream}
 	subs := newChannelSubs()
+	connID := fmt.Sprintf("conn-%d", connCounter.Add(1))
 	defer subs.closeAll()
+	defer s.presence.CleanupConnection(connID)
 
 	for {
 		frame, err := stream.Recv()
@@ -116,6 +122,14 @@ func (s *nodeService) Channel(stream nodev1.NodeService_ChannelServer) error {
 			s.handleBatchPublish(ctx, writer, reqID, f.BatchPublish)
 		case *nodev1.ClientFrame_Ping:
 			s.handlePing(writer, reqID, f.Ping)
+		case *nodev1.ClientFrame_PresenceSet:
+			s.handlePresenceSet(ctx, writer, reqID, connID, f.PresenceSet)
+		case *nodev1.ClientFrame_PresenceQuery:
+			s.handlePresenceQuery(writer, reqID, f.PresenceQuery)
+		case *nodev1.ClientFrame_PresenceSubscribe:
+			s.handlePresenceSubscribe(writer, reqID, connID, f.PresenceSubscribe)
+		case *nodev1.ClientFrame_PresenceUnsubscribe:
+			s.handlePresenceUnsubscribe(writer, reqID, connID)
 		default:
 			sendErr(writer, reqID, codes.InvalidArgument, "unknown frame type")
 		}
@@ -644,6 +658,71 @@ func (s *nodeService) handlePing(w *streamWriter, reqID uint64, f *nodev1.PingFr
 			ServerTime: timestamppb.Now(),
 		}},
 	})
+}
+
+func (s *nodeService) handlePresenceSet(ctx context.Context, w *streamWriter, reqID uint64, connID string, f *nodev1.PresenceSetFrame) {
+	caller, ok := envelope.GetCaller(ctx)
+	if !ok {
+		sendErr(w, reqID, codes.Unauthenticated, "identity required")
+		return
+	}
+	s.presence.Set(connID, caller.PublicKey, f.Status, f.Typing, f.Metadata, f.TtlSeconds)
+	_ = w.send(&nodev1.ServerFrame{
+		RequestId: reqID,
+		Frame:     &nodev1.ServerFrame_Receipt{Receipt: &nodev1.ReceiptFrame{Ok: true}},
+	})
+}
+
+func (s *nodeService) handlePresenceQuery(w *streamWriter, reqID uint64, f *nodev1.PresenceQueryFrame) {
+	keys := pubKeysFromBytes(f.PublicKeys)
+	entries := s.presence.Query(keys)
+	events := make([]*nodev1.PresenceEventFrame, len(entries))
+	for i, e := range entries {
+		events[i] = e.toProto(false)
+	}
+	_ = w.send(&nodev1.ServerFrame{
+		RequestId: reqID,
+		Frame:     &nodev1.ServerFrame_PresenceResponse{PresenceResponse: &nodev1.PresenceResponseFrame{Entries: events}},
+	})
+}
+
+func (s *nodeService) handlePresenceSubscribe(w *streamWriter, reqID uint64, connID string, f *nodev1.PresenceSubscribeFrame) {
+	keys := pubKeysFromBytes(f.PublicKeys)
+	s.presence.Subscribe(connID, keys, w)
+
+	// Send current snapshot.
+	entries := s.presence.Query(keys)
+	events := make([]*nodev1.PresenceEventFrame, len(entries))
+	for i, e := range entries {
+		events[i] = e.toProto(false)
+	}
+	_ = w.send(&nodev1.ServerFrame{
+		RequestId: reqID,
+		Frame:     &nodev1.ServerFrame_PresenceResponse{PresenceResponse: &nodev1.PresenceResponseFrame{Entries: events}},
+	})
+}
+
+func (s *nodeService) handlePresenceUnsubscribe(w *streamWriter, reqID uint64, connID string) {
+	s.presence.Unsubscribe(connID)
+	_ = w.send(&nodev1.ServerFrame{
+		RequestId: reqID,
+		Frame:     &nodev1.ServerFrame_Receipt{Receipt: &nodev1.ReceiptFrame{Ok: true}},
+	})
+}
+
+func pubKeysFromBytes(raw [][]byte) []identity.PublicKey {
+	if len(raw) == 0 {
+		return nil
+	}
+	keys := make([]identity.PublicKey, 0, len(raw))
+	for _, b := range raw {
+		if len(b) == 32 {
+			var pk identity.PublicKey
+			copy(pk[:], b)
+			keys = append(keys, pk)
+		}
+	}
+	return keys
 }
 
 func sendErr(w *streamWriter, reqID uint64, code codes.Code, msg string) {
