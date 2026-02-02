@@ -129,7 +129,15 @@ func (m *channelMux) roundTrip(ctx context.Context, frame *nodev1.ClientFrame) (
 		}
 		// Check for error frame.
 		if ef, ok := resp.Frame.(*nodev1.ServerFrame_Error); ok {
-			return nil, status.Error(codes.Code(ef.Error.Code), ef.Error.Message)
+			msg := ef.Error.Message
+			if ef.Error.Detail != "" {
+				msg = ef.Error.Detail + ": " + msg
+			}
+			err := status.Error(codes.Code(ef.Error.Code), msg)
+			if ef.Error.Retryable {
+				err = &retryableError{cause: err}
+			}
+			return nil, err
 		}
 		return resp, nil
 	}
@@ -173,4 +181,26 @@ func (m *channelMux) close() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	_ = m.stream.CloseSend()
+}
+
+// retryableError wraps an error to indicate the operation may be retried.
+type retryableError struct {
+	cause error
+}
+
+func (e *retryableError) Error() string { return e.cause.Error() }
+func (e *retryableError) Unwrap() error { return e.cause }
+
+// GRPCStatus implements the gRPC status interface so status.FromError works.
+func (e *retryableError) GRPCStatus() *status.Status {
+	if s, ok := status.FromError(e.cause); ok {
+		return s
+	}
+	return status.New(codes.Unknown, e.cause.Error())
+}
+
+// Retryable reports whether err was flagged as retryable by the server.
+func Retryable(err error) bool {
+	var re *retryableError
+	return errors.As(err, &re)
 }
