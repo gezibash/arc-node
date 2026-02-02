@@ -266,11 +266,10 @@ func (s *nodeService) handleSubscribe(ctx context.Context, w *streamWriter, reqI
 			case <-subCtx.Done():
 				<-redeliverDone
 				return
-			case entry, ok := <-sub.Entries():
-				if !ok {
-					<-redeliverDone
-					return
-				}
+			case <-sub.Done():
+				<-redeliverDone
+				return
+			case entry := <-sub.Entries():
 
 				var deliveryID int64
 				if entry.DeliveryMode == 1 {

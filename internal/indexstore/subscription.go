@@ -69,6 +69,7 @@ type SubscriptionHealth struct {
 type Subscription interface {
 	ID() string
 	Entries() <-chan *physical.Entry
+	Done() <-chan struct{}
 	Cancel()
 	Err() error
 	Health() SubscriptionHealth
@@ -119,7 +120,7 @@ func newSubscription(ctx context.Context, expression string, callerKey [32]byte,
 
 	go func() {
 		<-ctx.Done()
-		close(s.entries)
+		s.disconnected.Store(true)
 		close(s.done)
 	}()
 
@@ -128,6 +129,7 @@ func newSubscription(ctx context.Context, expression string, callerKey [32]byte,
 
 func (s *subscription) ID() string                      { return s.id }
 func (s *subscription) Entries() <-chan *physical.Entry { return s.entries }
+func (s *subscription) Done() <-chan struct{}           { return s.done }
 func (s *subscription) Cancel()                         { s.cancel() }
 
 func (s *subscription) Err() error {
@@ -367,6 +369,8 @@ func (m *subscriptionManager) deliverToSub(sub *subscription, entry *physical.En
 			timer.Stop()
 			sub.consecutiveDrops.Store(0)
 			sub.totalDelivered.Add(1)
+		case <-sub.done:
+			timer.Stop()
 		case <-timer.C:
 			sub.totalDropped.Add(1)
 			drops := sub.consecutiveDrops.Add(1)
@@ -381,6 +385,7 @@ func (m *subscriptionManager) deliverToSub(sub *subscription, entry *physical.En
 		select {
 		case sub.entries <- entry:
 			sub.totalDelivered.Add(1)
+		case <-sub.done:
 		default:
 			sub.totalDropped.Add(1)
 			m.disconnectSub(sub, "buffer full")
@@ -391,6 +396,7 @@ func (m *subscriptionManager) deliverToSub(sub *subscription, entry *physical.En
 		case sub.entries <- entry:
 			sub.consecutiveDrops.Store(0)
 			sub.totalDelivered.Add(1)
+		case <-sub.done:
 		default:
 			sub.totalDropped.Add(1)
 			drops := sub.consecutiveDrops.Add(1)

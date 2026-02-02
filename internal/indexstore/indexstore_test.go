@@ -822,14 +822,11 @@ func TestCloseStopsSubscriptions(t *testing.T) {
 		t.Fatalf("Close: %v", err)
 	}
 
-	// After close, subscription channel should be closed.
+	// After close, subscription Done channel should be closed.
 	select {
-	case _, ok := <-sub.Entries():
-		if ok {
-			t.Fatal("expected subscription channel to be closed")
-		}
+	case <-sub.Done():
 	case <-time.After(time.Second):
-		t.Fatal("subscription channel not closed after store.Close()")
+		t.Fatal("subscription Done() not closed after store.Close()")
 	}
 
 	// Subscribe after close should fail.
