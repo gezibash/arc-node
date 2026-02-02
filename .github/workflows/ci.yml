@@ -12,7 +12,7 @@ permissions:
 jobs:
   commit-lint:
     if: github.event_name == 'pull_request'
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
         with:
@@ -22,7 +22,7 @@ jobs:
           allowed-commit-types: "feat,fix,refactor,perf,test,ci,docs,build,chore,revert"
 
   generate:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: bufbuild/buf-setup-action@v1
@@ -35,7 +35,7 @@ jobs:
 
   lint:
     needs: generate
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
@@ -51,7 +51,7 @@ jobs:
 
   test:
     needs: generate
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
@@ -75,7 +75,7 @@ jobs:
 
   govulncheck:
     needs: generate
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
@@ -90,14 +90,14 @@ jobs:
 
   dependency-review:
     if: github.event_name == 'pull_request'
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: actions/dependency-review-action@v4
 
   codeql:
     needs: generate
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
