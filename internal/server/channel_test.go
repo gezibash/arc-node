@@ -1228,6 +1228,78 @@ func TestHandleAckDeliveryIdUnit(t *testing.T) {
 	}
 }
 
+func TestHandleNackMissingDeliveryId(t *testing.T) {
+	svc := newTestNodeService(t)
+	w, ms := newMockWriter()
+	ctx := context.Background()
+
+	svc.handleNack(ctx, w, 1, &nodev1.NackFrame{DeliveryId: 0})
+
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	if len(ms.sent) != 1 {
+		t.Fatalf("expected 1 frame, got %d", len(ms.sent))
+	}
+	errFrame := ms.sent[0].Frame.(*nodev1.ServerFrame_Error).Error
+	if errFrame.Code != int32(codes.InvalidArgument) {
+		t.Errorf("code = %d, want %d", errFrame.Code, codes.InvalidArgument)
+	}
+}
+
+func TestHandleNackUnknownDeliveryId(t *testing.T) {
+	svc := newTestNodeService(t)
+	w, ms := newMockWriter()
+	ctx := context.Background()
+
+	svc.handleNack(ctx, w, 1, &nodev1.NackFrame{DeliveryId: 999})
+
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	if len(ms.sent) != 1 {
+		t.Fatalf("expected 1 frame, got %d", len(ms.sent))
+	}
+	receipt := ms.sent[0].Frame.(*nodev1.ServerFrame_Receipt).Receipt
+	if !receipt.Ok {
+		t.Error("expected Ok=true for unknown delivery_id (idempotent)")
+	}
+}
+
+func TestHandleNackDeadLetterUnit(t *testing.T) {
+	svc := newTestNodeService(t)
+	w, ms := newMockWriter()
+	ctx := context.Background()
+
+	// Create and deliver an entry so we have a valid delivery ID.
+	ref := reference.Compute([]byte("nack-dl-unit"))
+	entry := &idxphysical.Entry{
+		Ref:          ref,
+		Labels:       map[string]string{"type": "test"},
+		Timestamp:    time.Now().UnixMilli(),
+		Persistence:  1,
+		DeliveryMode: 1,
+	}
+	if err := svc.index.Index(ctx, entry); err != nil {
+		t.Fatalf("Index: %v", err)
+	}
+	deliveryID := svc.index.Deliver(entry, "test-sub")
+
+	svc.handleNack(ctx, w, 1, &nodev1.NackFrame{
+		DeliveryId: deliveryID,
+		DeadLetter: true,
+		Reason:     "bad data",
+	})
+
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	if len(ms.sent) != 1 {
+		t.Fatalf("expected 1 frame, got %d", len(ms.sent))
+	}
+	receipt := ms.sent[0].Frame.(*nodev1.ServerFrame_Receipt).Receipt
+	if !receipt.Ok {
+		t.Error("expected Ok=true")
+	}
+}
+
 func TestHandlePutErrorUnit(t *testing.T) {
 	// handlePut with nil data — should succeed (empty blob).
 	svc := newTestNodeService(t)

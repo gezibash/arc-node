@@ -109,6 +109,8 @@ func (s *nodeService) Channel(stream nodev1.NodeService_ChannelServer) error {
 			s.handleListPeers(ctx, writer, reqID)
 		case *nodev1.ClientFrame_ResolveGet:
 			s.handleResolveGet(ctx, writer, reqID, f.ResolveGet)
+		case *nodev1.ClientFrame_Nack:
+			s.handleNack(ctx, writer, reqID, f.Nack)
 		case *nodev1.ClientFrame_BatchPublish:
 			s.handleBatchPublish(ctx, writer, reqID, f.BatchPublish)
 		default:
@@ -465,6 +467,24 @@ func (s *nodeService) handleAck(ctx context.Context, w *streamWriter, reqID uint
 		return
 	}
 	// No-op for legacy acks since delivery tracking is now ID-based.
+	_ = w.send(&nodev1.ServerFrame{
+		RequestId: reqID,
+		Frame:     &nodev1.ServerFrame_Receipt{Receipt: &nodev1.ReceiptFrame{Ok: true}},
+	})
+}
+
+func (s *nodeService) handleNack(ctx context.Context, w *streamWriter, reqID uint64, f *nodev1.NackFrame) {
+	if f.DeliveryId <= 0 {
+		sendErr(w, reqID, codes.InvalidArgument, "delivery_id required")
+		return
+	}
+
+	_, err := s.index.NackDelivery(ctx, f.DeliveryId, f.DeadLetter, f.Reason)
+	if err != nil {
+		sendErr(w, reqID, codes.Internal, err.Error())
+		return
+	}
+
 	_ = w.send(&nodev1.ServerFrame{
 		RequestId: reqID,
 		Frame:     &nodev1.ServerFrame_Receipt{Receipt: &nodev1.ReceiptFrame{Ok: true}},
