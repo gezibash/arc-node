@@ -14,7 +14,7 @@ type mockClient struct {
 	putContentFn        func(ctx context.Context, data []byte) (reference.Reference, error)
 	getContentFn        func(ctx context.Context, ref reference.Reference) ([]byte, error)
 	resolveGetFn        func(ctx context.Context, prefix string) (*client.GetResult, error)
-	sendMessageFn       func(ctx context.Context, msg message.Message, labels map[string]string, dims *nodev1.Dimensions) (reference.Reference, error)
+	sendMessageFn       func(ctx context.Context, msg message.Message, labels map[string]string, dims *nodev1.Dimensions) (*client.PublishResult, error)
 	queryMessagesFn     func(ctx context.Context, opts *client.QueryOptions) (*client.QueryResult, error)
 	subscribeMessagesFn func(ctx context.Context, expression string, labels map[string]string) (<-chan *client.Entry, <-chan error, error)
 	federateFn          func(ctx context.Context, peer string, labels map[string]string) (*client.FederateResult, error)
@@ -35,7 +35,7 @@ func (m *mockClient) ResolveGet(ctx context.Context, prefix string) (*client.Get
 	return m.resolveGetFn(ctx, prefix)
 }
 
-func (m *mockClient) SendMessage(ctx context.Context, msg message.Message, labels map[string]string, dims *nodev1.Dimensions) (reference.Reference, error) {
+func (m *mockClient) SendMessage(ctx context.Context, msg message.Message, labels map[string]string, dims *nodev1.Dimensions) (*client.PublishResult, error) {
 	return m.sendMessageFn(ctx, msg, labels, dims)
 }
 

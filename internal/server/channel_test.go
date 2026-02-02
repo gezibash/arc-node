@@ -51,11 +51,11 @@ func TestChannelPublishQueryRoundTrip(t *testing.T) {
 	ctx := context.Background()
 
 	msg := makeMessage(t, callerKP, "text/plain")
-	ref, err := c.SendMessage(ctx, msg, map[string]string{"ch": "test"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE})
+	pubResult, err := c.SendMessage(ctx, msg, map[string]string{"ch": "test"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE})
 	if err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
-	if ref == (reference.Reference{}) {
+	if pubResult.Ref == (reference.Reference{}) {
 		t.Fatal("zero reference")
 	}
 
@@ -68,7 +68,7 @@ func TestChannelPublishQueryRoundTrip(t *testing.T) {
 	if len(result.Entries) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(result.Entries))
 	}
-	if result.Entries[0].Ref != ref {
+	if result.Entries[0].Ref != pubResult.Ref {
 		t.Errorf("ref mismatch")
 	}
 }
@@ -657,11 +657,11 @@ func TestChannelSendWithDimensions(t *testing.T) {
 		Priority:    5,
 		TtlMs:       60000,
 	}
-	ref, err := c.SendMessage(ctx, msg, map[string]string{"dim": "test"}, dims)
+	pubResult, err := c.SendMessage(ctx, msg, map[string]string{"dim": "test"}, dims)
 	if err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
-	if ref == (reference.Reference{}) {
+	if pubResult.Ref == (reference.Reference{}) {
 		t.Fatal("zero reference")
 	}
 
@@ -857,13 +857,13 @@ func TestChannelResolveGetIndexMatch(t *testing.T) {
 	ctx := context.Background()
 
 	msg := makeMessage(t, callerKP, "text/plain")
-	ref, err := c.SendMessage(ctx, msg, map[string]string{"rg2": "test"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE})
+	pubResult, err := c.SendMessage(ctx, msg, map[string]string{"rg2": "test"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE})
 	if err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
 
 	// Use the message ref prefix to resolve.
-	refHex := fmt.Sprintf("%x", ref)
+	refHex := fmt.Sprintf("%x", pubResult.Ref)
 	prefix := refHex[:8]
 
 	result, err := c.ResolveGet(ctx, prefix)
@@ -873,8 +873,8 @@ func TestChannelResolveGetIndexMatch(t *testing.T) {
 	if result.Kind != client.GetKindMessage {
 		t.Errorf("kind = %d, want %d (message)", result.Kind, client.GetKindMessage)
 	}
-	if result.Ref != ref {
-		t.Errorf("ref mismatch: got %x, want %x", result.Ref, ref)
+	if result.Ref != pubResult.Ref {
+		t.Errorf("ref mismatch: got %x, want %x", result.Ref, pubResult.Ref)
 	}
 }
 
@@ -1603,7 +1603,7 @@ func TestHandleAckLegacyReference(t *testing.T) {
 		Persistence: nodev1.Persistence_PERSISTENCE_DURABLE,
 		Delivery:    nodev1.Delivery_DELIVERY_AT_LEAST_ONCE,
 	}
-	ref, err := c.SendMessage(ctx, msg, nil, dims)
+	pubResult, err := c.SendMessage(ctx, msg, nil, dims)
 	if err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
@@ -1614,7 +1614,7 @@ func TestHandleAckLegacyReference(t *testing.T) {
 		if e == nil {
 			t.Fatal("nil entry")
 		}
-		if e.Ref != ref {
+		if e.Ref != pubResult.Ref {
 			t.Errorf("ref mismatch")
 		}
 	case <-time.After(3 * time.Second):
@@ -1707,11 +1707,11 @@ func TestBadgerIntegration(t *testing.T) {
 		ctx := context.Background()
 
 		msg := makeMessage(t, callerKP, "text/plain")
-		ref, err := c.SendMessage(ctx, msg, map[string]string{"bg": "test"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE})
+		pubResult, err := c.SendMessage(ctx, msg, map[string]string{"bg": "test"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE})
 		if err != nil {
 			t.Fatalf("SendMessage: %v", err)
 		}
-		if ref == (reference.Reference{}) {
+		if pubResult.Ref == (reference.Reference{}) {
 			t.Fatal("zero reference")
 		}
 
@@ -1768,11 +1768,11 @@ func TestBadgerIntegration(t *testing.T) {
 			Ordering:    nodev1.Ordering_ORDERING_FIFO,
 			Correlation: "corr-bg",
 		}
-		ref, err := c.SendMessage(ctx, msg, map[string]string{"bgdims": "test"}, dims)
+		pubResult, err := c.SendMessage(ctx, msg, map[string]string{"bgdims": "test"}, dims)
 		if err != nil {
 			t.Fatalf("SendMessage: %v", err)
 		}
-		if ref == (reference.Reference{}) {
+		if pubResult.Ref == (reference.Reference{}) {
 			t.Fatal("zero reference")
 		}
 

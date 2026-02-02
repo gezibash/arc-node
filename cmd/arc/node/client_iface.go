@@ -16,7 +16,7 @@ type NodeClient interface {
 	PutContent(ctx context.Context, data []byte) (reference.Reference, error)
 	GetContent(ctx context.Context, ref reference.Reference) ([]byte, error)
 	ResolveGet(ctx context.Context, prefix string) (*client.GetResult, error)
-	SendMessage(ctx context.Context, msg message.Message, labels map[string]string, dims *nodev1.Dimensions) (reference.Reference, error)
+	SendMessage(ctx context.Context, msg message.Message, labels map[string]string, dims *nodev1.Dimensions) (*client.PublishResult, error)
 	QueryMessages(ctx context.Context, opts *client.QueryOptions) (*client.QueryResult, error)
 	SubscribeMessages(ctx context.Context, expression string, labels map[string]string) (<-chan *client.Entry, <-chan error, error)
 	Federate(ctx context.Context, peer string, labels map[string]string) (*client.FederateResult, error)

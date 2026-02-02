@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	nodev1 "github.com/gezibash/arc-node/api/arc/node/v1"
+	"github.com/gezibash/arc-node/pkg/client"
 	"github.com/gezibash/arc/v2/pkg/identity"
 	"github.com/gezibash/arc/v2/pkg/message"
 	"github.com/gezibash/arc/v2/pkg/reference"
@@ -30,12 +31,12 @@ func TestPublishCmd_Success(t *testing.T) {
 			}
 			return contentRef, nil
 		},
-		sendMessageFn: func(_ context.Context, msg message.Message, labels map[string]string, dims *nodev1.Dimensions) (reference.Reference, error) {
+		sendMessageFn: func(_ context.Context, msg message.Message, labels map[string]string, dims *nodev1.Dimensions) (*client.PublishResult, error) {
 			gotLabels = labels
 			if dims.Persistence != nodev1.Persistence_PERSISTENCE_DURABLE {
 				t.Errorf("persistence = %v, want durable", dims.Persistence)
 			}
-			return msgRef, nil
+			return &client.PublishResult{Ref: msgRef}, nil
 		},
 	}
 
@@ -93,11 +94,11 @@ func TestPublishCmd_WithExplicitTo(t *testing.T) {
 		putContentFn: func(_ context.Context, _ []byte) (reference.Reference, error) {
 			return reference.Compute([]byte("x")), nil
 		},
-		sendMessageFn: func(_ context.Context, msg message.Message, _ map[string]string, _ *nodev1.Dimensions) (reference.Reference, error) {
+		sendMessageFn: func(_ context.Context, msg message.Message, _ map[string]string, _ *nodev1.Dimensions) (*client.PublishResult, error) {
 			if msg.To != recipientKP.PublicKey() {
 				t.Errorf("msg.To = %x, want %x", msg.To, recipientKP.PublicKey())
 			}
-			return reference.Compute([]byte("msg")), nil
+			return &client.PublishResult{Ref: reference.Compute([]byte("msg"))}, nil
 		},
 	}
 
@@ -135,8 +136,8 @@ func TestPublishCmd_JSONOutput(t *testing.T) {
 		putContentFn: func(_ context.Context, _ []byte) (reference.Reference, error) {
 			return reference.Compute([]byte("x")), nil
 		},
-		sendMessageFn: func(_ context.Context, _ message.Message, _ map[string]string, _ *nodev1.Dimensions) (reference.Reference, error) {
-			return reference.Compute([]byte("msg")), nil
+		sendMessageFn: func(_ context.Context, _ message.Message, _ map[string]string, _ *nodev1.Dimensions) (*client.PublishResult, error) {
+			return &client.PublishResult{Ref: reference.Compute([]byte("msg"))}, nil
 		},
 	}
 
@@ -181,9 +182,9 @@ func TestPublishCmd_ContentTypeFlag(t *testing.T) {
 		putContentFn: func(_ context.Context, _ []byte) (reference.Reference, error) {
 			return reference.Compute([]byte("x")), nil
 		},
-		sendMessageFn: func(_ context.Context, msg message.Message, _ map[string]string, _ *nodev1.Dimensions) (reference.Reference, error) {
+		sendMessageFn: func(_ context.Context, msg message.Message, _ map[string]string, _ *nodev1.Dimensions) (*client.PublishResult, error) {
 			gotMsg = msg
-			return reference.Compute([]byte("msg")), nil
+			return &client.PublishResult{Ref: reference.Compute([]byte("msg"))}, nil
 		},
 	}
 

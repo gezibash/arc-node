@@ -1452,6 +1452,8 @@ type ReceiptFrame struct {
 	Reference     []byte                 `protobuf:"bytes,1,opt,name=reference,proto3" json:"reference,omitempty"`
 	Ok            bool                   `protobuf:"varint,2,opt,name=ok,proto3" json:"ok,omitempty"`
 	Error         string                 `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
+	Timestamp     int64                  `protobuf:"varint,4,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	Sequence      uint64                 `protobuf:"varint,5,opt,name=sequence,proto3" json:"sequence,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1505,6 +1507,20 @@ func (x *ReceiptFrame) GetError() string {
 		return x.Error
 	}
 	return ""
+}
+
+func (x *ReceiptFrame) GetTimestamp() int64 {
+	if x != nil {
+		return x.Timestamp
+	}
+	return 0
+}
+
+func (x *ReceiptFrame) GetSequence() uint64 {
+	if x != nil {
+		return x.Sequence
+	}
+	return 0
 }
 
 type ResponseFrame struct {
@@ -2272,6 +2288,8 @@ type ReceiptEntry struct {
 	Reference     []byte                 `protobuf:"bytes,1,opt,name=reference,proto3" json:"reference,omitempty"`
 	Ok            bool                   `protobuf:"varint,2,opt,name=ok,proto3" json:"ok,omitempty"`
 	Error         string                 `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
+	Timestamp     int64                  `protobuf:"varint,4,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	Sequence      uint64                 `protobuf:"varint,5,opt,name=sequence,proto3" json:"sequence,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2325,6 +2343,20 @@ func (x *ReceiptEntry) GetError() string {
 		return x.Error
 	}
 	return ""
+}
+
+func (x *ReceiptEntry) GetTimestamp() int64 {
+	if x != nil {
+		return x.Timestamp
+	}
+	return 0
+}
+
+func (x *ReceiptEntry) GetSequence() uint64 {
+	if x != nil {
+		return x.Sequence
+	}
+	return 0
 }
 
 type BatchReceiptFrame struct {
@@ -3215,11 +3247,13 @@ const file_arc_node_v1_node_proto_rawDesc = "" +
 	"\achannel\x18\x01 \x01(\tR\achannel\x12-\n" +
 	"\x05entry\x18\x02 \x01(\v2\x17.arc.node.v1.IndexEntryR\x05entry\x12\x1f\n" +
 	"\vdelivery_id\x18\x03 \x01(\x03R\n" +
-	"deliveryId\"R\n" +
+	"deliveryId\"\x8c\x01\n" +
 	"\fReceiptFrame\x12\x1c\n" +
 	"\treference\x18\x01 \x01(\fR\treference\x12\x0e\n" +
 	"\x02ok\x18\x02 \x01(\bR\x02ok\x12\x14\n" +
-	"\x05error\x18\x03 \x01(\tR\x05error\"\xb5\x01\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error\x12\x1c\n" +
+	"\ttimestamp\x18\x04 \x01(\x03R\ttimestamp\x12\x1a\n" +
+	"\bsequence\x18\x05 \x01(\x04R\bsequence\"\xb5\x01\n" +
 	"\rResponseFrame\x12\x12\n" +
 	"\x04data\x18\x01 \x01(\fR\x04data\x12!\n" +
 	"\fcontent_type\x18\x02 \x01(\tR\vcontentType\x121\n" +
@@ -3285,11 +3319,13 @@ const file_arc_node_v1_node_proto_rawDesc = "" +
 	"\x15PresenceResponseFrame\x129\n" +
 	"\aentries\x18\x01 \x03(\v2\x1f.arc.node.v1.PresenceEventFrameR\aentries\"J\n" +
 	"\x11BatchPublishFrame\x125\n" +
-	"\bmessages\x18\x01 \x03(\v2\x19.arc.node.v1.PublishFrameR\bmessages\"R\n" +
+	"\bmessages\x18\x01 \x03(\v2\x19.arc.node.v1.PublishFrameR\bmessages\"\x8c\x01\n" +
 	"\fReceiptEntry\x12\x1c\n" +
 	"\treference\x18\x01 \x01(\fR\treference\x12\x0e\n" +
 	"\x02ok\x18\x02 \x01(\bR\x02ok\x12\x14\n" +
-	"\x05error\x18\x03 \x01(\tR\x05error\"H\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error\x12\x1c\n" +
+	"\ttimestamp\x18\x04 \x01(\x03R\ttimestamp\x12\x1a\n" +
+	"\bsequence\x18\x05 \x01(\x04R\bsequence\"H\n" +
 	"\x11BatchReceiptFrame\x123\n" +
 	"\aresults\x18\x01 \x03(\v2\x19.arc.node.v1.ReceiptEntryR\aresults\"\xe8\b\n" +
 	"\vClientFrame\x12\x1d\n" +

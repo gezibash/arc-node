@@ -169,6 +169,8 @@ message ReceiptFrame {
   bytes reference = 1;
   bool ok = 2;
   string error = 3;
+  int64 timestamp = 4;
+  uint64 sequence = 5;
 }
 
 message ResponseFrame {
@@ -258,6 +260,8 @@ message ReceiptEntry {
   bytes reference = 1;
   bool ok = 2;
   string error = 3;
+  int64 timestamp = 4;
+  uint64 sequence = 5;
 }
 
 message BatchReceiptFrame {

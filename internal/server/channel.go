@@ -166,7 +166,7 @@ func (s *nodeService) handleGet(ctx context.Context, w *streamWriter, reqID uint
 }
 
 func (s *nodeService) handlePublish(ctx context.Context, w *streamWriter, reqID uint64, f *nodev1.PublishFrame) {
-	ref, err := s.doPublish(ctx, f.Message, f.Labels, f.Dimensions)
+	ref, ts, seq, err := s.doPublish(ctx, f.Message, f.Labels, f.Dimensions)
 	if err != nil {
 		st := publishErrToStatus(err)
 		if s, ok := status.FromError(st); ok {
@@ -178,7 +178,7 @@ func (s *nodeService) handlePublish(ctx context.Context, w *streamWriter, reqID 
 	}
 	_ = w.send(&nodev1.ServerFrame{
 		RequestId: reqID,
-		Frame:     &nodev1.ServerFrame_Receipt{Receipt: &nodev1.ReceiptFrame{Reference: ref[:], Ok: true}},
+		Frame:     &nodev1.ServerFrame_Receipt{Receipt: &nodev1.ReceiptFrame{Reference: ref[:], Ok: true, Timestamp: ts, Sequence: seq}},
 	})
 }
 
@@ -637,11 +637,11 @@ func (s *nodeService) handleResolveGet(ctx context.Context, w *streamWriter, req
 func (s *nodeService) handleBatchPublish(ctx context.Context, w *streamWriter, reqID uint64, f *nodev1.BatchPublishFrame) {
 	results := make([]*nodev1.ReceiptEntry, len(f.Messages))
 	for i, pub := range f.Messages {
-		ref, err := s.doPublish(ctx, pub.Message, pub.Labels, pub.Dimensions)
+		ref, ts, seq, err := s.doPublish(ctx, pub.Message, pub.Labels, pub.Dimensions)
 		if err != nil {
 			results[i] = &nodev1.ReceiptEntry{Ok: false, Error: err.Error()}
 		} else {
-			results[i] = &nodev1.ReceiptEntry{Reference: ref[:], Ok: true}
+			results[i] = &nodev1.ReceiptEntry{Reference: ref[:], Ok: true, Timestamp: ts, Sequence: seq}
 		}
 	}
 	_ = w.send(&nodev1.ServerFrame{

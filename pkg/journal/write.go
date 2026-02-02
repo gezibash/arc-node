@@ -37,7 +37,7 @@ func (j *Journal) Write(ctx context.Context, plaintext []byte, labels map[string
 	labelMap := j.ownerLabels(labels)
 	labelMap["entry"] = reference.Hex(entryRef)
 
-	ref, err := j.client.SendMessage(ctx, msg, labelMap, &nodev1.Dimensions{
+	result, err := j.client.SendMessage(ctx, msg, labelMap, &nodev1.Dimensions{
 		Persistence: nodev1.Persistence_PERSISTENCE_DURABLE,
 		Visibility:  nodev1.Visibility_VISIBILITY_PRIVATE,
 	})
@@ -47,7 +47,7 @@ func (j *Journal) Write(ctx context.Context, plaintext []byte, labels map[string
 
 	j.IndexEntry(ctx, contentRef, entryRef, string(plaintext), msg.Timestamp)
 
-	return &WriteResult{Ref: ref, EntryRef: entryRef}, nil
+	return &WriteResult{Ref: result.Ref, EntryRef: entryRef}, nil
 }
 
 func (j *Journal) recipientKey() identity.PublicKey {

@@ -288,14 +288,21 @@ func (c *Client) GetContent(ctx context.Context, ref reference.Reference) ([]byt
 
 // SendMessage sends a signed message with explicit dimensions.
 // Every caller must specify dimensions — they are the protocol.
-func (c *Client) SendMessage(ctx context.Context, msg message.Message, labels map[string]string, dims *nodev1.Dimensions) (reference.Reference, error) {
+// PublishResult contains server-assigned values returned after a successful publish.
+type PublishResult struct {
+	Ref       reference.Reference
+	Timestamp int64
+	Sequence  uint64
+}
+
+func (c *Client) SendMessage(ctx context.Context, msg message.Message, labels map[string]string, dims *nodev1.Dimensions) (*PublishResult, error) {
 	canonical, err := message.CanonicalBytes(msg)
 	if err != nil {
-		return reference.Reference{}, fmt.Errorf("canonical bytes: %w", err)
+		return nil, fmt.Errorf("canonical bytes: %w", err)
 	}
 	mux, err := c.channel(ctx)
 	if err != nil {
-		return reference.Reference{}, fmt.Errorf("channel unavailable: %w", err)
+		return nil, fmt.Errorf("channel unavailable: %w", err)
 	}
 	resp, err := mux.roundTrip(ctx, &nodev1.ClientFrame{
 		Frame: &nodev1.ClientFrame_Publish{Publish: &nodev1.PublishFrame{
@@ -305,15 +312,15 @@ func (c *Client) SendMessage(ctx context.Context, msg message.Message, labels ma
 		}},
 	})
 	if err != nil {
-		return reference.Reference{}, err
+		return nil, err
 	}
 	rc, ok := resp.Frame.(*nodev1.ServerFrame_Receipt)
 	if !ok {
-		return reference.Reference{}, fmt.Errorf("unexpected server frame type")
+		return nil, fmt.Errorf("unexpected server frame type")
 	}
 	var ref reference.Reference
 	copy(ref[:], rc.Receipt.Reference)
-	return ref, nil
+	return &PublishResult{Ref: ref, Timestamp: rc.Receipt.Timestamp, Sequence: rc.Receipt.Sequence}, nil
 }
 
 // BatchMessage is a single message in a batch publish request.
@@ -325,8 +332,10 @@ type BatchMessage struct {
 
 // BatchResult is the result of a single message in a batch publish.
 type BatchResult struct {
-	Ref reference.Reference
-	Err error
+	Ref       reference.Reference
+	Timestamp int64
+	Sequence  uint64
+	Err       error
 }
 
 // BatchSendMessages publishes multiple messages in a single round-trip.
@@ -366,7 +375,7 @@ func (c *Client) BatchSendMessages(ctx context.Context, msgs []BatchMessage) ([]
 		if r.Ok {
 			var ref reference.Reference
 			copy(ref[:], r.Reference)
-			results[i] = BatchResult{Ref: ref}
+			results[i] = BatchResult{Ref: ref, Timestamp: r.Timestamp, Sequence: r.Sequence}
 		} else {
 			results[i] = BatchResult{Err: fmt.Errorf("%s", r.Error)}
 		}
