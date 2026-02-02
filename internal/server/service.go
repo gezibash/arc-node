@@ -31,6 +31,7 @@ type nodeService struct {
 	visCheck    func(entry *physical.Entry, callerKey [32]byte) bool
 	groupCache  *groupCache
 	adminKey    identity.PublicKey
+	presence    *presenceManager
 }
 
 func (s *nodeService) doPut(ctx context.Context, data []byte) (reference.Reference, error) {

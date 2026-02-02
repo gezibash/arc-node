@@ -85,6 +85,7 @@ func New(ctx context.Context, addr string, obs *observability.Observability, ena
 		visCheck:    vc.Check,
 		groupCache:  gc,
 		adminKey:    kp.PublicKey(),
+		presence:    newPresenceManager(),
 	})
 
 	if enableReflection {
