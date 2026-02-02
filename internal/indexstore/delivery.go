@@ -28,12 +28,13 @@ type DeliveryTracker struct {
 
 // InflightDelivery represents an in-flight delivery awaiting acknowledgement.
 type InflightDelivery struct {
-	id        int64
-	ref       reference.Reference
-	Entry     *physical.Entry
-	subID     string
-	Attempt   int
-	expiresAt time.Time
+	id               int64
+	ref              reference.Reference
+	Entry            *physical.Entry
+	subID            string
+	Attempt          int
+	FirstDeliveredAt time.Time
+	expiresAt        time.Time
 }
 
 // NewDeliveryTracker creates a new DeliveryTracker.
@@ -57,13 +58,15 @@ func (t *DeliveryTracker) Deliver(entry *physical.Entry, subID string) int64 {
 	}
 
 	id := t.nextID.Add(1)
+	now := time.Now()
 	d := &InflightDelivery{
-		id:        id,
-		ref:       entry.Ref,
-		Entry:     entry,
-		subID:     subID,
-		Attempt:   1,
-		expiresAt: time.Now().Add(timeout),
+		id:               id,
+		ref:              entry.Ref,
+		Entry:            entry,
+		subID:            subID,
+		Attempt:          1,
+		FirstDeliveredAt: now,
+		expiresAt:        now.Add(timeout),
 	}
 	t.mu.Lock()
 	t.inflight[id] = d
@@ -258,12 +261,13 @@ func (t *DeliveryTracker) Redeliver(d *InflightDelivery) int64 {
 
 	newID := t.nextID.Add(1)
 	newD := &InflightDelivery{
-		id:        newID,
-		ref:       d.ref,
-		Entry:     d.Entry,
-		subID:     d.subID,
-		Attempt:   d.Attempt + 1,
-		expiresAt: time.Now().Add(timeout),
+		id:               newID,
+		ref:              d.ref,
+		Entry:            d.Entry,
+		subID:            d.subID,
+		Attempt:          d.Attempt + 1,
+		FirstDeliveredAt: d.FirstDeliveredAt,
+		expiresAt:        time.Now().Add(timeout),
 	}
 	t.mu.Lock()
 	t.inflight[newID] = newD

@@ -172,6 +172,8 @@ message DeliveryFrame {
   string channel = 1;
   IndexEntry entry = 2;
   int64 delivery_id = 3;
+  int32 attempt = 4;
+  int64 first_delivered_at = 5; // unix nanos
 }
 
 message ReceiptFrame {
