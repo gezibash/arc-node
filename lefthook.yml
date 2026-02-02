@@ -12,8 +12,11 @@ commit-msg:
         fi
 
 pre-commit:
-  parallel: true
   commands:
+    gofmt:
+      glob: "*.go"
+      run: gofmt -w {staged_files} && git add {staged_files}
+      stage_fixed: true
     golangci-lint:
       glob: "*.go"
       run: golangci-lint run ./...
