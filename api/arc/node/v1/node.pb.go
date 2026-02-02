@@ -1692,6 +1692,8 @@ type ErrorFrame struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Code          int32                  `protobuf:"varint,1,opt,name=code,proto3" json:"code,omitempty"`
 	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	Detail        string                 `protobuf:"bytes,3,opt,name=detail,proto3" json:"detail,omitempty"`        // machine-readable error type (e.g. "BLOB_NOT_FOUND", "CEL_PARSE_ERROR")
+	Retryable     bool                   `protobuf:"varint,4,opt,name=retryable,proto3" json:"retryable,omitempty"` // whether the client should retry
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1738,6 +1740,20 @@ func (x *ErrorFrame) GetMessage() string {
 		return x.Message
 	}
 	return ""
+}
+
+func (x *ErrorFrame) GetDetail() string {
+	if x != nil {
+		return x.Detail
+	}
+	return ""
+}
+
+func (x *ErrorFrame) GetRetryable() bool {
+	if x != nil {
+		return x.Retryable
+	}
+	return false
 }
 
 type FederateResponseFrame struct {
@@ -3354,11 +3370,13 @@ const file_arc_node_v1_node_proto_rawDesc = "" +
 	"\aentries\x18\x03 \x03(\v2\x17.arc.node.v1.IndexEntryR\aentries\x12\x1f\n" +
 	"\vnext_cursor\x18\x04 \x01(\tR\n" +
 	"nextCursor\x12\x19\n" +
-	"\bhas_more\x18\x05 \x01(\bR\ahasMore\":\n" +
+	"\bhas_more\x18\x05 \x01(\bR\ahasMore\"p\n" +
 	"\n" +
 	"ErrorFrame\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\x05R\x04code\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"I\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\x12\x16\n" +
+	"\x06detail\x18\x03 \x01(\tR\x06detail\x12\x1c\n" +
+	"\tretryable\x18\x04 \x01(\bR\tretryable\"I\n" +
 	"\x15FederateResponseFrame\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\"E\n" +
