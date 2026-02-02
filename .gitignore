@@ -13,3 +13,6 @@ bin/
 *.out
 .claude/settings.local.json
 hack/
+
+# Generated protobuf
+api/arc/node/v1/*.pb.go

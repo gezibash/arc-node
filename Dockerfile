@@ -5,6 +5,17 @@ ARG GO_IMAGE=golang:${GO_VERSION}-alpine@sha256:98e6cffc31ccc44c7c15d83df1d69891
 ARG ALPINE_VERSION=3.21.6
 ARG ALPINE_IMAGE=alpine:${ALPINE_VERSION}@sha256:c3f8e73fdb79deaebaa2037150150191b9dcbfba68b4a46d70103204c53f4709
 
+# Generate protobuf
+FROM --platform=$BUILDPLATFORM ${GO_IMAGE} AS generate
+RUN apk add --no-cache curl
+RUN BIN="/usr/local/bin" && \
+    curl -sSL "https://github.com/bufbuild/buf/releases/latest/download/buf-$(uname -s)-$(uname -m)" -o "${BIN}/buf" && \
+    chmod +x "${BIN}/buf"
+WORKDIR /src
+COPY buf.yaml buf.gen.yaml ./
+COPY api/proto api/proto
+RUN buf generate
+
 # Build stage
 FROM --platform=$BUILDPLATFORM ${GO_IMAGE} AS builder
 
@@ -15,6 +26,7 @@ COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod \
 	go mod download
 COPY . .
+COPY --from=generate /src/api/arc/node/v1/ api/arc/node/v1/
 
 ARG TARGETOS
 ARG TARGETARCH

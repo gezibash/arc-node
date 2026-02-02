@@ -73,6 +73,9 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - uses: bufbuild/buf-setup-action@v1
+      - run: buf generate
+
       - name: Build
         env:
           GOOS: ${{ matrix.goos }}
