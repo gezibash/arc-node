@@ -682,6 +682,100 @@ func TestDeliveryTracker_PendingAfterMultipleDeliveries(t *testing.T) {
 	}
 }
 
+func TestDeliveryTracker_NackRedeliver(t *testing.T) {
+	ctx := context.Background()
+	backend := newTestBackend(t)
+	tracker := NewDeliveryTracker(backend)
+
+	ref := reference.Compute([]byte("nack-redeliver"))
+	entry := &physical.Entry{
+		Ref:          ref,
+		Labels:       map[string]string{"type": "test"},
+		Timestamp:    time.Now().UnixMilli(),
+		DeliveryMode: 1,
+	}
+	if err := backend.Put(ctx, entry); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	id := tracker.Deliver(entry, "sub-1")
+	if tracker.Pending() != 1 {
+		t.Fatalf("Pending = %d, want 1", tracker.Pending())
+	}
+
+	// Nack without dead_letter — should redeliver immediately.
+	d, err := tracker.Nack(ctx, id, false, "retry please")
+	if err != nil {
+		t.Fatalf("Nack: %v", err)
+	}
+	if d == nil {
+		t.Fatal("Nack returned nil")
+	}
+	// Should still have 1 pending (the redelivered entry).
+	if tracker.Pending() != 1 {
+		t.Fatalf("Pending after nack = %d, want 1", tracker.Pending())
+	}
+}
+
+func TestDeliveryTracker_NackDeadLetter(t *testing.T) {
+	ctx := context.Background()
+	backend := newTestBackend(t)
+	tracker := NewDeliveryTracker(backend)
+
+	ref := reference.Compute([]byte("nack-dl"))
+	entry := &physical.Entry{
+		Ref:          ref,
+		Labels:       map[string]string{"type": "test", "app": "myapp"},
+		Timestamp:    time.Now().UnixMilli(),
+		DeliveryMode: 1,
+	}
+	if err := backend.Put(ctx, entry); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	id := tracker.Deliver(entry, "sub-nack")
+
+	// Nack with dead_letter=true and a reason.
+	d, err := tracker.Nack(ctx, id, true, "bad payload")
+	if err != nil {
+		t.Fatalf("Nack: %v", err)
+	}
+	if d == nil {
+		t.Fatal("Nack returned nil")
+	}
+	if tracker.Pending() != 0 {
+		t.Fatalf("Pending after nack dead letter = %d, want 0", tracker.Pending())
+	}
+
+	// Verify dead letter labels in backend.
+	got, err := backend.Get(ctx, ref)
+	if err != nil {
+		t.Fatalf("Get after nack dead letter: %v", err)
+	}
+	if got.Labels["_dead_letter"] != "true" {
+		t.Errorf("expected _dead_letter=true, got %q", got.Labels["_dead_letter"])
+	}
+	if got.Labels["_dead_letter_reason"] != "bad payload" {
+		t.Errorf("expected _dead_letter_reason='bad payload', got %q", got.Labels["_dead_letter_reason"])
+	}
+	if got.Labels["_dead_letter_sub"] != "sub-nack" {
+		t.Errorf("expected _dead_letter_sub=sub-nack, got %q", got.Labels["_dead_letter_sub"])
+	}
+}
+
+func TestDeliveryTracker_NackUnknownID(t *testing.T) {
+	backend := newTestBackend(t)
+	tracker := NewDeliveryTracker(backend)
+
+	d, err := tracker.Nack(context.Background(), 999, false, "")
+	if err != nil {
+		t.Fatalf("Nack unknown ID: %v", err)
+	}
+	if d != nil {
+		t.Fatal("expected nil for unknown ID")
+	}
+}
+
 func TestDeliveryTracker_CleanupNotExpiredEnough(t *testing.T) {
 	ctx := context.Background()
 	backend := newTestBackend(t)

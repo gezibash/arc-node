@@ -554,7 +554,7 @@ func (x ResolveGetResponseFrame_Kind) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ResolveGetResponseFrame_Kind.Descriptor instead.
 func (ResolveGetResponseFrame_Kind) EnumDescriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{18, 0}
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{19, 0}
 }
 
 // Dimensions bundles all dimension enums and associated fields.
@@ -962,6 +962,66 @@ func (x *AckFrame) GetDeliveryId() int64 {
 	return 0
 }
 
+type NackFrame struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	DeliveryId    int64                  `protobuf:"varint,1,opt,name=delivery_id,json=deliveryId,proto3" json:"delivery_id,omitempty"`
+	Reason        string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
+	DeadLetter    bool                   `protobuf:"varint,3,opt,name=dead_letter,json=deadLetter,proto3" json:"dead_letter,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *NackFrame) Reset() {
+	*x = NackFrame{}
+	mi := &file_arc_node_v1_node_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NackFrame) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NackFrame) ProtoMessage() {}
+
+func (x *NackFrame) ProtoReflect() protoreflect.Message {
+	mi := &file_arc_node_v1_node_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NackFrame.ProtoReflect.Descriptor instead.
+func (*NackFrame) Descriptor() ([]byte, []int) {
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *NackFrame) GetDeliveryId() int64 {
+	if x != nil {
+		return x.DeliveryId
+	}
+	return 0
+}
+
+func (x *NackFrame) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *NackFrame) GetDeadLetter() bool {
+	if x != nil {
+		return x.DeadLetter
+	}
+	return false
+}
+
 type SeekFrame struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Channel       string                 `protobuf:"bytes,1,opt,name=channel,proto3" json:"channel,omitempty"`
@@ -973,7 +1033,7 @@ type SeekFrame struct {
 
 func (x *SeekFrame) Reset() {
 	*x = SeekFrame{}
-	mi := &file_arc_node_v1_node_proto_msgTypes[5]
+	mi := &file_arc_node_v1_node_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -985,7 +1045,7 @@ func (x *SeekFrame) String() string {
 func (*SeekFrame) ProtoMessage() {}
 
 func (x *SeekFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_node_v1_node_proto_msgTypes[5]
+	mi := &file_arc_node_v1_node_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -998,7 +1058,7 @@ func (x *SeekFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SeekFrame.ProtoReflect.Descriptor instead.
 func (*SeekFrame) Descriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{5}
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *SeekFrame) GetChannel() string {
@@ -1035,7 +1095,7 @@ type QueryFrame struct {
 
 func (x *QueryFrame) Reset() {
 	*x = QueryFrame{}
-	mi := &file_arc_node_v1_node_proto_msgTypes[6]
+	mi := &file_arc_node_v1_node_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1047,7 +1107,7 @@ func (x *QueryFrame) String() string {
 func (*QueryFrame) ProtoMessage() {}
 
 func (x *QueryFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_node_v1_node_proto_msgTypes[6]
+	mi := &file_arc_node_v1_node_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1060,7 +1120,7 @@ func (x *QueryFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryFrame.ProtoReflect.Descriptor instead.
 func (*QueryFrame) Descriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{6}
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *QueryFrame) GetLabels() map[string]string {
@@ -1108,7 +1168,7 @@ type PutFrame struct {
 
 func (x *PutFrame) Reset() {
 	*x = PutFrame{}
-	mi := &file_arc_node_v1_node_proto_msgTypes[7]
+	mi := &file_arc_node_v1_node_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1120,7 +1180,7 @@ func (x *PutFrame) String() string {
 func (*PutFrame) ProtoMessage() {}
 
 func (x *PutFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_node_v1_node_proto_msgTypes[7]
+	mi := &file_arc_node_v1_node_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1133,7 +1193,7 @@ func (x *PutFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PutFrame.ProtoReflect.Descriptor instead.
 func (*PutFrame) Descriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{7}
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *PutFrame) GetData() []byte {
@@ -1159,7 +1219,7 @@ type GetFrame struct {
 
 func (x *GetFrame) Reset() {
 	*x = GetFrame{}
-	mi := &file_arc_node_v1_node_proto_msgTypes[8]
+	mi := &file_arc_node_v1_node_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1171,7 +1231,7 @@ func (x *GetFrame) String() string {
 func (*GetFrame) ProtoMessage() {}
 
 func (x *GetFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_node_v1_node_proto_msgTypes[8]
+	mi := &file_arc_node_v1_node_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1184,7 +1244,7 @@ func (x *GetFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetFrame.ProtoReflect.Descriptor instead.
 func (*GetFrame) Descriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{8}
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *GetFrame) GetReference() []byte {
@@ -1204,7 +1264,7 @@ type FederateFrame struct {
 
 func (x *FederateFrame) Reset() {
 	*x = FederateFrame{}
-	mi := &file_arc_node_v1_node_proto_msgTypes[9]
+	mi := &file_arc_node_v1_node_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1216,7 +1276,7 @@ func (x *FederateFrame) String() string {
 func (*FederateFrame) ProtoMessage() {}
 
 func (x *FederateFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_node_v1_node_proto_msgTypes[9]
+	mi := &file_arc_node_v1_node_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1229,7 +1289,7 @@ func (x *FederateFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FederateFrame.ProtoReflect.Descriptor instead.
 func (*FederateFrame) Descriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{9}
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *FederateFrame) GetPeer() string {
@@ -1254,7 +1314,7 @@ type ListPeersFrame struct {
 
 func (x *ListPeersFrame) Reset() {
 	*x = ListPeersFrame{}
-	mi := &file_arc_node_v1_node_proto_msgTypes[10]
+	mi := &file_arc_node_v1_node_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1266,7 +1326,7 @@ func (x *ListPeersFrame) String() string {
 func (*ListPeersFrame) ProtoMessage() {}
 
 func (x *ListPeersFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_node_v1_node_proto_msgTypes[10]
+	mi := &file_arc_node_v1_node_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1279,7 +1339,7 @@ func (x *ListPeersFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPeersFrame.ProtoReflect.Descriptor instead.
 func (*ListPeersFrame) Descriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{10}
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{11}
 }
 
 type ResolveGetFrame struct {
@@ -1291,7 +1351,7 @@ type ResolveGetFrame struct {
 
 func (x *ResolveGetFrame) Reset() {
 	*x = ResolveGetFrame{}
-	mi := &file_arc_node_v1_node_proto_msgTypes[11]
+	mi := &file_arc_node_v1_node_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1303,7 +1363,7 @@ func (x *ResolveGetFrame) String() string {
 func (*ResolveGetFrame) ProtoMessage() {}
 
 func (x *ResolveGetFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_node_v1_node_proto_msgTypes[11]
+	mi := &file_arc_node_v1_node_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1316,7 +1376,7 @@ func (x *ResolveGetFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveGetFrame.ProtoReflect.Descriptor instead.
 func (*ResolveGetFrame) Descriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{11}
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ResolveGetFrame) GetPrefix() string {
@@ -1337,7 +1397,7 @@ type DeliveryFrame struct {
 
 func (x *DeliveryFrame) Reset() {
 	*x = DeliveryFrame{}
-	mi := &file_arc_node_v1_node_proto_msgTypes[12]
+	mi := &file_arc_node_v1_node_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1349,7 +1409,7 @@ func (x *DeliveryFrame) String() string {
 func (*DeliveryFrame) ProtoMessage() {}
 
 func (x *DeliveryFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_node_v1_node_proto_msgTypes[12]
+	mi := &file_arc_node_v1_node_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1362,7 +1422,7 @@ func (x *DeliveryFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeliveryFrame.ProtoReflect.Descriptor instead.
 func (*DeliveryFrame) Descriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{12}
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *DeliveryFrame) GetChannel() string {
@@ -1397,7 +1457,7 @@ type ReceiptFrame struct {
 
 func (x *ReceiptFrame) Reset() {
 	*x = ReceiptFrame{}
-	mi := &file_arc_node_v1_node_proto_msgTypes[13]
+	mi := &file_arc_node_v1_node_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1409,7 +1469,7 @@ func (x *ReceiptFrame) String() string {
 func (*ReceiptFrame) ProtoMessage() {}
 
 func (x *ReceiptFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_node_v1_node_proto_msgTypes[13]
+	mi := &file_arc_node_v1_node_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1422,7 +1482,7 @@ func (x *ReceiptFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReceiptFrame.ProtoReflect.Descriptor instead.
 func (*ReceiptFrame) Descriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{13}
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ReceiptFrame) GetReference() []byte {
@@ -1459,7 +1519,7 @@ type ResponseFrame struct {
 
 func (x *ResponseFrame) Reset() {
 	*x = ResponseFrame{}
-	mi := &file_arc_node_v1_node_proto_msgTypes[14]
+	mi := &file_arc_node_v1_node_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1471,7 +1531,7 @@ func (x *ResponseFrame) String() string {
 func (*ResponseFrame) ProtoMessage() {}
 
 func (x *ResponseFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_node_v1_node_proto_msgTypes[14]
+	mi := &file_arc_node_v1_node_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1484,7 +1544,7 @@ func (x *ResponseFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResponseFrame.ProtoReflect.Descriptor instead.
 func (*ResponseFrame) Descriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{14}
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ResponseFrame) GetData() []byte {
@@ -1532,7 +1592,7 @@ type ErrorFrame struct {
 
 func (x *ErrorFrame) Reset() {
 	*x = ErrorFrame{}
-	mi := &file_arc_node_v1_node_proto_msgTypes[15]
+	mi := &file_arc_node_v1_node_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1544,7 +1604,7 @@ func (x *ErrorFrame) String() string {
 func (*ErrorFrame) ProtoMessage() {}
 
 func (x *ErrorFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_node_v1_node_proto_msgTypes[15]
+	mi := &file_arc_node_v1_node_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1557,7 +1617,7 @@ func (x *ErrorFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ErrorFrame.ProtoReflect.Descriptor instead.
 func (*ErrorFrame) Descriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{15}
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *ErrorFrame) GetCode() int32 {
@@ -1584,7 +1644,7 @@ type FederateResponseFrame struct {
 
 func (x *FederateResponseFrame) Reset() {
 	*x = FederateResponseFrame{}
-	mi := &file_arc_node_v1_node_proto_msgTypes[16]
+	mi := &file_arc_node_v1_node_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1596,7 +1656,7 @@ func (x *FederateResponseFrame) String() string {
 func (*FederateResponseFrame) ProtoMessage() {}
 
 func (x *FederateResponseFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_node_v1_node_proto_msgTypes[16]
+	mi := &file_arc_node_v1_node_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1609,7 +1669,7 @@ func (x *FederateResponseFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FederateResponseFrame.ProtoReflect.Descriptor instead.
 func (*FederateResponseFrame) Descriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{16}
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *FederateResponseFrame) GetStatus() string {
@@ -1635,7 +1695,7 @@ type ListPeersResponseFrame struct {
 
 func (x *ListPeersResponseFrame) Reset() {
 	*x = ListPeersResponseFrame{}
-	mi := &file_arc_node_v1_node_proto_msgTypes[17]
+	mi := &file_arc_node_v1_node_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1647,7 +1707,7 @@ func (x *ListPeersResponseFrame) String() string {
 func (*ListPeersResponseFrame) ProtoMessage() {}
 
 func (x *ListPeersResponseFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_node_v1_node_proto_msgTypes[17]
+	mi := &file_arc_node_v1_node_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1660,7 +1720,7 @@ func (x *ListPeersResponseFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPeersResponseFrame.ProtoReflect.Descriptor instead.
 func (*ListPeersResponseFrame) Descriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{17}
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *ListPeersResponseFrame) GetPeers() []*PeerInfo {
@@ -1683,7 +1743,7 @@ type ResolveGetResponseFrame struct {
 
 func (x *ResolveGetResponseFrame) Reset() {
 	*x = ResolveGetResponseFrame{}
-	mi := &file_arc_node_v1_node_proto_msgTypes[18]
+	mi := &file_arc_node_v1_node_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1695,7 +1755,7 @@ func (x *ResolveGetResponseFrame) String() string {
 func (*ResolveGetResponseFrame) ProtoMessage() {}
 
 func (x *ResolveGetResponseFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_node_v1_node_proto_msgTypes[18]
+	mi := &file_arc_node_v1_node_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1708,7 +1768,7 @@ func (x *ResolveGetResponseFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveGetResponseFrame.ProtoReflect.Descriptor instead.
 func (*ResolveGetResponseFrame) Descriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{18}
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *ResolveGetResponseFrame) GetKind() ResolveGetResponseFrame_Kind {
@@ -1762,6 +1822,7 @@ type ClientFrame struct {
 	//	*ClientFrame_Federate
 	//	*ClientFrame_ListPeers
 	//	*ClientFrame_ResolveGet
+	//	*ClientFrame_Nack
 	Frame         isClientFrame_Frame `protobuf_oneof:"frame"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1769,7 +1830,7 @@ type ClientFrame struct {
 
 func (x *ClientFrame) Reset() {
 	*x = ClientFrame{}
-	mi := &file_arc_node_v1_node_proto_msgTypes[19]
+	mi := &file_arc_node_v1_node_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1781,7 +1842,7 @@ func (x *ClientFrame) String() string {
 func (*ClientFrame) ProtoMessage() {}
 
 func (x *ClientFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_node_v1_node_proto_msgTypes[19]
+	mi := &file_arc_node_v1_node_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1794,7 +1855,7 @@ func (x *ClientFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientFrame.ProtoReflect.Descriptor instead.
 func (*ClientFrame) Descriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{19}
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *ClientFrame) GetRequestId() uint64 {
@@ -1910,6 +1971,15 @@ func (x *ClientFrame) GetResolveGet() *ResolveGetFrame {
 	return nil
 }
 
+func (x *ClientFrame) GetNack() *NackFrame {
+	if x != nil {
+		if x, ok := x.Frame.(*ClientFrame_Nack); ok {
+			return x.Nack
+		}
+	}
+	return nil
+}
+
 type isClientFrame_Frame interface {
 	isClientFrame_Frame()
 }
@@ -1958,6 +2028,10 @@ type ClientFrame_ResolveGet struct {
 	ResolveGet *ResolveGetFrame `protobuf:"bytes,11,opt,name=resolve_get,json=resolveGet,proto3,oneof"`
 }
 
+type ClientFrame_Nack struct {
+	Nack *NackFrame `protobuf:"bytes,12,opt,name=nack,proto3,oneof"`
+}
+
 func (*ClientFrame_Publish) isClientFrame_Frame() {}
 
 func (*ClientFrame_Subscribe) isClientFrame_Frame() {}
@@ -1980,6 +2054,8 @@ func (*ClientFrame_ListPeers) isClientFrame_Frame() {}
 
 func (*ClientFrame_ResolveGet) isClientFrame_Frame() {}
 
+func (*ClientFrame_Nack) isClientFrame_Frame() {}
+
 type ServerFrame struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	RequestId uint64                 `protobuf:"varint,15,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
@@ -1999,7 +2075,7 @@ type ServerFrame struct {
 
 func (x *ServerFrame) Reset() {
 	*x = ServerFrame{}
-	mi := &file_arc_node_v1_node_proto_msgTypes[20]
+	mi := &file_arc_node_v1_node_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2011,7 +2087,7 @@ func (x *ServerFrame) String() string {
 func (*ServerFrame) ProtoMessage() {}
 
 func (x *ServerFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_node_v1_node_proto_msgTypes[20]
+	mi := &file_arc_node_v1_node_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2024,7 +2100,7 @@ func (x *ServerFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServerFrame.ProtoReflect.Descriptor instead.
 func (*ServerFrame) Descriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{20}
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ServerFrame) GetRequestId() uint64 {
@@ -2162,7 +2238,7 @@ type IndexEntry struct {
 
 func (x *IndexEntry) Reset() {
 	*x = IndexEntry{}
-	mi := &file_arc_node_v1_node_proto_msgTypes[21]
+	mi := &file_arc_node_v1_node_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2174,7 +2250,7 @@ func (x *IndexEntry) String() string {
 func (*IndexEntry) ProtoMessage() {}
 
 func (x *IndexEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_node_v1_node_proto_msgTypes[21]
+	mi := &file_arc_node_v1_node_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2187,7 +2263,7 @@ func (x *IndexEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IndexEntry.ProtoReflect.Descriptor instead.
 func (*IndexEntry) Descriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{21}
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *IndexEntry) GetReference() []byte {
@@ -2234,7 +2310,7 @@ type PeerInfo struct {
 
 func (x *PeerInfo) Reset() {
 	*x = PeerInfo{}
-	mi := &file_arc_node_v1_node_proto_msgTypes[22]
+	mi := &file_arc_node_v1_node_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2246,7 +2322,7 @@ func (x *PeerInfo) String() string {
 func (*PeerInfo) ProtoMessage() {}
 
 func (x *PeerInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_node_v1_node_proto_msgTypes[22]
+	mi := &file_arc_node_v1_node_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2259,7 +2335,7 @@ func (x *PeerInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PeerInfo.ProtoReflect.Descriptor instead.
 func (*PeerInfo) Descriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{22}
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *PeerInfo) GetAddress() string {
@@ -2373,7 +2449,13 @@ const file_arc_node_v1_node_proto_rawDesc = "" +
 	"\bAckFrame\x12\x1c\n" +
 	"\treference\x18\x01 \x01(\fR\treference\x12\x1f\n" +
 	"\vdelivery_id\x18\x02 \x01(\x03R\n" +
-	"deliveryId\"[\n" +
+	"deliveryId\"e\n" +
+	"\tNackFrame\x12\x1f\n" +
+	"\vdelivery_id\x18\x01 \x01(\x03R\n" +
+	"deliveryId\x12\x16\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\x12\x1f\n" +
+	"\vdead_letter\x18\x03 \x01(\bR\n" +
+	"deadLetter\"[\n" +
 	"\tSeekFrame\x12\x18\n" +
 	"\achannel\x18\x01 \x01(\tR\achannel\x12\x1c\n" +
 	"\ttimestamp\x18\x02 \x01(\x03R\ttimestamp\x12\x16\n" +
@@ -2440,7 +2522,7 @@ const file_arc_node_v1_node_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"'\n" +
 	"\x04Kind\x12\r\n" +
 	"\tKIND_BLOB\x10\x00\x12\x10\n" +
-	"\fKIND_MESSAGE\x10\x01\"\x85\x05\n" +
+	"\fKIND_MESSAGE\x10\x01\"\xb3\x05\n" +
 	"\vClientFrame\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x0f \x01(\x04R\trequestId\x125\n" +
@@ -2457,7 +2539,8 @@ const file_arc_node_v1_node_proto_rawDesc = "" +
 	"list_peers\x18\n" +
 	" \x01(\v2\x1b.arc.node.v1.ListPeersFrameH\x00R\tlistPeers\x12?\n" +
 	"\vresolve_get\x18\v \x01(\v2\x1c.arc.node.v1.ResolveGetFrameH\x00R\n" +
-	"resolveGetB\a\n" +
+	"resolveGet\x12,\n" +
+	"\x04nack\x18\f \x01(\v2\x16.arc.node.v1.NackFrameH\x00R\x04nackB\a\n" +
 	"\x05frame\"\x95\x04\n" +
 	"\vServerFrame\x12\x1d\n" +
 	"\n" +
@@ -2553,7 +2636,7 @@ func file_arc_node_v1_node_proto_rawDescGZIP() []byte {
 }
 
 var file_arc_node_v1_node_proto_enumTypes = make([]protoimpl.EnumInfo, 11)
-var file_arc_node_v1_node_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
+var file_arc_node_v1_node_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
 var file_arc_node_v1_node_proto_goTypes = []any{
 	(Order)(0),                        // 0: arc.node.v1.Order
 	(Pattern)(0),                      // 1: arc.node.v1.Pattern
@@ -2571,31 +2654,32 @@ var file_arc_node_v1_node_proto_goTypes = []any{
 	(*SubscribeFrame)(nil),            // 13: arc.node.v1.SubscribeFrame
 	(*UnsubscribeFrame)(nil),          // 14: arc.node.v1.UnsubscribeFrame
 	(*AckFrame)(nil),                  // 15: arc.node.v1.AckFrame
-	(*SeekFrame)(nil),                 // 16: arc.node.v1.SeekFrame
-	(*QueryFrame)(nil),                // 17: arc.node.v1.QueryFrame
-	(*PutFrame)(nil),                  // 18: arc.node.v1.PutFrame
-	(*GetFrame)(nil),                  // 19: arc.node.v1.GetFrame
-	(*FederateFrame)(nil),             // 20: arc.node.v1.FederateFrame
-	(*ListPeersFrame)(nil),            // 21: arc.node.v1.ListPeersFrame
-	(*ResolveGetFrame)(nil),           // 22: arc.node.v1.ResolveGetFrame
-	(*DeliveryFrame)(nil),             // 23: arc.node.v1.DeliveryFrame
-	(*ReceiptFrame)(nil),              // 24: arc.node.v1.ReceiptFrame
-	(*ResponseFrame)(nil),             // 25: arc.node.v1.ResponseFrame
-	(*ErrorFrame)(nil),                // 26: arc.node.v1.ErrorFrame
-	(*FederateResponseFrame)(nil),     // 27: arc.node.v1.FederateResponseFrame
-	(*ListPeersResponseFrame)(nil),    // 28: arc.node.v1.ListPeersResponseFrame
-	(*ResolveGetResponseFrame)(nil),   // 29: arc.node.v1.ResolveGetResponseFrame
-	(*ClientFrame)(nil),               // 30: arc.node.v1.ClientFrame
-	(*ServerFrame)(nil),               // 31: arc.node.v1.ServerFrame
-	(*IndexEntry)(nil),                // 32: arc.node.v1.IndexEntry
-	(*PeerInfo)(nil),                  // 33: arc.node.v1.PeerInfo
-	nil,                               // 34: arc.node.v1.PublishFrame.LabelsEntry
-	nil,                               // 35: arc.node.v1.SubscribeFrame.LabelsEntry
-	nil,                               // 36: arc.node.v1.QueryFrame.LabelsEntry
-	nil,                               // 37: arc.node.v1.FederateFrame.LabelsEntry
-	nil,                               // 38: arc.node.v1.ResolveGetResponseFrame.LabelsEntry
-	nil,                               // 39: arc.node.v1.IndexEntry.LabelsEntry
-	nil,                               // 40: arc.node.v1.PeerInfo.LabelsEntry
+	(*NackFrame)(nil),                 // 16: arc.node.v1.NackFrame
+	(*SeekFrame)(nil),                 // 17: arc.node.v1.SeekFrame
+	(*QueryFrame)(nil),                // 18: arc.node.v1.QueryFrame
+	(*PutFrame)(nil),                  // 19: arc.node.v1.PutFrame
+	(*GetFrame)(nil),                  // 20: arc.node.v1.GetFrame
+	(*FederateFrame)(nil),             // 21: arc.node.v1.FederateFrame
+	(*ListPeersFrame)(nil),            // 22: arc.node.v1.ListPeersFrame
+	(*ResolveGetFrame)(nil),           // 23: arc.node.v1.ResolveGetFrame
+	(*DeliveryFrame)(nil),             // 24: arc.node.v1.DeliveryFrame
+	(*ReceiptFrame)(nil),              // 25: arc.node.v1.ReceiptFrame
+	(*ResponseFrame)(nil),             // 26: arc.node.v1.ResponseFrame
+	(*ErrorFrame)(nil),                // 27: arc.node.v1.ErrorFrame
+	(*FederateResponseFrame)(nil),     // 28: arc.node.v1.FederateResponseFrame
+	(*ListPeersResponseFrame)(nil),    // 29: arc.node.v1.ListPeersResponseFrame
+	(*ResolveGetResponseFrame)(nil),   // 30: arc.node.v1.ResolveGetResponseFrame
+	(*ClientFrame)(nil),               // 31: arc.node.v1.ClientFrame
+	(*ServerFrame)(nil),               // 32: arc.node.v1.ServerFrame
+	(*IndexEntry)(nil),                // 33: arc.node.v1.IndexEntry
+	(*PeerInfo)(nil),                  // 34: arc.node.v1.PeerInfo
+	nil,                               // 35: arc.node.v1.PublishFrame.LabelsEntry
+	nil,                               // 36: arc.node.v1.SubscribeFrame.LabelsEntry
+	nil,                               // 37: arc.node.v1.QueryFrame.LabelsEntry
+	nil,                               // 38: arc.node.v1.FederateFrame.LabelsEntry
+	nil,                               // 39: arc.node.v1.ResolveGetResponseFrame.LabelsEntry
+	nil,                               // 40: arc.node.v1.IndexEntry.LabelsEntry
+	nil,                               // 41: arc.node.v1.PeerInfo.LabelsEntry
 }
 var file_arc_node_v1_node_proto_depIdxs = []int32{
 	1,  // 0: arc.node.v1.Dimensions.pattern:type_name -> arc.node.v1.Pattern
@@ -2606,47 +2690,48 @@ var file_arc_node_v1_node_proto_depIdxs = []int32{
 	6,  // 5: arc.node.v1.Dimensions.affinity:type_name -> arc.node.v1.Affinity
 	7,  // 6: arc.node.v1.Dimensions.dedup:type_name -> arc.node.v1.Dedup
 	8,  // 7: arc.node.v1.Dimensions.complete:type_name -> arc.node.v1.DeliveryComplete
-	34, // 8: arc.node.v1.PublishFrame.labels:type_name -> arc.node.v1.PublishFrame.LabelsEntry
+	35, // 8: arc.node.v1.PublishFrame.labels:type_name -> arc.node.v1.PublishFrame.LabelsEntry
 	11, // 9: arc.node.v1.PublishFrame.dimensions:type_name -> arc.node.v1.Dimensions
-	35, // 10: arc.node.v1.SubscribeFrame.labels:type_name -> arc.node.v1.SubscribeFrame.LabelsEntry
+	36, // 10: arc.node.v1.SubscribeFrame.labels:type_name -> arc.node.v1.SubscribeFrame.LabelsEntry
 	11, // 11: arc.node.v1.SubscribeFrame.dimensions:type_name -> arc.node.v1.Dimensions
-	36, // 12: arc.node.v1.QueryFrame.labels:type_name -> arc.node.v1.QueryFrame.LabelsEntry
+	37, // 12: arc.node.v1.QueryFrame.labels:type_name -> arc.node.v1.QueryFrame.LabelsEntry
 	0,  // 13: arc.node.v1.QueryFrame.order:type_name -> arc.node.v1.Order
-	37, // 14: arc.node.v1.FederateFrame.labels:type_name -> arc.node.v1.FederateFrame.LabelsEntry
-	32, // 15: arc.node.v1.DeliveryFrame.entry:type_name -> arc.node.v1.IndexEntry
-	32, // 16: arc.node.v1.ResponseFrame.entries:type_name -> arc.node.v1.IndexEntry
-	33, // 17: arc.node.v1.ListPeersResponseFrame.peers:type_name -> arc.node.v1.PeerInfo
+	38, // 14: arc.node.v1.FederateFrame.labels:type_name -> arc.node.v1.FederateFrame.LabelsEntry
+	33, // 15: arc.node.v1.DeliveryFrame.entry:type_name -> arc.node.v1.IndexEntry
+	33, // 16: arc.node.v1.ResponseFrame.entries:type_name -> arc.node.v1.IndexEntry
+	34, // 17: arc.node.v1.ListPeersResponseFrame.peers:type_name -> arc.node.v1.PeerInfo
 	10, // 18: arc.node.v1.ResolveGetResponseFrame.kind:type_name -> arc.node.v1.ResolveGetResponseFrame.Kind
-	38, // 19: arc.node.v1.ResolveGetResponseFrame.labels:type_name -> arc.node.v1.ResolveGetResponseFrame.LabelsEntry
+	39, // 19: arc.node.v1.ResolveGetResponseFrame.labels:type_name -> arc.node.v1.ResolveGetResponseFrame.LabelsEntry
 	12, // 20: arc.node.v1.ClientFrame.publish:type_name -> arc.node.v1.PublishFrame
 	13, // 21: arc.node.v1.ClientFrame.subscribe:type_name -> arc.node.v1.SubscribeFrame
 	14, // 22: arc.node.v1.ClientFrame.unsubscribe:type_name -> arc.node.v1.UnsubscribeFrame
 	15, // 23: arc.node.v1.ClientFrame.ack:type_name -> arc.node.v1.AckFrame
-	16, // 24: arc.node.v1.ClientFrame.seek:type_name -> arc.node.v1.SeekFrame
-	17, // 25: arc.node.v1.ClientFrame.query:type_name -> arc.node.v1.QueryFrame
-	18, // 26: arc.node.v1.ClientFrame.put:type_name -> arc.node.v1.PutFrame
-	19, // 27: arc.node.v1.ClientFrame.get:type_name -> arc.node.v1.GetFrame
-	20, // 28: arc.node.v1.ClientFrame.federate:type_name -> arc.node.v1.FederateFrame
-	21, // 29: arc.node.v1.ClientFrame.list_peers:type_name -> arc.node.v1.ListPeersFrame
-	22, // 30: arc.node.v1.ClientFrame.resolve_get:type_name -> arc.node.v1.ResolveGetFrame
-	23, // 31: arc.node.v1.ServerFrame.delivery:type_name -> arc.node.v1.DeliveryFrame
-	24, // 32: arc.node.v1.ServerFrame.receipt:type_name -> arc.node.v1.ReceiptFrame
-	25, // 33: arc.node.v1.ServerFrame.response:type_name -> arc.node.v1.ResponseFrame
-	26, // 34: arc.node.v1.ServerFrame.error:type_name -> arc.node.v1.ErrorFrame
-	27, // 35: arc.node.v1.ServerFrame.federate_response:type_name -> arc.node.v1.FederateResponseFrame
-	28, // 36: arc.node.v1.ServerFrame.list_peers_response:type_name -> arc.node.v1.ListPeersResponseFrame
-	29, // 37: arc.node.v1.ServerFrame.resolve_get_response:type_name -> arc.node.v1.ResolveGetResponseFrame
-	39, // 38: arc.node.v1.IndexEntry.labels:type_name -> arc.node.v1.IndexEntry.LabelsEntry
-	11, // 39: arc.node.v1.IndexEntry.dimensions:type_name -> arc.node.v1.Dimensions
-	40, // 40: arc.node.v1.PeerInfo.labels:type_name -> arc.node.v1.PeerInfo.LabelsEntry
-	9,  // 41: arc.node.v1.PeerInfo.direction:type_name -> arc.node.v1.PeerDirection
-	30, // 42: arc.node.v1.NodeService.Channel:input_type -> arc.node.v1.ClientFrame
-	31, // 43: arc.node.v1.NodeService.Channel:output_type -> arc.node.v1.ServerFrame
-	43, // [43:44] is the sub-list for method output_type
-	42, // [42:43] is the sub-list for method input_type
-	42, // [42:42] is the sub-list for extension type_name
-	42, // [42:42] is the sub-list for extension extendee
-	0,  // [0:42] is the sub-list for field type_name
+	17, // 24: arc.node.v1.ClientFrame.seek:type_name -> arc.node.v1.SeekFrame
+	18, // 25: arc.node.v1.ClientFrame.query:type_name -> arc.node.v1.QueryFrame
+	19, // 26: arc.node.v1.ClientFrame.put:type_name -> arc.node.v1.PutFrame
+	20, // 27: arc.node.v1.ClientFrame.get:type_name -> arc.node.v1.GetFrame
+	21, // 28: arc.node.v1.ClientFrame.federate:type_name -> arc.node.v1.FederateFrame
+	22, // 29: arc.node.v1.ClientFrame.list_peers:type_name -> arc.node.v1.ListPeersFrame
+	23, // 30: arc.node.v1.ClientFrame.resolve_get:type_name -> arc.node.v1.ResolveGetFrame
+	16, // 31: arc.node.v1.ClientFrame.nack:type_name -> arc.node.v1.NackFrame
+	24, // 32: arc.node.v1.ServerFrame.delivery:type_name -> arc.node.v1.DeliveryFrame
+	25, // 33: arc.node.v1.ServerFrame.receipt:type_name -> arc.node.v1.ReceiptFrame
+	26, // 34: arc.node.v1.ServerFrame.response:type_name -> arc.node.v1.ResponseFrame
+	27, // 35: arc.node.v1.ServerFrame.error:type_name -> arc.node.v1.ErrorFrame
+	28, // 36: arc.node.v1.ServerFrame.federate_response:type_name -> arc.node.v1.FederateResponseFrame
+	29, // 37: arc.node.v1.ServerFrame.list_peers_response:type_name -> arc.node.v1.ListPeersResponseFrame
+	30, // 38: arc.node.v1.ServerFrame.resolve_get_response:type_name -> arc.node.v1.ResolveGetResponseFrame
+	40, // 39: arc.node.v1.IndexEntry.labels:type_name -> arc.node.v1.IndexEntry.LabelsEntry
+	11, // 40: arc.node.v1.IndexEntry.dimensions:type_name -> arc.node.v1.Dimensions
+	41, // 41: arc.node.v1.PeerInfo.labels:type_name -> arc.node.v1.PeerInfo.LabelsEntry
+	9,  // 42: arc.node.v1.PeerInfo.direction:type_name -> arc.node.v1.PeerDirection
+	31, // 43: arc.node.v1.NodeService.Channel:input_type -> arc.node.v1.ClientFrame
+	32, // 44: arc.node.v1.NodeService.Channel:output_type -> arc.node.v1.ServerFrame
+	44, // [44:45] is the sub-list for method output_type
+	43, // [43:44] is the sub-list for method input_type
+	43, // [43:43] is the sub-list for extension type_name
+	43, // [43:43] is the sub-list for extension extendee
+	0,  // [0:43] is the sub-list for field type_name
 }
 
 func init() { file_arc_node_v1_node_proto_init() }
@@ -2654,7 +2739,7 @@ func file_arc_node_v1_node_proto_init() {
 	if File_arc_node_v1_node_proto != nil {
 		return
 	}
-	file_arc_node_v1_node_proto_msgTypes[19].OneofWrappers = []any{
+	file_arc_node_v1_node_proto_msgTypes[20].OneofWrappers = []any{
 		(*ClientFrame_Publish)(nil),
 		(*ClientFrame_Subscribe)(nil),
 		(*ClientFrame_Unsubscribe)(nil),
@@ -2666,8 +2751,9 @@ func file_arc_node_v1_node_proto_init() {
 		(*ClientFrame_Federate)(nil),
 		(*ClientFrame_ListPeers)(nil),
 		(*ClientFrame_ResolveGet)(nil),
+		(*ClientFrame_Nack)(nil),
 	}
-	file_arc_node_v1_node_proto_msgTypes[20].OneofWrappers = []any{
+	file_arc_node_v1_node_proto_msgTypes[21].OneofWrappers = []any{
 		(*ServerFrame_Delivery)(nil),
 		(*ServerFrame_Receipt)(nil),
 		(*ServerFrame_Response)(nil),
@@ -2682,7 +2768,7 @@ func file_arc_node_v1_node_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_arc_node_v1_node_proto_rawDesc), len(file_arc_node_v1_node_proto_rawDesc)),
 			NumEnums:      11,
-			NumMessages:   30,
+			NumMessages:   31,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

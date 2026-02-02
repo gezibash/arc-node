@@ -560,6 +560,24 @@ func (c *Client) Federate(ctx context.Context, peer string, labels map[string]st
 	}, nil
 }
 
+// Nack explicitly rejects a delivery. If deadLetter is true, the entry skips
+// redelivery and goes straight to the dead letter queue. The reason string is
+// recorded in the dead letter labels.
+func (c *Client) Nack(ctx context.Context, deliveryID int64, reason string, deadLetter bool) error {
+	mux, err := c.channel(ctx)
+	if err != nil {
+		return fmt.Errorf("channel unavailable: %w", err)
+	}
+	_, err = mux.roundTrip(ctx, &nodev1.ClientFrame{
+		Frame: &nodev1.ClientFrame_Nack{Nack: &nodev1.NackFrame{
+			DeliveryId: deliveryID,
+			Reason:     reason,
+			DeadLetter: deadLetter,
+		}},
+	})
+	return err
+}
+
 // Seek repositions an active subscription's cursor.
 func (c *Client) Seek(ctx context.Context, channel string, timestamp int64) error {
 	mux, err := c.channel(ctx)

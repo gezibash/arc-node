@@ -138,6 +138,82 @@ func (t *DeliveryTracker) Ack(ctx context.Context, deliveryID int64) (*physical.
 	return entry, nil
 }
 
+// Nack explicitly rejects a delivery. If deadLetter is true, the entry is
+// sent straight to the dead letter queue with the given reason. Otherwise
+// the entry is immediately redelivered.
+func (t *DeliveryTracker) Nack(ctx context.Context, deliveryID int64, deadLetter bool, reason string) (*InflightDelivery, error) {
+	t.mu.Lock()
+	d, ok := t.inflight[deliveryID]
+	if !ok {
+		t.mu.Unlock()
+		return nil, nil // idempotent
+	}
+	t.mu.Unlock()
+
+	if deadLetter {
+		if err := t.deadLetterWithReason(ctx, d, reason); err != nil {
+			return d, fmt.Errorf("nack dead letter: %w", err)
+		}
+		return d, nil
+	}
+
+	// Immediate redelivery.
+	t.Redeliver(d)
+	return d, nil
+}
+
+// deadLetterWithReason is like DeadLetter but also adds a _dead_letter_reason label.
+func (t *DeliveryTracker) deadLetterWithReason(ctx context.Context, d *InflightDelivery, reason string) error {
+	t.mu.Lock()
+	delete(t.inflight, d.id)
+	entries := t.byRef[d.ref]
+	for i, e := range entries {
+		if e.id == d.id {
+			entries[i] = entries[len(entries)-1]
+			entries = entries[:len(entries)-1]
+			break
+		}
+	}
+	if len(entries) == 0 {
+		delete(t.byRef, d.ref)
+	} else {
+		t.byRef[d.ref] = entries
+	}
+	t.mu.Unlock()
+
+	if d.Entry == nil {
+		return nil
+	}
+
+	dlEntry := &physical.Entry{
+		Ref:         d.Entry.Ref,
+		Labels:      make(map[string]string),
+		Timestamp:   d.Entry.Timestamp,
+		Persistence: 1,
+	}
+	for k, v := range d.Entry.Labels {
+		dlEntry.Labels[k] = v
+	}
+	dlEntry.Labels["_dead_letter"] = "true"
+	dlEntry.Labels["_dead_letter_sub"] = d.subID
+	dlEntry.Labels["_dead_letter_attempts"] = fmt.Sprintf("%d", d.Attempt)
+	if reason != "" {
+		dlEntry.Labels["_dead_letter_reason"] = reason
+	}
+
+	if err := t.backend.Put(ctx, dlEntry); err != nil {
+		return fmt.Errorf("dead letter: %w", err)
+	}
+
+	slog.WarnContext(ctx, "entry dead-lettered via nack",
+		"ref", reference.Hex(d.ref),
+		"sub", d.subID,
+		"attempts", d.Attempt,
+		"reason", reason,
+	)
+	return nil
+}
+
 // Expired returns inflight deliveries that have exceeded their ack timeout.
 func (t *DeliveryTracker) Expired() []*InflightDelivery {
 	now := time.Now()
