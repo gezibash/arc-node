@@ -368,6 +368,55 @@ func (Affinity) EnumDescriptor() ([]byte, []int) {
 	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{6}
 }
 
+type Backpressure int32
+
+const (
+	Backpressure_BACKPRESSURE_DROP       Backpressure = 0
+	Backpressure_BACKPRESSURE_BLOCK      Backpressure = 1
+	Backpressure_BACKPRESSURE_DISCONNECT Backpressure = 2
+)
+
+// Enum value maps for Backpressure.
+var (
+	Backpressure_name = map[int32]string{
+		0: "BACKPRESSURE_DROP",
+		1: "BACKPRESSURE_BLOCK",
+		2: "BACKPRESSURE_DISCONNECT",
+	}
+	Backpressure_value = map[string]int32{
+		"BACKPRESSURE_DROP":       0,
+		"BACKPRESSURE_BLOCK":      1,
+		"BACKPRESSURE_DISCONNECT": 2,
+	}
+)
+
+func (x Backpressure) Enum() *Backpressure {
+	p := new(Backpressure)
+	*p = x
+	return p
+}
+
+func (x Backpressure) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (Backpressure) Descriptor() protoreflect.EnumDescriptor {
+	return file_arc_node_v1_node_proto_enumTypes[7].Descriptor()
+}
+
+func (Backpressure) Type() protoreflect.EnumType {
+	return &file_arc_node_v1_node_proto_enumTypes[7]
+}
+
+func (x Backpressure) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use Backpressure.Descriptor instead.
+func (Backpressure) EnumDescriptor() ([]byte, []int) {
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{7}
+}
+
 type Dedup int32
 
 const (
@@ -401,11 +450,11 @@ func (x Dedup) String() string {
 }
 
 func (Dedup) Descriptor() protoreflect.EnumDescriptor {
-	return file_arc_node_v1_node_proto_enumTypes[7].Descriptor()
+	return file_arc_node_v1_node_proto_enumTypes[8].Descriptor()
 }
 
 func (Dedup) Type() protoreflect.EnumType {
-	return &file_arc_node_v1_node_proto_enumTypes[7]
+	return &file_arc_node_v1_node_proto_enumTypes[8]
 }
 
 func (x Dedup) Number() protoreflect.EnumNumber {
@@ -414,7 +463,7 @@ func (x Dedup) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use Dedup.Descriptor instead.
 func (Dedup) EnumDescriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{7}
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{8}
 }
 
 type DeliveryComplete int32
@@ -450,11 +499,11 @@ func (x DeliveryComplete) String() string {
 }
 
 func (DeliveryComplete) Descriptor() protoreflect.EnumDescriptor {
-	return file_arc_node_v1_node_proto_enumTypes[8].Descriptor()
+	return file_arc_node_v1_node_proto_enumTypes[9].Descriptor()
 }
 
 func (DeliveryComplete) Type() protoreflect.EnumType {
-	return &file_arc_node_v1_node_proto_enumTypes[8]
+	return &file_arc_node_v1_node_proto_enumTypes[9]
 }
 
 func (x DeliveryComplete) Number() protoreflect.EnumNumber {
@@ -463,7 +512,7 @@ func (x DeliveryComplete) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use DeliveryComplete.Descriptor instead.
 func (DeliveryComplete) EnumDescriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{8}
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{9}
 }
 
 type PeerDirection int32
@@ -496,11 +545,11 @@ func (x PeerDirection) String() string {
 }
 
 func (PeerDirection) Descriptor() protoreflect.EnumDescriptor {
-	return file_arc_node_v1_node_proto_enumTypes[9].Descriptor()
+	return file_arc_node_v1_node_proto_enumTypes[10].Descriptor()
 }
 
 func (PeerDirection) Type() protoreflect.EnumType {
-	return &file_arc_node_v1_node_proto_enumTypes[9]
+	return &file_arc_node_v1_node_proto_enumTypes[10]
 }
 
 func (x PeerDirection) Number() protoreflect.EnumNumber {
@@ -509,7 +558,7 @@ func (x PeerDirection) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use PeerDirection.Descriptor instead.
 func (PeerDirection) EnumDescriptor() ([]byte, []int) {
-	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{9}
+	return file_arc_node_v1_node_proto_rawDescGZIP(), []int{10}
 }
 
 type ResolveGetResponseFrame_Kind int32
@@ -542,11 +591,11 @@ func (x ResolveGetResponseFrame_Kind) String() string {
 }
 
 func (ResolveGetResponseFrame_Kind) Descriptor() protoreflect.EnumDescriptor {
-	return file_arc_node_v1_node_proto_enumTypes[10].Descriptor()
+	return file_arc_node_v1_node_proto_enumTypes[11].Descriptor()
 }
 
 func (ResolveGetResponseFrame_Kind) Type() protoreflect.EnumType {
-	return &file_arc_node_v1_node_proto_enumTypes[10]
+	return &file_arc_node_v1_node_proto_enumTypes[11]
 }
 
 func (x ResolveGetResponseFrame_Kind) Number() protoreflect.EnumNumber {
@@ -791,6 +840,9 @@ type SubscribeFrame struct {
 	Dimensions     *Dimensions            `protobuf:"bytes,4,opt,name=dimensions,proto3" json:"dimensions,omitempty"`
 	SubscriptionId string                 `protobuf:"bytes,5,opt,name=subscription_id,json=subscriptionId,proto3" json:"subscription_id,omitempty"`
 	Cursor         string                 `protobuf:"bytes,6,opt,name=cursor,proto3" json:"cursor,omitempty"`
+	MaxInflight    int32                  `protobuf:"varint,7,opt,name=max_inflight,json=maxInflight,proto3" json:"max_inflight,omitempty"`
+	Prefetch       int32                  `protobuf:"varint,8,opt,name=prefetch,proto3" json:"prefetch,omitempty"`
+	Backpressure   Backpressure           `protobuf:"varint,9,opt,name=backpressure,proto3,enum=arc.node.v1.Backpressure" json:"backpressure,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -865,6 +917,27 @@ func (x *SubscribeFrame) GetCursor() string {
 		return x.Cursor
 	}
 	return ""
+}
+
+func (x *SubscribeFrame) GetMaxInflight() int32 {
+	if x != nil {
+		return x.MaxInflight
+	}
+	return 0
+}
+
+func (x *SubscribeFrame) GetPrefetch() int32 {
+	if x != nil {
+		return x.Prefetch
+	}
+	return 0
+}
+
+func (x *SubscribeFrame) GetBackpressure() Backpressure {
+	if x != nil {
+		return x.Backpressure
+	}
+	return Backpressure_BACKPRESSURE_DROP
 }
 
 type UnsubscribeFrame struct {
@@ -1388,12 +1461,14 @@ func (x *ResolveGetFrame) GetPrefix() string {
 }
 
 type DeliveryFrame struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Channel       string                 `protobuf:"bytes,1,opt,name=channel,proto3" json:"channel,omitempty"`
-	Entry         *IndexEntry            `protobuf:"bytes,2,opt,name=entry,proto3" json:"entry,omitempty"`
-	DeliveryId    int64                  `protobuf:"varint,3,opt,name=delivery_id,json=deliveryId,proto3" json:"delivery_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Channel          string                 `protobuf:"bytes,1,opt,name=channel,proto3" json:"channel,omitempty"`
+	Entry            *IndexEntry            `protobuf:"bytes,2,opt,name=entry,proto3" json:"entry,omitempty"`
+	DeliveryId       int64                  `protobuf:"varint,3,opt,name=delivery_id,json=deliveryId,proto3" json:"delivery_id,omitempty"`
+	Attempt          int32                  `protobuf:"varint,4,opt,name=attempt,proto3" json:"attempt,omitempty"`
+	FirstDeliveredAt int64                  `protobuf:"varint,5,opt,name=first_delivered_at,json=firstDeliveredAt,proto3" json:"first_delivered_at,omitempty"` // unix nanos
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *DeliveryFrame) Reset() {
@@ -1443,6 +1518,20 @@ func (x *DeliveryFrame) GetEntry() *IndexEntry {
 func (x *DeliveryFrame) GetDeliveryId() int64 {
 	if x != nil {
 		return x.DeliveryId
+	}
+	return 0
+}
+
+func (x *DeliveryFrame) GetAttempt() int32 {
+	if x != nil {
+		return x.Attempt
+	}
+	return 0
+}
+
+func (x *DeliveryFrame) GetFirstDeliveredAt() int64 {
+	if x != nil {
+		return x.FirstDeliveredAt
 	}
 	return 0
 }
@@ -3186,7 +3275,7 @@ const file_arc_node_v1_node_proto_rawDesc = "" +
 	"dimensions\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xc0\x02\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xbe\x03\n" +
 	"\x0eSubscribeFrame\x12\x18\n" +
 	"\achannel\x18\x01 \x01(\tR\achannel\x12?\n" +
 	"\x06labels\x18\x02 \x03(\v2'.arc.node.v1.SubscribeFrame.LabelsEntryR\x06labels\x12\x1e\n" +
@@ -3197,7 +3286,10 @@ const file_arc_node_v1_node_proto_rawDesc = "" +
 	"dimensions\x18\x04 \x01(\v2\x17.arc.node.v1.DimensionsR\n" +
 	"dimensions\x12'\n" +
 	"\x0fsubscription_id\x18\x05 \x01(\tR\x0esubscriptionId\x12\x16\n" +
-	"\x06cursor\x18\x06 \x01(\tR\x06cursor\x1a9\n" +
+	"\x06cursor\x18\x06 \x01(\tR\x06cursor\x12!\n" +
+	"\fmax_inflight\x18\a \x01(\x05R\vmaxInflight\x12\x1a\n" +
+	"\bprefetch\x18\b \x01(\x05R\bprefetch\x12=\n" +
+	"\fbackpressure\x18\t \x01(\x0e2\x19.arc.node.v1.BackpressureR\fbackpressure\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\",\n" +
@@ -3242,12 +3334,14 @@ const file_arc_node_v1_node_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x10\n" +
 	"\x0eListPeersFrame\")\n" +
 	"\x0fResolveGetFrame\x12\x16\n" +
-	"\x06prefix\x18\x01 \x01(\tR\x06prefix\"y\n" +
+	"\x06prefix\x18\x01 \x01(\tR\x06prefix\"\xc1\x01\n" +
 	"\rDeliveryFrame\x12\x18\n" +
 	"\achannel\x18\x01 \x01(\tR\achannel\x12-\n" +
 	"\x05entry\x18\x02 \x01(\v2\x17.arc.node.v1.IndexEntryR\x05entry\x12\x1f\n" +
 	"\vdelivery_id\x18\x03 \x01(\x03R\n" +
-	"deliveryId\"\x8c\x01\n" +
+	"deliveryId\x12\x18\n" +
+	"\aattempt\x18\x04 \x01(\x05R\aattempt\x12,\n" +
+	"\x12first_delivered_at\x18\x05 \x01(\x03R\x10firstDeliveredAt\"\x8c\x01\n" +
 	"\fReceiptFrame\x12\x1c\n" +
 	"\treference\x18\x01 \x01(\fR\treference\x12\x0e\n" +
 	"\x02ok\x18\x02 \x01(\bR\x02ok\x12\x14\n" +
@@ -3423,7 +3517,11 @@ const file_arc_node_v1_node_proto_rawDesc = "" +
 	"\bAffinity\x12\x11\n" +
 	"\rAFFINITY_NONE\x10\x00\x12\x13\n" +
 	"\x0fAFFINITY_SENDER\x10\x01\x12\x10\n" +
-	"\fAFFINITY_KEY\x10\x02*A\n" +
+	"\fAFFINITY_KEY\x10\x02*Z\n" +
+	"\fBackpressure\x12\x15\n" +
+	"\x11BACKPRESSURE_DROP\x10\x00\x12\x16\n" +
+	"\x12BACKPRESSURE_BLOCK\x10\x01\x12\x1b\n" +
+	"\x17BACKPRESSURE_DISCONNECT\x10\x02*A\n" +
 	"\x05Dedup\x12\x0e\n" +
 	"\n" +
 	"DEDUP_NONE\x10\x00\x12\r\n" +
@@ -3451,7 +3549,7 @@ func file_arc_node_v1_node_proto_rawDescGZIP() []byte {
 	return file_arc_node_v1_node_proto_rawDescData
 }
 
-var file_arc_node_v1_node_proto_enumTypes = make([]protoimpl.EnumInfo, 11)
+var file_arc_node_v1_node_proto_enumTypes = make([]protoimpl.EnumInfo, 12)
 var file_arc_node_v1_node_proto_msgTypes = make([]protoimpl.MessageInfo, 44)
 var file_arc_node_v1_node_proto_goTypes = []any{
 	(Order)(0),                        // 0: arc.node.v1.Order
@@ -3461,55 +3559,56 @@ var file_arc_node_v1_node_proto_goTypes = []any{
 	(Visibility)(0),                   // 4: arc.node.v1.Visibility
 	(Ordering)(0),                     // 5: arc.node.v1.Ordering
 	(Affinity)(0),                     // 6: arc.node.v1.Affinity
-	(Dedup)(0),                        // 7: arc.node.v1.Dedup
-	(DeliveryComplete)(0),             // 8: arc.node.v1.DeliveryComplete
-	(PeerDirection)(0),                // 9: arc.node.v1.PeerDirection
-	(ResolveGetResponseFrame_Kind)(0), // 10: arc.node.v1.ResolveGetResponseFrame.Kind
-	(*Dimensions)(nil),                // 11: arc.node.v1.Dimensions
-	(*PublishFrame)(nil),              // 12: arc.node.v1.PublishFrame
-	(*SubscribeFrame)(nil),            // 13: arc.node.v1.SubscribeFrame
-	(*UnsubscribeFrame)(nil),          // 14: arc.node.v1.UnsubscribeFrame
-	(*AckFrame)(nil),                  // 15: arc.node.v1.AckFrame
-	(*NackFrame)(nil),                 // 16: arc.node.v1.NackFrame
-	(*SeekFrame)(nil),                 // 17: arc.node.v1.SeekFrame
-	(*QueryFrame)(nil),                // 18: arc.node.v1.QueryFrame
-	(*PutFrame)(nil),                  // 19: arc.node.v1.PutFrame
-	(*GetFrame)(nil),                  // 20: arc.node.v1.GetFrame
-	(*FederateFrame)(nil),             // 21: arc.node.v1.FederateFrame
-	(*ListPeersFrame)(nil),            // 22: arc.node.v1.ListPeersFrame
-	(*ResolveGetFrame)(nil),           // 23: arc.node.v1.ResolveGetFrame
-	(*DeliveryFrame)(nil),             // 24: arc.node.v1.DeliveryFrame
-	(*ReceiptFrame)(nil),              // 25: arc.node.v1.ReceiptFrame
-	(*ResponseFrame)(nil),             // 26: arc.node.v1.ResponseFrame
-	(*ErrorFrame)(nil),                // 27: arc.node.v1.ErrorFrame
-	(*FederateResponseFrame)(nil),     // 28: arc.node.v1.FederateResponseFrame
-	(*ListPeersResponseFrame)(nil),    // 29: arc.node.v1.ListPeersResponseFrame
-	(*ResolveGetResponseFrame)(nil),   // 30: arc.node.v1.ResolveGetResponseFrame
-	(*PingFrame)(nil),                 // 31: arc.node.v1.PingFrame
-	(*PongFrame)(nil),                 // 32: arc.node.v1.PongFrame
-	(*PresenceSetFrame)(nil),          // 33: arc.node.v1.PresenceSetFrame
-	(*PresenceQueryFrame)(nil),        // 34: arc.node.v1.PresenceQueryFrame
-	(*PresenceSubscribeFrame)(nil),    // 35: arc.node.v1.PresenceSubscribeFrame
-	(*PresenceUnsubscribeFrame)(nil),  // 36: arc.node.v1.PresenceUnsubscribeFrame
-	(*PresenceEventFrame)(nil),        // 37: arc.node.v1.PresenceEventFrame
-	(*PresenceResponseFrame)(nil),     // 38: arc.node.v1.PresenceResponseFrame
-	(*BatchPublishFrame)(nil),         // 39: arc.node.v1.BatchPublishFrame
-	(*ReceiptEntry)(nil),              // 40: arc.node.v1.ReceiptEntry
-	(*BatchReceiptFrame)(nil),         // 41: arc.node.v1.BatchReceiptFrame
-	(*ClientFrame)(nil),               // 42: arc.node.v1.ClientFrame
-	(*ServerFrame)(nil),               // 43: arc.node.v1.ServerFrame
-	(*IndexEntry)(nil),                // 44: arc.node.v1.IndexEntry
-	(*PeerInfo)(nil),                  // 45: arc.node.v1.PeerInfo
-	nil,                               // 46: arc.node.v1.PublishFrame.LabelsEntry
-	nil,                               // 47: arc.node.v1.SubscribeFrame.LabelsEntry
-	nil,                               // 48: arc.node.v1.QueryFrame.LabelsEntry
-	nil,                               // 49: arc.node.v1.FederateFrame.LabelsEntry
-	nil,                               // 50: arc.node.v1.ResolveGetResponseFrame.LabelsEntry
-	nil,                               // 51: arc.node.v1.PresenceSetFrame.MetadataEntry
-	nil,                               // 52: arc.node.v1.PresenceEventFrame.MetadataEntry
-	nil,                               // 53: arc.node.v1.IndexEntry.LabelsEntry
-	nil,                               // 54: arc.node.v1.PeerInfo.LabelsEntry
-	(*timestamppb.Timestamp)(nil),     // 55: google.protobuf.Timestamp
+	(Backpressure)(0),                 // 7: arc.node.v1.Backpressure
+	(Dedup)(0),                        // 8: arc.node.v1.Dedup
+	(DeliveryComplete)(0),             // 9: arc.node.v1.DeliveryComplete
+	(PeerDirection)(0),                // 10: arc.node.v1.PeerDirection
+	(ResolveGetResponseFrame_Kind)(0), // 11: arc.node.v1.ResolveGetResponseFrame.Kind
+	(*Dimensions)(nil),                // 12: arc.node.v1.Dimensions
+	(*PublishFrame)(nil),              // 13: arc.node.v1.PublishFrame
+	(*SubscribeFrame)(nil),            // 14: arc.node.v1.SubscribeFrame
+	(*UnsubscribeFrame)(nil),          // 15: arc.node.v1.UnsubscribeFrame
+	(*AckFrame)(nil),                  // 16: arc.node.v1.AckFrame
+	(*NackFrame)(nil),                 // 17: arc.node.v1.NackFrame
+	(*SeekFrame)(nil),                 // 18: arc.node.v1.SeekFrame
+	(*QueryFrame)(nil),                // 19: arc.node.v1.QueryFrame
+	(*PutFrame)(nil),                  // 20: arc.node.v1.PutFrame
+	(*GetFrame)(nil),                  // 21: arc.node.v1.GetFrame
+	(*FederateFrame)(nil),             // 22: arc.node.v1.FederateFrame
+	(*ListPeersFrame)(nil),            // 23: arc.node.v1.ListPeersFrame
+	(*ResolveGetFrame)(nil),           // 24: arc.node.v1.ResolveGetFrame
+	(*DeliveryFrame)(nil),             // 25: arc.node.v1.DeliveryFrame
+	(*ReceiptFrame)(nil),              // 26: arc.node.v1.ReceiptFrame
+	(*ResponseFrame)(nil),             // 27: arc.node.v1.ResponseFrame
+	(*ErrorFrame)(nil),                // 28: arc.node.v1.ErrorFrame
+	(*FederateResponseFrame)(nil),     // 29: arc.node.v1.FederateResponseFrame
+	(*ListPeersResponseFrame)(nil),    // 30: arc.node.v1.ListPeersResponseFrame
+	(*ResolveGetResponseFrame)(nil),   // 31: arc.node.v1.ResolveGetResponseFrame
+	(*PingFrame)(nil),                 // 32: arc.node.v1.PingFrame
+	(*PongFrame)(nil),                 // 33: arc.node.v1.PongFrame
+	(*PresenceSetFrame)(nil),          // 34: arc.node.v1.PresenceSetFrame
+	(*PresenceQueryFrame)(nil),        // 35: arc.node.v1.PresenceQueryFrame
+	(*PresenceSubscribeFrame)(nil),    // 36: arc.node.v1.PresenceSubscribeFrame
+	(*PresenceUnsubscribeFrame)(nil),  // 37: arc.node.v1.PresenceUnsubscribeFrame
+	(*PresenceEventFrame)(nil),        // 38: arc.node.v1.PresenceEventFrame
+	(*PresenceResponseFrame)(nil),     // 39: arc.node.v1.PresenceResponseFrame
+	(*BatchPublishFrame)(nil),         // 40: arc.node.v1.BatchPublishFrame
+	(*ReceiptEntry)(nil),              // 41: arc.node.v1.ReceiptEntry
+	(*BatchReceiptFrame)(nil),         // 42: arc.node.v1.BatchReceiptFrame
+	(*ClientFrame)(nil),               // 43: arc.node.v1.ClientFrame
+	(*ServerFrame)(nil),               // 44: arc.node.v1.ServerFrame
+	(*IndexEntry)(nil),                // 45: arc.node.v1.IndexEntry
+	(*PeerInfo)(nil),                  // 46: arc.node.v1.PeerInfo
+	nil,                               // 47: arc.node.v1.PublishFrame.LabelsEntry
+	nil,                               // 48: arc.node.v1.SubscribeFrame.LabelsEntry
+	nil,                               // 49: arc.node.v1.QueryFrame.LabelsEntry
+	nil,                               // 50: arc.node.v1.FederateFrame.LabelsEntry
+	nil,                               // 51: arc.node.v1.ResolveGetResponseFrame.LabelsEntry
+	nil,                               // 52: arc.node.v1.PresenceSetFrame.MetadataEntry
+	nil,                               // 53: arc.node.v1.PresenceEventFrame.MetadataEntry
+	nil,                               // 54: arc.node.v1.IndexEntry.LabelsEntry
+	nil,                               // 55: arc.node.v1.PeerInfo.LabelsEntry
+	(*timestamppb.Timestamp)(nil),     // 56: google.protobuf.Timestamp
 }
 var file_arc_node_v1_node_proto_depIdxs = []int32{
 	1,  // 0: arc.node.v1.Dimensions.pattern:type_name -> arc.node.v1.Pattern
@@ -3518,66 +3617,67 @@ var file_arc_node_v1_node_proto_depIdxs = []int32{
 	4,  // 3: arc.node.v1.Dimensions.visibility:type_name -> arc.node.v1.Visibility
 	5,  // 4: arc.node.v1.Dimensions.ordering:type_name -> arc.node.v1.Ordering
 	6,  // 5: arc.node.v1.Dimensions.affinity:type_name -> arc.node.v1.Affinity
-	7,  // 6: arc.node.v1.Dimensions.dedup:type_name -> arc.node.v1.Dedup
-	8,  // 7: arc.node.v1.Dimensions.complete:type_name -> arc.node.v1.DeliveryComplete
-	46, // 8: arc.node.v1.PublishFrame.labels:type_name -> arc.node.v1.PublishFrame.LabelsEntry
-	11, // 9: arc.node.v1.PublishFrame.dimensions:type_name -> arc.node.v1.Dimensions
-	47, // 10: arc.node.v1.SubscribeFrame.labels:type_name -> arc.node.v1.SubscribeFrame.LabelsEntry
-	11, // 11: arc.node.v1.SubscribeFrame.dimensions:type_name -> arc.node.v1.Dimensions
-	48, // 12: arc.node.v1.QueryFrame.labels:type_name -> arc.node.v1.QueryFrame.LabelsEntry
-	0,  // 13: arc.node.v1.QueryFrame.order:type_name -> arc.node.v1.Order
-	49, // 14: arc.node.v1.FederateFrame.labels:type_name -> arc.node.v1.FederateFrame.LabelsEntry
-	44, // 15: arc.node.v1.DeliveryFrame.entry:type_name -> arc.node.v1.IndexEntry
-	44, // 16: arc.node.v1.ResponseFrame.entries:type_name -> arc.node.v1.IndexEntry
-	45, // 17: arc.node.v1.ListPeersResponseFrame.peers:type_name -> arc.node.v1.PeerInfo
-	10, // 18: arc.node.v1.ResolveGetResponseFrame.kind:type_name -> arc.node.v1.ResolveGetResponseFrame.Kind
-	50, // 19: arc.node.v1.ResolveGetResponseFrame.labels:type_name -> arc.node.v1.ResolveGetResponseFrame.LabelsEntry
-	55, // 20: arc.node.v1.PongFrame.server_time:type_name -> google.protobuf.Timestamp
-	51, // 21: arc.node.v1.PresenceSetFrame.metadata:type_name -> arc.node.v1.PresenceSetFrame.MetadataEntry
-	52, // 22: arc.node.v1.PresenceEventFrame.metadata:type_name -> arc.node.v1.PresenceEventFrame.MetadataEntry
-	37, // 23: arc.node.v1.PresenceResponseFrame.entries:type_name -> arc.node.v1.PresenceEventFrame
-	12, // 24: arc.node.v1.BatchPublishFrame.messages:type_name -> arc.node.v1.PublishFrame
-	40, // 25: arc.node.v1.BatchReceiptFrame.results:type_name -> arc.node.v1.ReceiptEntry
-	12, // 26: arc.node.v1.ClientFrame.publish:type_name -> arc.node.v1.PublishFrame
-	13, // 27: arc.node.v1.ClientFrame.subscribe:type_name -> arc.node.v1.SubscribeFrame
-	14, // 28: arc.node.v1.ClientFrame.unsubscribe:type_name -> arc.node.v1.UnsubscribeFrame
-	15, // 29: arc.node.v1.ClientFrame.ack:type_name -> arc.node.v1.AckFrame
-	17, // 30: arc.node.v1.ClientFrame.seek:type_name -> arc.node.v1.SeekFrame
-	18, // 31: arc.node.v1.ClientFrame.query:type_name -> arc.node.v1.QueryFrame
-	19, // 32: arc.node.v1.ClientFrame.put:type_name -> arc.node.v1.PutFrame
-	20, // 33: arc.node.v1.ClientFrame.get:type_name -> arc.node.v1.GetFrame
-	21, // 34: arc.node.v1.ClientFrame.federate:type_name -> arc.node.v1.FederateFrame
-	22, // 35: arc.node.v1.ClientFrame.list_peers:type_name -> arc.node.v1.ListPeersFrame
-	23, // 36: arc.node.v1.ClientFrame.resolve_get:type_name -> arc.node.v1.ResolveGetFrame
-	16, // 37: arc.node.v1.ClientFrame.nack:type_name -> arc.node.v1.NackFrame
-	39, // 38: arc.node.v1.ClientFrame.batch_publish:type_name -> arc.node.v1.BatchPublishFrame
-	31, // 39: arc.node.v1.ClientFrame.ping:type_name -> arc.node.v1.PingFrame
-	33, // 40: arc.node.v1.ClientFrame.presence_set:type_name -> arc.node.v1.PresenceSetFrame
-	34, // 41: arc.node.v1.ClientFrame.presence_query:type_name -> arc.node.v1.PresenceQueryFrame
-	35, // 42: arc.node.v1.ClientFrame.presence_subscribe:type_name -> arc.node.v1.PresenceSubscribeFrame
-	36, // 43: arc.node.v1.ClientFrame.presence_unsubscribe:type_name -> arc.node.v1.PresenceUnsubscribeFrame
-	24, // 44: arc.node.v1.ServerFrame.delivery:type_name -> arc.node.v1.DeliveryFrame
-	25, // 45: arc.node.v1.ServerFrame.receipt:type_name -> arc.node.v1.ReceiptFrame
-	26, // 46: arc.node.v1.ServerFrame.response:type_name -> arc.node.v1.ResponseFrame
-	27, // 47: arc.node.v1.ServerFrame.error:type_name -> arc.node.v1.ErrorFrame
-	28, // 48: arc.node.v1.ServerFrame.federate_response:type_name -> arc.node.v1.FederateResponseFrame
-	29, // 49: arc.node.v1.ServerFrame.list_peers_response:type_name -> arc.node.v1.ListPeersResponseFrame
-	30, // 50: arc.node.v1.ServerFrame.resolve_get_response:type_name -> arc.node.v1.ResolveGetResponseFrame
-	41, // 51: arc.node.v1.ServerFrame.batch_receipt:type_name -> arc.node.v1.BatchReceiptFrame
-	32, // 52: arc.node.v1.ServerFrame.pong:type_name -> arc.node.v1.PongFrame
-	37, // 53: arc.node.v1.ServerFrame.presence_event:type_name -> arc.node.v1.PresenceEventFrame
-	38, // 54: arc.node.v1.ServerFrame.presence_response:type_name -> arc.node.v1.PresenceResponseFrame
-	53, // 55: arc.node.v1.IndexEntry.labels:type_name -> arc.node.v1.IndexEntry.LabelsEntry
-	11, // 56: arc.node.v1.IndexEntry.dimensions:type_name -> arc.node.v1.Dimensions
-	54, // 57: arc.node.v1.PeerInfo.labels:type_name -> arc.node.v1.PeerInfo.LabelsEntry
-	9,  // 58: arc.node.v1.PeerInfo.direction:type_name -> arc.node.v1.PeerDirection
-	42, // 59: arc.node.v1.NodeService.Channel:input_type -> arc.node.v1.ClientFrame
-	43, // 60: arc.node.v1.NodeService.Channel:output_type -> arc.node.v1.ServerFrame
-	60, // [60:61] is the sub-list for method output_type
-	59, // [59:60] is the sub-list for method input_type
-	59, // [59:59] is the sub-list for extension type_name
-	59, // [59:59] is the sub-list for extension extendee
-	0,  // [0:59] is the sub-list for field type_name
+	8,  // 6: arc.node.v1.Dimensions.dedup:type_name -> arc.node.v1.Dedup
+	9,  // 7: arc.node.v1.Dimensions.complete:type_name -> arc.node.v1.DeliveryComplete
+	47, // 8: arc.node.v1.PublishFrame.labels:type_name -> arc.node.v1.PublishFrame.LabelsEntry
+	12, // 9: arc.node.v1.PublishFrame.dimensions:type_name -> arc.node.v1.Dimensions
+	48, // 10: arc.node.v1.SubscribeFrame.labels:type_name -> arc.node.v1.SubscribeFrame.LabelsEntry
+	12, // 11: arc.node.v1.SubscribeFrame.dimensions:type_name -> arc.node.v1.Dimensions
+	7,  // 12: arc.node.v1.SubscribeFrame.backpressure:type_name -> arc.node.v1.Backpressure
+	49, // 13: arc.node.v1.QueryFrame.labels:type_name -> arc.node.v1.QueryFrame.LabelsEntry
+	0,  // 14: arc.node.v1.QueryFrame.order:type_name -> arc.node.v1.Order
+	50, // 15: arc.node.v1.FederateFrame.labels:type_name -> arc.node.v1.FederateFrame.LabelsEntry
+	45, // 16: arc.node.v1.DeliveryFrame.entry:type_name -> arc.node.v1.IndexEntry
+	45, // 17: arc.node.v1.ResponseFrame.entries:type_name -> arc.node.v1.IndexEntry
+	46, // 18: arc.node.v1.ListPeersResponseFrame.peers:type_name -> arc.node.v1.PeerInfo
+	11, // 19: arc.node.v1.ResolveGetResponseFrame.kind:type_name -> arc.node.v1.ResolveGetResponseFrame.Kind
+	51, // 20: arc.node.v1.ResolveGetResponseFrame.labels:type_name -> arc.node.v1.ResolveGetResponseFrame.LabelsEntry
+	56, // 21: arc.node.v1.PongFrame.server_time:type_name -> google.protobuf.Timestamp
+	52, // 22: arc.node.v1.PresenceSetFrame.metadata:type_name -> arc.node.v1.PresenceSetFrame.MetadataEntry
+	53, // 23: arc.node.v1.PresenceEventFrame.metadata:type_name -> arc.node.v1.PresenceEventFrame.MetadataEntry
+	38, // 24: arc.node.v1.PresenceResponseFrame.entries:type_name -> arc.node.v1.PresenceEventFrame
+	13, // 25: arc.node.v1.BatchPublishFrame.messages:type_name -> arc.node.v1.PublishFrame
+	41, // 26: arc.node.v1.BatchReceiptFrame.results:type_name -> arc.node.v1.ReceiptEntry
+	13, // 27: arc.node.v1.ClientFrame.publish:type_name -> arc.node.v1.PublishFrame
+	14, // 28: arc.node.v1.ClientFrame.subscribe:type_name -> arc.node.v1.SubscribeFrame
+	15, // 29: arc.node.v1.ClientFrame.unsubscribe:type_name -> arc.node.v1.UnsubscribeFrame
+	16, // 30: arc.node.v1.ClientFrame.ack:type_name -> arc.node.v1.AckFrame
+	18, // 31: arc.node.v1.ClientFrame.seek:type_name -> arc.node.v1.SeekFrame
+	19, // 32: arc.node.v1.ClientFrame.query:type_name -> arc.node.v1.QueryFrame
+	20, // 33: arc.node.v1.ClientFrame.put:type_name -> arc.node.v1.PutFrame
+	21, // 34: arc.node.v1.ClientFrame.get:type_name -> arc.node.v1.GetFrame
+	22, // 35: arc.node.v1.ClientFrame.federate:type_name -> arc.node.v1.FederateFrame
+	23, // 36: arc.node.v1.ClientFrame.list_peers:type_name -> arc.node.v1.ListPeersFrame
+	24, // 37: arc.node.v1.ClientFrame.resolve_get:type_name -> arc.node.v1.ResolveGetFrame
+	17, // 38: arc.node.v1.ClientFrame.nack:type_name -> arc.node.v1.NackFrame
+	40, // 39: arc.node.v1.ClientFrame.batch_publish:type_name -> arc.node.v1.BatchPublishFrame
+	32, // 40: arc.node.v1.ClientFrame.ping:type_name -> arc.node.v1.PingFrame
+	34, // 41: arc.node.v1.ClientFrame.presence_set:type_name -> arc.node.v1.PresenceSetFrame
+	35, // 42: arc.node.v1.ClientFrame.presence_query:type_name -> arc.node.v1.PresenceQueryFrame
+	36, // 43: arc.node.v1.ClientFrame.presence_subscribe:type_name -> arc.node.v1.PresenceSubscribeFrame
+	37, // 44: arc.node.v1.ClientFrame.presence_unsubscribe:type_name -> arc.node.v1.PresenceUnsubscribeFrame
+	25, // 45: arc.node.v1.ServerFrame.delivery:type_name -> arc.node.v1.DeliveryFrame
+	26, // 46: arc.node.v1.ServerFrame.receipt:type_name -> arc.node.v1.ReceiptFrame
+	27, // 47: arc.node.v1.ServerFrame.response:type_name -> arc.node.v1.ResponseFrame
+	28, // 48: arc.node.v1.ServerFrame.error:type_name -> arc.node.v1.ErrorFrame
+	29, // 49: arc.node.v1.ServerFrame.federate_response:type_name -> arc.node.v1.FederateResponseFrame
+	30, // 50: arc.node.v1.ServerFrame.list_peers_response:type_name -> arc.node.v1.ListPeersResponseFrame
+	31, // 51: arc.node.v1.ServerFrame.resolve_get_response:type_name -> arc.node.v1.ResolveGetResponseFrame
+	42, // 52: arc.node.v1.ServerFrame.batch_receipt:type_name -> arc.node.v1.BatchReceiptFrame
+	33, // 53: arc.node.v1.ServerFrame.pong:type_name -> arc.node.v1.PongFrame
+	38, // 54: arc.node.v1.ServerFrame.presence_event:type_name -> arc.node.v1.PresenceEventFrame
+	39, // 55: arc.node.v1.ServerFrame.presence_response:type_name -> arc.node.v1.PresenceResponseFrame
+	54, // 56: arc.node.v1.IndexEntry.labels:type_name -> arc.node.v1.IndexEntry.LabelsEntry
+	12, // 57: arc.node.v1.IndexEntry.dimensions:type_name -> arc.node.v1.Dimensions
+	55, // 58: arc.node.v1.PeerInfo.labels:type_name -> arc.node.v1.PeerInfo.LabelsEntry
+	10, // 59: arc.node.v1.PeerInfo.direction:type_name -> arc.node.v1.PeerDirection
+	43, // 60: arc.node.v1.NodeService.Channel:input_type -> arc.node.v1.ClientFrame
+	44, // 61: arc.node.v1.NodeService.Channel:output_type -> arc.node.v1.ServerFrame
+	61, // [61:62] is the sub-list for method output_type
+	60, // [60:61] is the sub-list for method input_type
+	60, // [60:60] is the sub-list for extension type_name
+	60, // [60:60] is the sub-list for extension extendee
+	0,  // [0:60] is the sub-list for field type_name
 }
 
 func init() { file_arc_node_v1_node_proto_init() }
@@ -3623,7 +3723,7 @@ func file_arc_node_v1_node_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_arc_node_v1_node_proto_rawDesc), len(file_arc_node_v1_node_proto_rawDesc)),
-			NumEnums:      11,
+			NumEnums:      12,
 			NumMessages:   44,
 			NumExtensions: 0,
 			NumServices:   1,

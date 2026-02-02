@@ -1481,6 +1481,18 @@ func TestRedeliveryLoopWithExpiredDelivery(t *testing.T) {
 	if deliveryCount < 1 {
 		t.Errorf("expected at least 1 redelivered frame, got %d", deliveryCount)
 	}
+
+	// Verify attempt metadata on redelivered frames.
+	for _, frame := range ms.sent {
+		if df, ok := frame.Frame.(*nodev1.ServerFrame_Delivery); ok {
+			if df.Delivery.Attempt < 2 {
+				t.Errorf("redelivered frame Attempt = %d, want >= 2", df.Delivery.Attempt)
+			}
+			if df.Delivery.FirstDeliveredAt <= 0 {
+				t.Error("redelivered frame FirstDeliveredAt should be > 0")
+			}
+		}
+	}
 }
 
 func TestRedeliveryLoopDeadLetter(t *testing.T) {

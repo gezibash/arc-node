@@ -58,6 +58,12 @@ enum Affinity {
   AFFINITY_KEY = 2;
 }
 
+enum Backpressure {
+  BACKPRESSURE_DROP = 0;
+  BACKPRESSURE_BLOCK = 1;
+  BACKPRESSURE_DISCONNECT = 2;
+}
+
 enum Dedup {
   DEDUP_NONE = 0;
   DEDUP_REF = 1;
@@ -106,6 +112,9 @@ message SubscribeFrame {
   Dimensions dimensions = 4;
   string subscription_id = 5;
   string cursor = 6;
+  int32 max_inflight = 7;
+  int32 prefetch = 8;
+  Backpressure backpressure = 9;
 }
 
 message UnsubscribeFrame {
@@ -163,6 +172,8 @@ message DeliveryFrame {
   string channel = 1;
   IndexEntry entry = 2;
   int64 delivery_id = 3;
+  int32 attempt = 4;
+  int64 first_delivered_at = 5; // unix nanos
 }
 
 message ReceiptFrame {
