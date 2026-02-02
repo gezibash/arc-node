@@ -191,6 +191,12 @@ func (s *IndexStore) AckDelivery(ctx context.Context, deliveryID int64) (*physic
 	return s.delivery.Ack(ctx, deliveryID)
 }
 
+// NackDelivery explicitly rejects a delivery. If deadLetter is true, the entry
+// goes straight to the dead letter queue. Otherwise it is redelivered immediately.
+func (s *IndexStore) NackDelivery(ctx context.Context, deliveryID int64, deadLetter bool, reason string) (*InflightDelivery, error) {
+	return s.delivery.Nack(ctx, deliveryID, deadLetter, reason)
+}
+
 // PutCursor stores a durable subscription cursor.
 func (s *IndexStore) PutCursor(ctx context.Context, key string, cursor physical.Cursor) error {
 	return s.backend.PutCursor(ctx, key, cursor)

@@ -115,6 +115,12 @@ message AckFrame {
   int64 delivery_id = 2;
 }
 
+message NackFrame {
+  int64 delivery_id = 1;
+  string reason = 2;
+  bool dead_letter = 3;
+}
+
 message SeekFrame {
   string channel = 1;
   int64 timestamp = 2;
@@ -213,6 +219,7 @@ message ClientFrame {
     FederateFrame federate = 9;
     ListPeersFrame list_peers = 10;
     ResolveGetFrame resolve_get = 11;
+    NackFrame nack = 12;
   }
 }
 
