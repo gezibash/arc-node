@@ -30,7 +30,7 @@ func newPublishCmd(n *nodeCmd) *cobra.Command {
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Read content
-			data, err := readInput(args)
+			data, err := n.readInputFn(args)
 			if err != nil {
 				return err
 			}
@@ -46,8 +46,7 @@ func newPublishCmd(n *nodeCmd) *cobra.Command {
 			}
 
 			// Load keypair
-			kr := openKeyring(n.v)
-			key, err := loadKey(cmd, n.v, kr)
+			kp, err := n.loadKeypair(cmd)
 			if err != nil {
 				return fmt.Errorf("load key: %w", err)
 			}
@@ -59,7 +58,7 @@ func newPublishCmd(n *nodeCmd) *cobra.Command {
 			}
 
 			// Determine recipient
-			pub := key.Keypair.PublicKey()
+			pub := kp.PublicKey()
 			var toPub identity.PublicKey
 			if to != "" {
 				b, err := hex.DecodeString(to)
@@ -69,16 +68,16 @@ func newPublishCmd(n *nodeCmd) *cobra.Command {
 				copy(toPub[:], b)
 			} else {
 				// Default to the node's public key
-				nodeKey, err := openKeyring(n.v).Load(cmd.Context(), "node")
+				nodePub, err := n.loadNodeKey(cmd)
 				if err != nil {
 					return fmt.Errorf("load node key for default --to: %w", err)
 				}
-				toPub = nodeKey.Keypair.PublicKey()
+				toPub = nodePub
 			}
 
 			// Build and sign message using arc protocol
 			msg := message.New(pub, toPub, contentRef, contentType)
-			if err := message.Sign(&msg, key.Keypair); err != nil {
+			if err := message.Sign(&msg, kp); err != nil {
 				return fmt.Errorf("sign message: %w", err)
 			}
 

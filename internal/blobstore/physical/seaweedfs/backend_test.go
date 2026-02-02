@@ -272,3 +272,184 @@ func TestIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestDefaults(t *testing.T) {
+	d := Defaults()
+	if d[KeyPrefix] == "" {
+		t.Error("default prefix should not be empty")
+	}
+	if d[KeyTimeout] == "" {
+		t.Error("default timeout should not be empty")
+	}
+}
+
+func TestNewFactoryMissingFilerURL(t *testing.T) {
+	_, err := NewFactory(context.Background(), map[string]string{})
+	if err == nil {
+		t.Fatal("expected error for missing filer_url")
+	}
+}
+
+func TestNewFactoryEmptyFilerURL(t *testing.T) {
+	_, err := NewFactory(context.Background(), map[string]string{
+		KeyFilerURL: "",
+	})
+	if err == nil {
+		t.Fatal("expected error for empty filer_url")
+	}
+}
+
+func TestNewFactoryInvalidTimeout(t *testing.T) {
+	srv := mockFiler()
+	defer srv.Close()
+
+	_, err := NewFactory(context.Background(), map[string]string{
+		KeyFilerURL: srv.URL,
+		KeyTimeout:  "not-a-duration",
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid timeout")
+	}
+}
+
+func TestNewFactoryTrailingSlash(t *testing.T) {
+	srv := mockFiler()
+	defer srv.Close()
+
+	b, err := NewFactory(context.Background(), map[string]string{
+		KeyFilerURL: srv.URL + "/",
+		KeyPrefix:   "/blobs/",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	be := b.(*Backend)
+	if strings.HasSuffix(be.filerURL, "/") {
+		t.Error("filer_url should have trailing slash stripped")
+	}
+	if strings.HasSuffix(be.prefix, "/") {
+		t.Error("prefix should have trailing slash stripped")
+	}
+	b.Close()
+}
+
+func TestExistsAfterClose(t *testing.T) {
+	b := newTestBackend(t)
+	_ = b.Close()
+
+	ref := testRef([]byte("closed"))
+	_, err := b.Exists(context.Background(), ref)
+	if !errors.Is(err, physical.ErrClosed) {
+		t.Fatalf("Exists after close: got %v, want ErrClosed", err)
+	}
+}
+
+func TestDeleteAfterClose(t *testing.T) {
+	b := newTestBackend(t)
+	_ = b.Close()
+
+	ref := testRef([]byte("closed"))
+	err := b.Delete(context.Background(), ref)
+	if !errors.Is(err, physical.ErrClosed) {
+		t.Fatalf("Delete after close: got %v, want ErrClosed", err)
+	}
+}
+
+func TestStatsAfterClose(t *testing.T) {
+	b := newTestBackend(t)
+	_ = b.Close()
+
+	_, err := b.Stats(context.Background())
+	if !errors.Is(err, physical.ErrClosed) {
+		t.Fatalf("Stats after close: got %v, want ErrClosed", err)
+	}
+}
+
+func TestPutUnexpectedStatus(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	b, err := NewFactory(context.Background(), map[string]string{
+		KeyFilerURL: srv.URL,
+		KeyPrefix:   "/blobs",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ref := testRef([]byte("error"))
+	err = b.(*Backend).Put(context.Background(), ref, []byte("data"))
+	if err == nil {
+		t.Fatal("expected error for 500 status")
+	}
+	b.Close()
+}
+
+func TestGetUnexpectedStatus(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("server error"))
+	}))
+	defer srv.Close()
+
+	b, err := NewFactory(context.Background(), map[string]string{
+		KeyFilerURL: srv.URL,
+		KeyPrefix:   "/blobs",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ref := testRef([]byte("error"))
+	_, err = b.(*Backend).Get(context.Background(), ref)
+	if err == nil {
+		t.Fatal("expected error for 500 status")
+	}
+	b.Close()
+}
+
+func TestExistsUnexpectedStatus(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	b, err := NewFactory(context.Background(), map[string]string{
+		KeyFilerURL: srv.URL,
+		KeyPrefix:   "/blobs",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ref := testRef([]byte("error"))
+	_, err = b.(*Backend).Exists(context.Background(), ref)
+	if err == nil {
+		t.Fatal("expected error for 500 status")
+	}
+	b.Close()
+}
+
+func TestDeleteUnexpectedStatus(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	b, err := NewFactory(context.Background(), map[string]string{
+		KeyFilerURL: srv.URL,
+		KeyPrefix:   "/blobs",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ref := testRef([]byte("error"))
+	err = b.(*Backend).Delete(context.Background(), ref)
+	if err == nil {
+		t.Fatal("expected error for 500 status")
+	}
+	b.Close()
+}

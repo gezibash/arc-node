@@ -9,13 +9,16 @@ import (
 	"github.com/gezibash/arc-node/internal/keyring"
 	"github.com/gezibash/arc-node/internal/observability"
 	"github.com/gezibash/arc-node/pkg/client"
+	"github.com/gezibash/arc/v2/pkg/identity"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
 type nodeCmd struct {
-	v      *viper.Viper
-	client *client.Client
+	v         *viper.Viper
+	client    NodeClient
+	keyLoader KeyLoader
+	readInput func([]string) ([]byte, error)
 }
 
 func Entrypoint(v *viper.Viper) *cobra.Command {
@@ -65,7 +68,7 @@ func Entrypoint(v *viper.Viper) *cobra.Command {
 	return cmd
 }
 
-func dialNode(cmd *cobra.Command, v *viper.Viper) (*client.Client, error) {
+func dialNode(cmd *cobra.Command, v *viper.Viper) (NodeClient, error) {
 	addr, _ := cmd.Flags().GetString("addr")
 	kr := openKeyring(v)
 	key, err := loadKey(cmd, v, kr)
@@ -88,6 +91,45 @@ func loadKey(cmd *cobra.Command, v *viper.Viper, kr *keyring.Keyring) (*keyring.
 		return kr.Load(cmd.Context(), name)
 	}
 	return kr.LoadDefault(cmd.Context())
+}
+
+func (n *nodeCmd) loadKeypair(cmd *cobra.Command) (*identity.Keypair, error) {
+	if n.keyLoader != nil {
+		name := n.v.GetString("key")
+		if name != "" {
+			return n.keyLoader.Load(cmd.Context(), name)
+		}
+		return n.keyLoader.LoadDefault(cmd.Context())
+	}
+	kr := openKeyring(n.v)
+	key, err := loadKey(cmd, n.v, kr)
+	if err != nil {
+		return nil, err
+	}
+	return key.Keypair, nil
+}
+
+func (n *nodeCmd) loadNodeKey(cmd *cobra.Command) (identity.PublicKey, error) {
+	if n.keyLoader != nil {
+		kp, err := n.keyLoader.Load(cmd.Context(), "node")
+		if err != nil {
+			return identity.PublicKey{}, err
+		}
+		return kp.PublicKey(), nil
+	}
+	kr := openKeyring(n.v)
+	nodeKey, err := kr.Load(cmd.Context(), "node")
+	if err != nil {
+		return identity.PublicKey{}, err
+	}
+	return nodeKey.Keypair.PublicKey(), nil
+}
+
+func (n *nodeCmd) readInputFn(args []string) ([]byte, error) {
+	if n.readInput != nil {
+		return n.readInput(args)
+	}
+	return readInput(args)
 }
 
 func openKeyring(v *viper.Viper) *keyring.Keyring {

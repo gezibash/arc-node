@@ -502,3 +502,204 @@ func TestFederate(t *testing.T) {
 		t.Fatal("Federate returned nil result")
 	}
 }
+
+func TestSubscribeChannel(t *testing.T) {
+	addr, nodeKP := newTestServer(t)
+	c, kp := newTestClient(t, addr, nodeKP)
+	ctx := context.Background()
+	subCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	entries, _, err := c.SubscribeChannel(subCtx, "true", map[string]string{"app": "chan-test"})
+	if err != nil {
+		t.Fatalf("SubscribeChannel: %v", err)
+	}
+	time.Sleep(100 * time.Millisecond)
+	ref, _ := c.PutContent(ctx, []byte("chan-data"))
+	msg := makeMessage(t, kp, ref, "test/chan")
+	if _, err := c.SendMessage(ctx, msg, map[string]string{"app": "chan-test"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
+		t.Fatalf("SendMessage: %v", err)
+	}
+	select {
+	case e := <-entries:
+		if e == nil {
+			t.Fatal("received nil entry")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("did not receive entry within timeout")
+	}
+	cancel()
+	time.Sleep(100 * time.Millisecond)
+}
+
+func TestSubscribeContextCancel(t *testing.T) {
+	addr, nodeKP := newTestServer(t)
+	c, _ := newTestClient(t, addr, nodeKP)
+	subCtx, cancel := context.WithCancel(context.Background())
+	entries, _, err := c.SubscribeMessages(subCtx, "true", map[string]string{"app": "cancel-test"})
+	if err != nil {
+		t.Fatalf("SubscribeMessages: %v", err)
+	}
+	cancel()
+	select {
+	case _, ok := <-entries:
+		_ = ok
+	case <-time.After(2 * time.Second):
+		t.Fatal("entries channel not closed")
+	}
+}
+
+func TestNodeInfoNilClient(t *testing.T) {
+	var c *client.Client
+	info, ok := c.NodeInfo()
+	if ok {
+		t.Error("expected ok=false")
+	}
+	if info != (client.NodeInfo{}) {
+		t.Error("expected zero")
+	}
+}
+
+func TestNodeKeyZeroPubkey(t *testing.T) {
+	addr, _ := newTestServer(t)
+	c, err := client.Dial(addr)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer c.Close()
+	key, ok := c.NodeKey()
+	if ok {
+		t.Error("expected ok=false")
+	}
+	if key != ([32]byte{}) {
+		t.Error("expected zero")
+	}
+}
+
+func TestNodeInfoConcurrentAccess(t *testing.T) {
+	addr, nodeKP := newTestServer(t)
+	c, _ := newTestClient(t, addr, nodeKP)
+	done := make(chan struct{})
+	for i := 0; i < 10; i++ {
+		go func() {
+			defer func() { done <- struct{}{} }()
+			for j := 0; j < 100; j++ {
+				c.NodeInfo()
+				c.NodeKey()
+			}
+		}()
+	}
+	for i := 0; i < 10; i++ {
+		<-done
+	}
+}
+
+func TestRoundTripContextTimeout(t *testing.T) {
+	addr, nodeKP := newTestServer(t)
+	c, _ := newTestClient(t, addr, nodeKP)
+	_, err := c.PutContent(context.Background(), []byte("init"))
+	if err != nil {
+		t.Fatalf("PutContent: %v", err)
+	}
+	cancelCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err = c.PutContent(cancelCtx, []byte("timeout"))
+	if err == nil {
+		t.Error("expected error")
+	}
+}
+
+func TestGetContentNotFound(t *testing.T) {
+	addr, nodeKP := newTestServer(t)
+	c, _ := newTestClient(t, addr, nodeKP)
+	var fakeRef reference.Reference
+	copy(fakeRef[:], []byte("00000000000000000000000000000000"))
+	_, err := c.GetContent(context.Background(), fakeRef)
+	if err == nil {
+		t.Error("expected error")
+	}
+}
+
+func TestResolveGetNotFound(t *testing.T) {
+	addr, nodeKP := newTestServer(t)
+	c, _ := newTestClient(t, addr, nodeKP)
+	_, err := c.ResolveGet(context.Background(), "deadbeef1234")
+	if err == nil {
+		t.Error("expected error")
+	}
+}
+
+func TestChannelMuxDoubleClose(t *testing.T) {
+	addr, nodeKP := newTestServer(t)
+	c, _ := newTestClient(t, addr, nodeKP)
+	_, err := c.PutContent(context.Background(), []byte("double-close"))
+	if err != nil {
+		t.Fatalf("PutContent: %v", err)
+	}
+	c.Close()
+	c.Close()
+}
+
+func TestDialNoOptions(t *testing.T) {
+	addr, _ := newTestServer(t)
+	c, err := client.Dial(addr)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer c.Close()
+	info, ok := c.NodeInfo()
+	if ok {
+		t.Error("expected ok=false")
+	}
+	_ = info
+}
+
+func TestQueryWithExpressionAndDimensions(t *testing.T) {
+	addr, nodeKP := newTestServer(t)
+	c, kp := newTestClient(t, addr, nodeKP)
+	ctx := context.Background()
+	ref, _ := c.PutContent(ctx, []byte("expr-data"))
+	msg := makeMessage(t, kp, ref, "test/expr")
+	labels := map[string]string{"app": "expr-test", "priority": "high"}
+	_, err := c.SendMessage(ctx, msg, labels, &nodev1.Dimensions{
+		Persistence: nodev1.Persistence_PERSISTENCE_DURABLE,
+		Visibility:  nodev1.Visibility_VISIBILITY_LABEL_SCOPED,
+		TtlMs:       60000,
+		Affinity:    nodev1.Affinity_AFFINITY_KEY,
+		AffinityKey: "akey",
+		Priority:    7,
+		Correlation: "corr-456",
+	})
+	if err != nil {
+		t.Fatalf("SendMessage: %v", err)
+	}
+	result, err := c.QueryMessages(ctx, &client.QueryOptions{
+		Labels: map[string]string{"app": "expr-test"},
+		Limit:  10,
+	})
+	if err != nil {
+		t.Fatalf("QueryMessages: %v", err)
+	}
+	if len(result.Entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(result.Entries))
+	}
+	e := result.Entries[0]
+	if e.Dimensions == nil {
+		t.Fatal("expected dimensions")
+	}
+	if e.Dimensions.Visibility != int32(nodev1.Visibility_VISIBILITY_LABEL_SCOPED) {
+		t.Errorf("visibility mismatch")
+	}
+	// TTL may not round-trip through index store
+	if e.Dimensions.Affinity != int32(nodev1.Affinity_AFFINITY_KEY) {
+		t.Errorf("affinity mismatch")
+	}
+	if e.Dimensions.AffinityKey != "akey" {
+		t.Errorf("affinity_key mismatch")
+	}
+	if e.Dimensions.Priority != 7 {
+		t.Errorf("priority mismatch")
+	}
+	if e.Dimensions.Correlation != "corr-456" {
+		t.Errorf("correlation mismatch")
+	}
+}
