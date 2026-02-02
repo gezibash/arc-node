@@ -17,6 +17,7 @@ import (
 	"github.com/gezibash/arc-node/pkg/envelope"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // streamWriter serializes concurrent sends on a bidi stream.
@@ -113,6 +114,8 @@ func (s *nodeService) Channel(stream nodev1.NodeService_ChannelServer) error {
 			s.handleNack(ctx, writer, reqID, f.Nack)
 		case *nodev1.ClientFrame_BatchPublish:
 			s.handleBatchPublish(ctx, writer, reqID, f.BatchPublish)
+		case *nodev1.ClientFrame_Ping:
+			s.handlePing(writer, reqID, f.Ping)
 		default:
 			sendErr(writer, reqID, codes.InvalidArgument, "unknown frame type")
 		}
@@ -630,6 +633,16 @@ func (s *nodeService) handleBatchPublish(ctx context.Context, w *streamWriter, r
 	_ = w.send(&nodev1.ServerFrame{
 		RequestId: reqID,
 		Frame:     &nodev1.ServerFrame_BatchReceipt{BatchReceipt: &nodev1.BatchReceiptFrame{Results: results}},
+	})
+}
+
+func (s *nodeService) handlePing(w *streamWriter, reqID uint64, f *nodev1.PingFrame) {
+	_ = w.send(&nodev1.ServerFrame{
+		RequestId: reqID,
+		Frame: &nodev1.ServerFrame_Pong{Pong: &nodev1.PongFrame{
+			Nonce:      f.Nonce,
+			ServerTime: timestamppb.Now(),
+		}},
 	})
 }
 

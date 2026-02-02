@@ -43,8 +43,9 @@ type PingTickMsg struct{}
 
 // PingResultMsg carries the result of a node ping.
 type PingResultMsg struct {
-	Latency time.Duration
-	Err     error
+	Latency    time.Duration
+	ServerTime time.Time
+	Err        error
 }
 
 // ErrMsg is a generic error message any app can emit.
@@ -122,7 +123,7 @@ func (b Base) connectSubscription() tea.Cmd {
 	return func() tea.Msg {
 		if b.Client != nil {
 			if _, ok := b.Client.NodeKey(); !ok {
-				if _, err := b.Client.Ping(ctx); err != nil {
+				if _, _, err := b.Client.Ping(ctx); err != nil {
 					cancel()
 					return SubClosedMsg{}
 				}
@@ -169,11 +170,11 @@ func (b Base) pingNode() tea.Cmd {
 	c := b.Client
 	ctx := b.Ctx
 	return func() tea.Msg {
-		latency, err := c.Ping(ctx)
+		latency, serverTime, err := c.Ping(ctx)
 		if err != nil {
 			return PingResultMsg{Err: err}
 		}
-		return PingResultMsg{Latency: latency}
+		return PingResultMsg{Latency: latency, ServerTime: serverTime}
 	}
 }
 

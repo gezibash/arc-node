@@ -1871,3 +1871,23 @@ func TestChannelBatchPublish(t *testing.T) {
 		t.Fatalf("expected 3 entries, got %d", len(result.Entries))
 	}
 }
+
+func TestChannelPingPong(t *testing.T) {
+	_, kp, addr := newTestServer(t)
+	c, _ := newTestClient(t, addr, kp)
+	ctx := context.Background()
+
+	latency, serverTime, err := c.Ping(ctx)
+	if err != nil {
+		t.Fatalf("Ping: %v", err)
+	}
+	if latency <= 0 {
+		t.Errorf("expected positive latency, got %v", latency)
+	}
+	if serverTime.IsZero() {
+		t.Error("expected non-zero server time")
+	}
+	if time.Since(serverTime) > 5*time.Second {
+		t.Errorf("server time %v is too far from now", serverTime)
+	}
+}

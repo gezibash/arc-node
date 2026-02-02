@@ -1,7 +1,9 @@
 package client
 
 import (
+	"bytes"
 	"context"
+	"crypto/rand"
 	"fmt"
 	"sync"
 	"time"
@@ -166,14 +168,41 @@ func (c *Client) NodeKey() (identity.PublicKey, bool) {
 	return info.PublicKey, true
 }
 
-// Ping measures round-trip latency to the node.
-func (c *Client) Ping(ctx context.Context) (time.Duration, error) {
+// Ping measures round-trip latency to the node using a dedicated PingFrame.
+// Returns the round-trip duration, the server's wall-clock time, and any error.
+func (c *Client) Ping(ctx context.Context) (time.Duration, time.Time, error) {
+	nonce := make([]byte, 8)
+	if _, err := rand.Read(nonce); err != nil {
+		return 0, time.Time{}, fmt.Errorf("generate nonce: %w", err)
+	}
+
+	mux, err := c.channel(ctx)
+	if err != nil {
+		return 0, time.Time{}, fmt.Errorf("channel unavailable: %w", err)
+	}
+
 	start := time.Now()
-	_, err := c.QueryMessages(ctx, &QueryOptions{
-		Expression: "false",
-		Limit:      1,
+	resp, err := mux.roundTrip(ctx, &nodev1.ClientFrame{
+		Frame: &nodev1.ClientFrame_Ping{Ping: &nodev1.PingFrame{Nonce: nonce}},
 	})
-	return time.Since(start), err
+	rtt := time.Since(start)
+	if err != nil {
+		return 0, time.Time{}, err
+	}
+
+	pong, ok := resp.Frame.(*nodev1.ServerFrame_Pong)
+	if !ok {
+		return 0, time.Time{}, fmt.Errorf("unexpected server frame type")
+	}
+	if !bytes.Equal(pong.Pong.Nonce, nonce) {
+		return 0, time.Time{}, fmt.Errorf("nonce mismatch")
+	}
+
+	var serverTime time.Time
+	if pong.Pong.ServerTime != nil {
+		serverTime = pong.Pong.ServerTime.AsTime()
+	}
+	return rtt, serverTime, nil
 }
 
 // GetKind indicates whether a ResolveGet result is a blob or message.

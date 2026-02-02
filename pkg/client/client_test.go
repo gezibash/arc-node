@@ -347,12 +347,18 @@ func TestPing(t *testing.T) {
 	c, _ := newTestClient(t, addr, nodeKP)
 	ctx := context.Background()
 
-	d, err := c.Ping(ctx)
+	d, serverTime, err := c.Ping(ctx)
 	if err != nil {
 		t.Fatalf("Ping: %v", err)
 	}
 	if d <= 0 {
 		t.Errorf("Ping duration = %v, want > 0", d)
+	}
+	if serverTime.IsZero() {
+		t.Error("expected non-zero server time")
+	}
+	if time.Since(serverTime) > 5*time.Second {
+		t.Errorf("server time %v is too far from now", serverTime)
 	}
 }
 
