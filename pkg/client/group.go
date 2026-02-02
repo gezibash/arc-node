@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
+	nodev1 "github.com/gezibash/arc-node/api/arc/node/v1"
 	"github.com/gezibash/arc-node/pkg/group"
 	"github.com/gezibash/arc/v2/pkg/identity"
 	"github.com/gezibash/arc/v2/pkg/reference"
@@ -44,7 +45,10 @@ func (c *Client) PublishManifest(ctx context.Context, groupKP *identity.Keypair,
 		"group":       hex.EncodeToString(manifest.ID[:]),
 		"contentType": "arc/group.manifest",
 	}
-	if _, err := c.SendMessage(ctx, msg, labels); err != nil {
+	if _, err := c.SendMessage(ctx, msg, labels, &nodev1.Dimensions{
+		Persistence: nodev1.Persistence_PERSISTENCE_DURABLE,
+		Visibility:  nodev1.Visibility_VISIBILITY_LABEL_SCOPED,
+	}); err != nil {
 		return reference.Reference{}, fmt.Errorf("send manifest message: %w", err)
 	}
 

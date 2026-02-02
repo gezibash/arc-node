@@ -51,7 +51,7 @@ func TestChannelPublishQueryRoundTrip(t *testing.T) {
 	ctx := context.Background()
 
 	msg := makeMessage(t, callerKP, "text/plain")
-	ref, err := c.SendMessage(ctx, msg, map[string]string{"ch": "test"})
+	ref, err := c.SendMessage(ctx, msg, map[string]string{"ch": "test"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE})
 	if err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestChannelSubscribeDelivery(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	msg := makeMessage(t, callerKP, "text/plain")
-	if _, err := c.SendMessage(ctx, msg, nil); err != nil {
+	if _, err := c.SendMessage(ctx, msg, nil, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
 
@@ -122,7 +122,7 @@ func TestChannelUnsubscribeStopsDelivery(t *testing.T) {
 
 	// Send a message — should not arrive.
 	msg := makeMessage(t, callerKP, "text/plain")
-	if _, err := c.SendMessage(ctx, msg, nil); err != nil {
+	if _, err := c.SendMessage(ctx, msg, nil, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
 
@@ -156,7 +156,7 @@ func TestChannelPublishInvalidSignature(t *testing.T) {
 	msg := makeMessage(t, callerKP, "text/plain")
 	msg.Signature[0] ^= 0xFF
 
-	_, err := c.SendMessage(ctx, msg, nil)
+	_, err := c.SendMessage(ctx, msg, nil, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE})
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -222,7 +222,7 @@ func TestChannelDeliveryId(t *testing.T) {
 	msg := makeMessage(t, callerKP, "text/plain")
 	if _, err := c.SendMessage(ctx, msg, map[string]string{
 		"delivery": "at-least-once",
-	}); err != nil {
+	}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
 
@@ -242,11 +242,11 @@ func TestChannelQueryWithExpression(t *testing.T) {
 	ctx := context.Background()
 
 	msg := makeMessage(t, callerKP, "text/plain")
-	if _, err := c.SendMessage(ctx, msg, map[string]string{"priority": "high"}); err != nil {
+	if _, err := c.SendMessage(ctx, msg, map[string]string{"priority": "high"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
 	msg2 := makeMessage(t, callerKP, "text/plain")
-	if _, err := c.SendMessage(ctx, msg2, map[string]string{"priority": "low"}); err != nil {
+	if _, err := c.SendMessage(ctx, msg2, map[string]string{"priority": "low"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
 
@@ -278,13 +278,13 @@ func TestChannelSubscribeWithLabels(t *testing.T) {
 
 	// Non-matching.
 	msg1 := makeMessage(t, callerKP, "text/plain")
-	if _, err := c.SendMessage(ctx, msg1, map[string]string{"env": "dev"}); err != nil {
+	if _, err := c.SendMessage(ctx, msg1, map[string]string{"env": "dev"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
 
 	// Matching.
 	msg2 := makeMessage(t, callerKP, "text/plain")
-	if _, err := c.SendMessage(ctx, msg2, map[string]string{"env": "prod"}); err != nil {
+	if _, err := c.SendMessage(ctx, msg2, map[string]string{"env": "prod"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
 
@@ -318,7 +318,7 @@ func TestChannelAckByDeliveryId(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	msg := makeMessage(t, callerKP, "text/plain")
-	if _, err := c.SendMessage(ctx, msg, nil); err != nil {
+	if _, err := c.SendMessage(ctx, msg, nil, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
 
@@ -346,7 +346,7 @@ func TestChannelResolveGet(t *testing.T) {
 
 	// Publish a message referencing that content.
 	msg := makeMessage(t, callerKP, "text/plain")
-	if _, err := c.SendMessage(ctx, msg, map[string]string{"rg": "test"}); err != nil {
+	if _, err := c.SendMessage(ctx, msg, map[string]string{"rg": "test"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
 
@@ -391,7 +391,7 @@ func TestChannelSeekByTimestamp(t *testing.T) {
 		if err := message.Sign(&msg, callerKP); err != nil {
 			t.Fatalf("sign: %v", err)
 		}
-		if _, err := c.SendMessage(ctx, msg, map[string]string{"seek": "test"}); err != nil {
+		if _, err := c.SendMessage(ctx, msg, map[string]string{"seek": "test"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
 			t.Fatalf("SendMessage ts=%d: %v", ts, err)
 		}
 	}
@@ -476,7 +476,7 @@ func TestChannelQueryPagination(t *testing.T) {
 	const n = 5
 	for i := 0; i < n; i++ {
 		msg := makeMessage(t, callerKP, "text/plain")
-		if _, err := c.SendMessage(ctx, msg, map[string]string{"pg": "test"}); err != nil {
+		if _, err := c.SendMessage(ctx, msg, map[string]string{"pg": "test"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
 			t.Fatalf("SendMessage[%d]: %v", i, err)
 		}
 	}
@@ -543,7 +543,7 @@ func TestChannelQueryDescending(t *testing.T) {
 		if err := message.Sign(&msg, callerKP); err != nil {
 			t.Fatalf("sign: %v", err)
 		}
-		if _, err := c.SendMessage(ctx, msg, map[string]string{"desc": "test"}); err != nil {
+		if _, err := c.SendMessage(ctx, msg, map[string]string{"desc": "test"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
 			t.Fatalf("SendMessage ts=%d: %v", ts, err)
 		}
 	}
@@ -587,12 +587,12 @@ func TestChannelMultipleSubscriptions(t *testing.T) {
 
 	// Send message matching sub 1.
 	msg1 := makeMessage(t, callerKP, "text/plain")
-	if _, err := c1.SendMessage(ctx, msg1, map[string]string{"ms": "a"}); err != nil {
+	if _, err := c1.SendMessage(ctx, msg1, map[string]string{"ms": "a"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
 		t.Fatalf("SendMessage a: %v", err)
 	}
 	// Send message matching sub 2.
 	msg2 := makeMessage(t, callerKP, "text/plain")
-	if _, err := c1.SendMessage(ctx, msg2, map[string]string{"ms": "b"}); err != nil {
+	if _, err := c1.SendMessage(ctx, msg2, map[string]string{"ms": "b"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
 		t.Fatalf("SendMessage b: %v", err)
 	}
 
@@ -657,9 +657,9 @@ func TestChannelSendWithDimensions(t *testing.T) {
 		Priority:    5,
 		TtlMs:       60000,
 	}
-	ref, err := c.SendMessageWithDimensions(ctx, msg, map[string]string{"dim": "test"}, dims)
+	ref, err := c.SendMessage(ctx, msg, map[string]string{"dim": "test"}, dims)
 	if err != nil {
-		t.Fatalf("SendMessageWithDimensions: %v", err)
+		t.Fatalf("SendMessage: %v", err)
 	}
 	if ref == (reference.Reference{}) {
 		t.Fatal("zero reference")
@@ -712,8 +712,8 @@ func TestChannelAckByDeliveryIdAtLeastOnce(t *testing.T) {
 		Persistence: nodev1.Persistence_PERSISTENCE_DURABLE,
 		Delivery:    nodev1.Delivery_DELIVERY_AT_LEAST_ONCE,
 	}
-	if _, err := c.SendMessageWithDimensions(ctx, msg, map[string]string{"ack": "test"}, dims); err != nil {
-		t.Fatalf("SendMessageWithDimensions: %v", err)
+	if _, err := c.SendMessage(ctx, msg, map[string]string{"ack": "test"}, dims); err != nil {
+		t.Fatalf("SendMessage: %v", err)
 	}
 
 	// The client auto-acks delivery IDs. Verify the entry arrives.
@@ -857,7 +857,7 @@ func TestChannelResolveGetIndexMatch(t *testing.T) {
 	ctx := context.Background()
 
 	msg := makeMessage(t, callerKP, "text/plain")
-	ref, err := c.SendMessage(ctx, msg, map[string]string{"rg2": "test"})
+	ref, err := c.SendMessage(ctx, msg, map[string]string{"rg2": "test"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE})
 	if err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
@@ -896,13 +896,13 @@ func TestChannelSubscribeWithExpression(t *testing.T) {
 
 	// Non-matching.
 	msg1 := makeMessage(t, callerKP, "text/plain")
-	if _, err := c.SendMessage(ctx, msg1, map[string]string{"kind": "boring"}); err != nil {
+	if _, err := c.SendMessage(ctx, msg1, map[string]string{"kind": "boring"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
 
 	// Matching.
 	msg2 := makeMessage(t, callerKP, "text/plain")
-	if _, err := c.SendMessage(ctx, msg2, map[string]string{"kind": "important"}); err != nil {
+	if _, err := c.SendMessage(ctx, msg2, map[string]string{"kind": "important"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
 
@@ -926,11 +926,11 @@ func TestChannelQueryWithLabelFilter(t *testing.T) {
 	ctx := context.Background()
 
 	msg1 := makeMessage(t, callerKP, "text/plain")
-	if _, err := c.SendMessage(ctx, msg1, map[string]string{"app": "x", "env": "prod"}); err != nil {
+	if _, err := c.SendMessage(ctx, msg1, map[string]string{"app": "x", "env": "prod"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
 	msg2 := makeMessage(t, callerKP, "text/plain")
-	if _, err := c.SendMessage(ctx, msg2, map[string]string{"app": "x", "env": "staging"}); err != nil {
+	if _, err := c.SendMessage(ctx, msg2, map[string]string{"app": "x", "env": "staging"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
 
@@ -1032,7 +1032,7 @@ func TestChannelDurableSubscription(t *testing.T) {
 		if err := message.Sign(&msg, callerKP); err != nil {
 			t.Fatalf("sign: %v", err)
 		}
-		if _, err := c.SendMessage(ctx, msg, map[string]string{"durable": "test"}); err != nil {
+		if _, err := c.SendMessage(ctx, msg, map[string]string{"durable": "test"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
 			t.Fatalf("SendMessage: %v", err)
 		}
 	}
@@ -1093,8 +1093,8 @@ func TestChannelAtLeastOnceAutoAck(t *testing.T) {
 		Delivery:     nodev1.Delivery_DELIVERY_AT_LEAST_ONCE,
 		AckTimeoutMs: 500,
 	}
-	if _, err := c.SendMessageWithDimensions(ctx, msg, map[string]string{"alo": "test"}, dims); err != nil {
-		t.Fatalf("SendMessageWithDimensions: %v", err)
+	if _, err := c.SendMessage(ctx, msg, map[string]string{"alo": "test"}, dims); err != nil {
+		t.Fatalf("SendMessage: %v", err)
 	}
 
 	select {
@@ -1531,9 +1531,9 @@ func TestHandleAckLegacyReference(t *testing.T) {
 		Persistence: nodev1.Persistence_PERSISTENCE_DURABLE,
 		Delivery:    nodev1.Delivery_DELIVERY_AT_LEAST_ONCE,
 	}
-	ref, err := c.SendMessageWithDimensions(ctx, msg, nil, dims)
+	ref, err := c.SendMessage(ctx, msg, nil, dims)
 	if err != nil {
-		t.Fatalf("SendMessageWithDimensions: %v", err)
+		t.Fatalf("SendMessage: %v", err)
 	}
 
 	// Receive the delivery (client auto-acks via delivery_id).
@@ -1592,7 +1592,7 @@ func TestChannelSubscribeDuplicateReplaces(t *testing.T) {
 	// Since the SDK doesn't support multiple subscriptions on the same
 	// channel easily, just verify the first one still works.
 	msg := makeMessage(t, callerKP, "text/plain")
-	if _, err := c.SendMessage(ctx, msg, nil); err != nil {
+	if _, err := c.SendMessage(ctx, msg, nil, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
 
@@ -1635,7 +1635,7 @@ func TestBadgerIntegration(t *testing.T) {
 		ctx := context.Background()
 
 		msg := makeMessage(t, callerKP, "text/plain")
-		ref, err := c.SendMessage(ctx, msg, map[string]string{"bg": "test"})
+		ref, err := c.SendMessage(ctx, msg, map[string]string{"bg": "test"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE})
 		if err != nil {
 			t.Fatalf("SendMessage: %v", err)
 		}
@@ -1668,7 +1668,7 @@ func TestBadgerIntegration(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 
 		msg := makeMessage(t, callerKP, "text/plain")
-		if _, err := c.SendMessage(ctx, msg, map[string]string{"bgsub": "test"}); err != nil {
+		if _, err := c.SendMessage(ctx, msg, map[string]string{"bgsub": "test"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
 			t.Fatalf("SendMessage: %v", err)
 		}
 
@@ -1696,9 +1696,9 @@ func TestBadgerIntegration(t *testing.T) {
 			Ordering:    nodev1.Ordering_ORDERING_FIFO,
 			Correlation: "corr-bg",
 		}
-		ref, err := c.SendMessageWithDimensions(ctx, msg, map[string]string{"bgdims": "test"}, dims)
+		ref, err := c.SendMessage(ctx, msg, map[string]string{"bgdims": "test"}, dims)
 		if err != nil {
-			t.Fatalf("SendMessageWithDimensions: %v", err)
+			t.Fatalf("SendMessage: %v", err)
 		}
 		if ref == (reference.Reference{}) {
 			t.Fatal("zero reference")
@@ -1736,11 +1736,11 @@ func TestBadgerIntegration(t *testing.T) {
 		ctx := context.Background()
 
 		msg := makeMessage(t, callerKP, "text/plain")
-		if _, err := c.SendMessage(ctx, msg, map[string]string{"bgexpr": "high"}); err != nil {
+		if _, err := c.SendMessage(ctx, msg, map[string]string{"bgexpr": "high"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
 			t.Fatalf("SendMessage: %v", err)
 		}
 		msg2 := makeMessage(t, callerKP, "text/plain")
-		if _, err := c.SendMessage(ctx, msg2, map[string]string{"bgexpr": "low"}); err != nil {
+		if _, err := c.SendMessage(ctx, msg2, map[string]string{"bgexpr": "low"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
 			t.Fatalf("SendMessage: %v", err)
 		}
 

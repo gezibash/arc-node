@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
+	nodev1 "github.com/gezibash/arc-node/api/arc/node/v1"
 	"github.com/gezibash/arc/v2/pkg/identity"
 	"github.com/gezibash/arc/v2/pkg/message"
 	"github.com/gezibash/arc/v2/pkg/reference"
@@ -88,7 +89,9 @@ func newPublishCmd(n *nodeCmd) *cobra.Command {
 			}
 
 			slog.DebugContext(cmd.Context(), "sending message", "content_ref", reference.Hex(contentRef), "labels", labelMap)
-			ref, err := n.client.SendMessage(cmd.Context(), msg, labelMap)
+			ref, err := n.client.SendMessage(cmd.Context(), msg, labelMap, &nodev1.Dimensions{
+				Persistence: nodev1.Persistence_PERSISTENCE_DURABLE,
+			})
 			if err != nil {
 				return fmt.Errorf("send message: %w", err)
 			}

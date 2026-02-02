@@ -6,6 +6,7 @@ import (
 
 	"encoding/hex"
 
+	nodev1 "github.com/gezibash/arc-node/api/arc/node/v1"
 	"github.com/gezibash/arc/v2/pkg/identity"
 	"github.com/gezibash/arc/v2/pkg/message"
 	"github.com/gezibash/arc/v2/pkg/reference"
@@ -36,7 +37,10 @@ func (j *Journal) Write(ctx context.Context, plaintext []byte, labels map[string
 	labelMap := j.ownerLabels(labels)
 	labelMap["entry"] = reference.Hex(entryRef)
 
-	ref, err := j.client.SendMessage(ctx, msg, labelMap)
+	ref, err := j.client.SendMessage(ctx, msg, labelMap, &nodev1.Dimensions{
+		Persistence: nodev1.Persistence_PERSISTENCE_DURABLE,
+		Visibility:  nodev1.Visibility_VISIBILITY_PRIVATE,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("send message: %w", err)
 	}

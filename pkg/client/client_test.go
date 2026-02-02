@@ -148,7 +148,7 @@ func TestSendAndQueryMessages(t *testing.T) {
 		}
 		msg := makeMessage(t, kp, ref, "test/plain")
 		labels := map[string]string{"app": "test", "type": "msg"}
-		if _, err := c.SendMessage(ctx, msg, labels); err != nil {
+		if _, err := c.SendMessage(ctx, msg, labels, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
 			t.Fatalf("SendMessage[%d]: %v", i, err)
 		}
 	}
@@ -199,7 +199,7 @@ func TestSendAndQueryMessages(t *testing.T) {
 	}
 }
 
-func TestSendMessageWithDimensions(t *testing.T) {
+func TestSendMessage(t *testing.T) {
 	addr, nodeKP := newTestServer(t)
 	c, kp := newTestClient(t, addr, nodeKP)
 	ctx := context.Background()
@@ -215,8 +215,8 @@ func TestSendMessageWithDimensions(t *testing.T) {
 		Correlation: "corr-123",
 	}
 	labels := map[string]string{"app": "test", "type": "dims"}
-	if _, err := c.SendMessageWithDimensions(ctx, msg, labels, dims); err != nil {
-		t.Fatalf("SendMessageWithDimensions: %v", err)
+	if _, err := c.SendMessage(ctx, msg, labels, dims); err != nil {
+		t.Fatalf("SendMessage: %v", err)
 	}
 
 	result, err := c.QueryMessages(ctx, &client.QueryOptions{
@@ -261,7 +261,7 @@ func TestSubscribeMessages(t *testing.T) {
 
 	ref, _ := c.PutContent(ctx, []byte("sub-data"))
 	msg := makeMessage(t, kp, ref, "test/sub")
-	if _, err := c.SendMessage(ctx, msg, map[string]string{"app": "sub-test"}); err != nil {
+	if _, err := c.SendMessage(ctx, msg, map[string]string{"app": "sub-test"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
 
@@ -292,7 +292,7 @@ func TestResolveGet(t *testing.T) {
 		"type":    "resolve",
 		"content": reference.Hex(contentRef),
 	}
-	msgRef, err := c.SendMessage(ctx, msg, labels)
+	msgRef, err := c.SendMessage(ctx, msg, labels, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE})
 	if err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
@@ -386,7 +386,7 @@ func TestSeek(t *testing.T) {
 
 	ref, _ := c.PutContent(ctx, []byte("seek"))
 	msg := makeMessage(t, kp, ref, "test/seek")
-	_, _ = c.SendMessage(ctx, msg, map[string]string{"app": "seek-test"})
+	_, _ = c.SendMessage(ctx, msg, map[string]string{"app": "seek-test"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE})
 
 	err = c.Seek(ctx, "default", time.Now().UnixMilli())
 	if err != nil {

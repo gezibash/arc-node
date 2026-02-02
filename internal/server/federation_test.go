@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	nodev1 "github.com/gezibash/arc-node/api/arc/node/v1"
 	"github.com/gezibash/arc-node/internal/blobstore"
 	blobphysical "github.com/gezibash/arc-node/internal/blobstore/physical"
 	_ "github.com/gezibash/arc-node/internal/blobstore/physical/memory"
@@ -85,7 +86,7 @@ func TestFederationPolicyEphemeral(t *testing.T) {
 		t.Fatalf("sign: %v", err)
 	}
 	// Send with ephemeral persistence via SendMessage (dimensions set via envelope).
-	if _, err := peerClient.SendMessage(ctx, msg, map[string]string{"type": "ephemeral-test"}); err != nil {
+	if _, err := peerClient.SendMessage(ctx, msg, map[string]string{"type": "ephemeral-test"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
 
@@ -134,7 +135,7 @@ func TestFederationPolicyTTL(t *testing.T) {
 	if err := message.Sign(&msg, callerKP); err != nil {
 		t.Fatalf("sign: %v", err)
 	}
-	if _, err := peerClient.SendMessage(ctx, msg, map[string]string{"env": "ttl-test"}); err != nil {
+	if _, err := peerClient.SendMessage(ctx, msg, map[string]string{"env": "ttl-test"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
 
@@ -193,7 +194,7 @@ func TestFederationDimensionPropagation(t *testing.T) {
 	if err := message.Sign(&msg, callerKP); err != nil {
 		t.Fatalf("sign: %v", err)
 	}
-	if _, err := peerClient.SendMessage(ctx, msg, map[string]string{"env": "dims-test"}); err != nil {
+	if _, err := peerClient.SendMessage(ctx, msg, map[string]string{"env": "dims-test"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
 

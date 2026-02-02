@@ -228,7 +228,7 @@ func TestSendMessageValid(t *testing.T) {
 	ctx := context.Background()
 
 	msg := makeMessage(t, callerKP, "text/plain")
-	ref, err := c.SendMessage(ctx, msg, nil)
+	ref, err := c.SendMessage(ctx, msg, nil, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE})
 	if err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
@@ -246,7 +246,7 @@ func TestSendMessageInvalidSignature(t *testing.T) {
 	// Tamper with signature
 	msg.Signature[0] ^= 0xFF
 
-	_, err := c.SendMessage(ctx, msg, nil)
+	_, err := c.SendMessage(ctx, msg, nil, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE})
 
 	if err == nil {
 		t.Fatal("expected error")
@@ -263,7 +263,7 @@ func TestSendMessageLabels(t *testing.T) {
 
 	msg := makeMessage(t, callerKP, "text/plain")
 	customLabels := map[string]string{"env": "test", "app": "arc"}
-	_, err := c.SendMessage(ctx, msg, customLabels)
+	_, err := c.SendMessage(ctx, msg, customLabels, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE})
 	if err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
@@ -300,7 +300,7 @@ func TestSendMessageWithoutContentType(t *testing.T) {
 	ctx := context.Background()
 
 	msg := makeMessage(t, callerKP, "") // empty content type
-	_, err := c.SendMessage(ctx, msg, nil)
+	_, err := c.SendMessage(ctx, msg, nil, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE})
 	if err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
@@ -328,7 +328,7 @@ func TestQueryMessagesBasic(t *testing.T) {
 	const n = 5
 	for i := 0; i < n; i++ {
 		msg := makeMessage(t, callerKP, "text/plain")
-		if _, err := c.SendMessage(ctx, msg, nil); err != nil {
+		if _, err := c.SendMessage(ctx, msg, nil, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
 			t.Fatalf("SendMessage[%d]: %v", i, err)
 		}
 	}
@@ -349,7 +349,7 @@ func TestQueryMessagesPagination(t *testing.T) {
 
 	for i := 0; i < 5; i++ {
 		msg := makeMessage(t, callerKP, "text/plain")
-		if _, err := c.SendMessage(ctx, msg, nil); err != nil {
+		if _, err := c.SendMessage(ctx, msg, nil, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
 			t.Fatalf("SendMessage[%d]: %v", i, err)
 		}
 	}
@@ -397,7 +397,7 @@ func TestQueryMessagesDescending(t *testing.T) {
 		if err := message.Sign(&msg, callerKP); err != nil {
 			t.Fatalf("sign: %v", err)
 		}
-		if _, err := c.SendMessage(ctx, msg, nil); err != nil {
+		if _, err := c.SendMessage(ctx, msg, nil, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
 			t.Fatalf("SendMessage[%d]: %v", i, err)
 		}
 	}
@@ -420,11 +420,11 @@ func TestQueryMessagesWithLabels(t *testing.T) {
 	ctx := context.Background()
 
 	msg1 := makeMessage(t, callerKP, "text/plain")
-	if _, err := c.SendMessage(ctx, msg1, map[string]string{"env": "prod"}); err != nil {
+	if _, err := c.SendMessage(ctx, msg1, map[string]string{"env": "prod"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
 	msg2 := makeMessage(t, callerKP, "text/plain")
-	if _, err := c.SendMessage(ctx, msg2, map[string]string{"env": "dev"}); err != nil {
+	if _, err := c.SendMessage(ctx, msg2, map[string]string{"env": "dev"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
 
@@ -445,11 +445,11 @@ func TestQueryMessagesWithExpression(t *testing.T) {
 	ctx := context.Background()
 
 	msg1 := makeMessage(t, callerKP, "text/plain")
-	if _, err := c.SendMessage(ctx, msg1, map[string]string{"priority": "high"}); err != nil {
+	if _, err := c.SendMessage(ctx, msg1, map[string]string{"priority": "high"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
 	msg2 := makeMessage(t, callerKP, "text/plain")
-	if _, err := c.SendMessage(ctx, msg2, map[string]string{"priority": "low"}); err != nil {
+	if _, err := c.SendMessage(ctx, msg2, map[string]string{"priority": "low"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
 
@@ -482,7 +482,7 @@ func TestSubscribeMessagesBasic(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	msg := makeMessage(t, callerKP, "text/plain")
-	if _, err := c.SendMessage(ctx, msg, nil); err != nil {
+	if _, err := c.SendMessage(ctx, msg, nil, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
 
@@ -512,12 +512,12 @@ func TestSubscribeMessagesWithLabels(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	msg1 := makeMessage(t, callerKP, "text/plain")
-	if _, err := c.SendMessage(ctx, msg1, map[string]string{"env": "dev"}); err != nil {
+	if _, err := c.SendMessage(ctx, msg1, map[string]string{"env": "dev"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
 
 	msg2 := makeMessage(t, callerKP, "text/plain")
-	if _, err := c.SendMessage(ctx, msg2, map[string]string{"env": "prod"}); err != nil {
+	if _, err := c.SendMessage(ctx, msg2, map[string]string{"env": "prod"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
 
@@ -721,7 +721,7 @@ func TestFederateReplicatesMessages(t *testing.T) {
 		t.Fatalf("sign message: %v", err)
 	}
 	t.Log("sending message")
-	if _, err := peer.SendMessage(ctx, msg, map[string]string{"env": "prod"}); err != nil {
+	if _, err := peer.SendMessage(ctx, msg, map[string]string{"env": "prod"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE}); err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
 
@@ -768,9 +768,9 @@ func TestSendMessageDimensionsRoundTrip(t *testing.T) {
 		TtlMs:       30000,
 		Ordering:    nodev1.Ordering_ORDERING_FIFO,
 	}
-	ref, err := c.SendMessageWithDimensions(ctx, msg, map[string]string{"drt": "test"}, dims)
+	ref, err := c.SendMessage(ctx, msg, map[string]string{"drt": "test"}, dims)
 	if err != nil {
-		t.Fatalf("SendMessageWithDimensions: %v", err)
+		t.Fatalf("SendMessage: %v", err)
 	}
 	if ref == (reference.Reference{}) {
 		t.Fatal("zero reference")
@@ -809,7 +809,7 @@ func TestSendMessageEmptyPayload(t *testing.T) {
 	ctx := context.Background()
 
 	// SendMessage with a zero message fails during canonical bytes serialization.
-	_, err := c.SendMessage(ctx, message.Message{}, nil)
+	_, err := c.SendMessage(ctx, message.Message{}, nil, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE})
 	if err == nil {
 		t.Fatal("expected error for empty message")
 	}
@@ -829,7 +829,7 @@ func TestSendMessageWrongSigner(t *testing.T) {
 		t.Fatalf("generate: %v", err)
 	}
 	msg := makeMessage(t, otherKP, "text/plain")
-	_, err = c.SendMessage(ctx, msg, nil)
+	_, err = c.SendMessage(ctx, msg, nil, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE})
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -864,9 +864,9 @@ func TestSendMessageWithCorrelation(t *testing.T) {
 		Persistence: nodev1.Persistence_PERSISTENCE_DURABLE,
 		Correlation: "corr-123",
 	}
-	_, err := c.SendMessageWithDimensions(ctx, msg, map[string]string{"corr": "test"}, dims)
+	_, err := c.SendMessage(ctx, msg, map[string]string{"corr": "test"}, dims)
 	if err != nil {
-		t.Fatalf("SendMessageWithDimensions: %v", err)
+		t.Fatalf("SendMessage: %v", err)
 	}
 
 	// Query for correlation label.
@@ -1117,7 +1117,7 @@ func TestPublishGroupMessageAsMember(t *testing.T) {
 		t.Fatalf("sign: %v", err)
 	}
 
-	_, err = memberClient.SendMessage(ctx, msg, map[string]string{"app": "group-test"})
+	_, err = memberClient.SendMessage(ctx, msg, map[string]string{"app": "group-test"}, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE})
 	if err != nil {
 		t.Fatalf("SendMessage as member: %v", err)
 	}
@@ -1155,7 +1155,7 @@ func TestPublishGroupManifestNonMember(t *testing.T) {
 		t.Fatalf("sign: %v", err)
 	}
 
-	_, err = strangerClient.SendMessage(ctx, msg, nil)
+	_, err = strangerClient.SendMessage(ctx, msg, nil, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE})
 	if err == nil {
 		t.Fatal("expected error for non-member publish")
 	}

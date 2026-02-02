@@ -257,35 +257,9 @@ func (c *Client) GetContent(ctx context.Context, ref reference.Reference) ([]byt
 	return rf.Response.Data, nil
 }
 
-func (c *Client) SendMessage(ctx context.Context, msg message.Message, labels map[string]string) (reference.Reference, error) {
-	canonical, err := message.CanonicalBytes(msg)
-	if err != nil {
-		return reference.Reference{}, fmt.Errorf("canonical bytes: %w", err)
-	}
-	mux, err := c.channel(ctx)
-	if err != nil {
-		return reference.Reference{}, fmt.Errorf("channel unavailable: %w", err)
-	}
-	resp, err := mux.roundTrip(ctx, &nodev1.ClientFrame{
-		Frame: &nodev1.ClientFrame_Publish{Publish: &nodev1.PublishFrame{
-			Message: canonical,
-			Labels:  labels,
-		}},
-	})
-	if err != nil {
-		return reference.Reference{}, err
-	}
-	rc, ok := resp.Frame.(*nodev1.ServerFrame_Receipt)
-	if !ok {
-		return reference.Reference{}, fmt.Errorf("unexpected server frame type")
-	}
-	var ref reference.Reference
-	copy(ref[:], rc.Receipt.Reference)
-	return ref, nil
-}
-
-// SendMessageWithDimensions sends a signed message with explicit dimensions.
-func (c *Client) SendMessageWithDimensions(ctx context.Context, msg message.Message, labels map[string]string, dims *nodev1.Dimensions) (reference.Reference, error) {
+// SendMessage sends a signed message with explicit dimensions.
+// Every caller must specify dimensions — they are the protocol.
+func (c *Client) SendMessage(ctx context.Context, msg message.Message, labels map[string]string, dims *nodev1.Dimensions) (reference.Reference, error) {
 	canonical, err := message.CanonicalBytes(msg)
 	if err != nil {
 		return reference.Reference{}, fmt.Errorf("canonical bytes: %w", err)
@@ -304,12 +278,12 @@ func (c *Client) SendMessageWithDimensions(ctx context.Context, msg message.Mess
 	if err != nil {
 		return reference.Reference{}, err
 	}
-	rc2, ok := resp.Frame.(*nodev1.ServerFrame_Receipt)
+	rc, ok := resp.Frame.(*nodev1.ServerFrame_Receipt)
 	if !ok {
 		return reference.Reference{}, fmt.Errorf("unexpected server frame type")
 	}
 	var ref reference.Reference
-	copy(ref[:], rc2.Receipt.Reference)
+	copy(ref[:], rc.Receipt.Reference)
 	return ref, nil
 }
 

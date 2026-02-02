@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 
+	nodev1 "github.com/gezibash/arc-node/api/arc/node/v1"
 	"github.com/gezibash/arc-node/pkg/client"
 	"github.com/gezibash/arc/v2/pkg/identity"
 	"github.com/gezibash/arc/v2/pkg/message"
@@ -163,7 +164,10 @@ func (t *Threads) PushSearchIndex(ctx context.Context, idx *SearchIndex) (refere
 		"db-hash":     reference.Hex(dbHash),
 	}
 
-	ref, err := t.client.SendMessage(ctx, msg, labels)
+	ref, err := t.client.SendMessage(ctx, msg, labels, &nodev1.Dimensions{
+		Persistence: nodev1.Persistence_PERSISTENCE_DURABLE,
+		Visibility:  nodev1.Visibility_VISIBILITY_PRIVATE,
+	})
 	if err != nil {
 		return reference.Reference{}, fmt.Errorf("send search index message: %w", err)
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	nodev1 "github.com/gezibash/arc-node/api/arc/node/v1"
 	"github.com/gezibash/arc-node/pkg/client"
 	"github.com/gezibash/arc/v2/pkg/message"
 	"github.com/gezibash/arc/v2/pkg/reference"
@@ -77,7 +78,10 @@ func (j *Journal) Edit(ctx context.Context, oldEntryRef reference.Reference, new
 	newEntryRef := ComputeEntryRef(newContentRef, msg.Timestamp, pub)
 	labelMap["entry"] = reference.Hex(newEntryRef)
 
-	ref, err := j.client.SendMessage(ctx, msg, labelMap)
+	ref, err := j.client.SendMessage(ctx, msg, labelMap, &nodev1.Dimensions{
+		Persistence: nodev1.Persistence_PERSISTENCE_DURABLE,
+		Visibility:  nodev1.Visibility_VISIBILITY_PRIVATE,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("send message: %w", err)
 	}

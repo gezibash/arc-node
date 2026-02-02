@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
+	nodev1 "github.com/gezibash/arc-node/api/arc/node/v1"
 	"github.com/gezibash/arc/v2/pkg/message"
 )
 
@@ -30,7 +31,10 @@ func (d *DM) Send(ctx context.Context, plaintext []byte, labels map[string]strin
 
 	labelMap := d.conversationLabels(labels)
 
-	ref, err := d.client.SendMessage(ctx, msg, labelMap)
+	ref, err := d.client.SendMessage(ctx, msg, labelMap, &nodev1.Dimensions{
+		Persistence: nodev1.Persistence_PERSISTENCE_DURABLE,
+		Visibility:  nodev1.Visibility_VISIBILITY_PRIVATE,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("send message: %w", err)
 	}
