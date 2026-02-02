@@ -1755,3 +1755,47 @@ func TestBadgerIntegration(t *testing.T) {
 		}
 	})
 }
+
+func TestChannelBatchPublish(t *testing.T) {
+	_, kp, addr := newTestServer(t)
+	c, callerKP := newTestClient(t, addr, kp)
+	ctx := context.Background()
+
+	// Build a batch with 3 valid messages and 1 invalid (empty bytes).
+	var msgs []client.BatchMessage
+	for i := 0; i < 3; i++ {
+		msg := makeMessage(t, callerKP, "text/plain")
+		msgs = append(msgs, client.BatchMessage{
+			Message:    msg,
+			Labels:     map[string]string{"batch": "test", "i": fmt.Sprintf("%d", i)},
+			Dimensions: &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE},
+		})
+	}
+
+	results, err := c.BatchSendMessages(ctx, msgs)
+	if err != nil {
+		t.Fatalf("BatchSendMessages: %v", err)
+	}
+	if len(results) != 3 {
+		t.Fatalf("expected 3 results, got %d", len(results))
+	}
+	for i, r := range results {
+		if r.Err != nil {
+			t.Errorf("result[%d] unexpected error: %v", i, r.Err)
+		}
+		if r.Ref == (reference.Reference{}) {
+			t.Errorf("result[%d] zero reference", i)
+		}
+	}
+
+	// Verify all 3 are queryable.
+	result, err := c.QueryMessages(ctx, &client.QueryOptions{
+		Labels: map[string]string{"batch": "test"},
+	})
+	if err != nil {
+		t.Fatalf("QueryMessages: %v", err)
+	}
+	if len(result.Entries) != 3 {
+		t.Fatalf("expected 3 entries, got %d", len(result.Entries))
+	}
+}
