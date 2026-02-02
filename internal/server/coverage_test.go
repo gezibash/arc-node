@@ -124,9 +124,9 @@ func TestResolveGetMessageHitViaPrefix(t *testing.T) {
 	ctx := context.Background()
 
 	msg := makeMessage(t, callerKP, "text/plain")
-	ref, _ := c.SendMessage(ctx, msg, map[string]string{"rg": "cov"}, nil)
+	pubResult, _ := c.SendMessage(ctx, msg, map[string]string{"rg": "cov"}, nil)
 
-	prefix := hex.EncodeToString(ref[:])[:8]
+	prefix := hex.EncodeToString(pubResult.Ref[:])[:8]
 	result, err := c.ResolveGet(ctx, prefix)
 	if err != nil {
 		t.Fatalf("ResolveGet: %v", err)

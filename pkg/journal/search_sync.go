@@ -151,7 +151,7 @@ func (j *Journal) PushSearchIndex(ctx context.Context, idx *SearchIndex) (refere
 		"db-hash":     reference.Hex(dbHash),
 	}
 
-	ref, err := j.client.SendMessage(ctx, msg, labels, &nodev1.Dimensions{
+	result, err := j.client.SendMessage(ctx, msg, labels, &nodev1.Dimensions{
 		Persistence: nodev1.Persistence_PERSISTENCE_DURABLE,
 		Visibility:  nodev1.Visibility_VISIBILITY_PRIVATE,
 	})
@@ -159,7 +159,7 @@ func (j *Journal) PushSearchIndex(ctx context.Context, idx *SearchIndex) (refere
 		return reference.Reference{}, fmt.Errorf("send search index message: %w", err)
 	}
 
-	return ref, nil
+	return result.Ref, nil
 }
 
 func parseEntryCount(labels map[string]string) int {

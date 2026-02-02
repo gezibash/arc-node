@@ -549,11 +549,11 @@ func TestReadForEditNoContentLabel(t *testing.T) {
 	if err := message.Sign(&msg, j.kp); err != nil {
 		t.Fatal(err)
 	}
-	ref, err := j.client.SendMessage(ctx, msg, map[string]string{"app": "journal", "type": "entry"}, nil)
+	result, err := j.client.SendMessage(ctx, msg, map[string]string{"app": "journal", "type": "entry"}, nil)
 	if err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
-	_, _, err = j.ReadForEdit(ctx, reference.Hex(ref))
+	_, _, err = j.ReadForEdit(ctx, reference.Hex(result.Ref))
 	if err == nil {
 		t.Error("expected error for missing content label")
 	}
@@ -575,7 +575,7 @@ func TestReadForEditDecryptError(t *testing.T) {
 	if err := message.Sign(&msg, j.kp); err != nil {
 		t.Fatal(err)
 	}
-	ref, err := j.client.SendMessage(ctx, msg, map[string]string{
+	result, err := j.client.SendMessage(ctx, msg, map[string]string{
 		"app":     "journal",
 		"type":    "entry",
 		"content": reference.Hex(contentRef),
@@ -583,7 +583,7 @@ func TestReadForEditDecryptError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _, err = j.ReadForEdit(ctx, reference.Hex(ref))
+	_, _, err = j.ReadForEdit(ctx, reference.Hex(result.Ref))
 	if err == nil {
 		t.Error("expected decrypt error")
 	}

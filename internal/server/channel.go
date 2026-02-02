@@ -131,7 +131,7 @@ func (s *nodeService) Channel(stream nodev1.NodeService_ChannelServer) error {
 		case *nodev1.ClientFrame_PresenceUnsubscribe:
 			s.handlePresenceUnsubscribe(writer, reqID, connID)
 		default:
-			sendErr(writer, reqID, codes.InvalidArgument, "unknown frame type")
+			sendErr(writer, reqID, codes.InvalidArgument, "unknown frame type", withDetail("UNKNOWN_FRAME"))
 		}
 	}
 }
@@ -139,7 +139,7 @@ func (s *nodeService) Channel(stream nodev1.NodeService_ChannelServer) error {
 func (s *nodeService) handlePut(ctx context.Context, w *streamWriter, reqID uint64, f *nodev1.PutFrame) {
 	ref, err := s.doPut(ctx, f.Data)
 	if err != nil {
-		sendErr(w, reqID, codes.Internal, err.Error())
+		sendErr(w, reqID, codes.Internal, err.Error(), withDetail("INTERNAL"), withRetryable())
 		return
 	}
 	_ = w.send(&nodev1.ServerFrame{
@@ -151,12 +151,12 @@ func (s *nodeService) handlePut(ctx context.Context, w *streamWriter, reqID uint
 func (s *nodeService) handleGet(ctx context.Context, w *streamWriter, reqID uint64, f *nodev1.GetFrame) {
 	ref, err := referenceFromBytes(f.Reference)
 	if err != nil {
-		sendErr(w, reqID, codes.InvalidArgument, err.Error())
+		sendErr(w, reqID, codes.InvalidArgument, err.Error(), withDetail("INVALID_REFERENCE"))
 		return
 	}
 	data, err := s.doGet(ctx, ref)
 	if err != nil {
-		sendErr(w, reqID, codes.NotFound, err.Error())
+		sendErr(w, reqID, codes.NotFound, err.Error(), withDetail("BLOB_NOT_FOUND"))
 		return
 	}
 	_ = w.send(&nodev1.ServerFrame{
@@ -166,19 +166,19 @@ func (s *nodeService) handleGet(ctx context.Context, w *streamWriter, reqID uint
 }
 
 func (s *nodeService) handlePublish(ctx context.Context, w *streamWriter, reqID uint64, f *nodev1.PublishFrame) {
-	ref, err := s.doPublish(ctx, f.Message, f.Labels, f.Dimensions)
+	ref, ts, seq, err := s.doPublish(ctx, f.Message, f.Labels, f.Dimensions)
 	if err != nil {
 		st := publishErrToStatus(err)
 		if s, ok := status.FromError(st); ok {
-			sendErr(w, reqID, s.Code(), s.Message())
+			sendErr(w, reqID, s.Code(), s.Message(), withDetail("PUBLISH_FAILED"))
 		} else {
-			sendErr(w, reqID, codes.Internal, err.Error())
+			sendErr(w, reqID, codes.Internal, err.Error(), withDetail("INTERNAL"), withRetryable())
 		}
 		return
 	}
 	_ = w.send(&nodev1.ServerFrame{
 		RequestId: reqID,
-		Frame:     &nodev1.ServerFrame_Receipt{Receipt: &nodev1.ReceiptFrame{Reference: ref[:], Ok: true}},
+		Frame:     &nodev1.ServerFrame_Receipt{Receipt: &nodev1.ReceiptFrame{Reference: ref[:], Ok: true, Timestamp: ts, Sequence: seq}},
 	})
 }
 
@@ -192,7 +192,7 @@ func (s *nodeService) handleQuery(ctx context.Context, w *streamWriter, reqID ui
 	}
 	result, err := s.doQuery(ctx, opts)
 	if err != nil {
-		sendErr(w, reqID, codes.Internal, err.Error())
+		sendErr(w, reqID, codes.Internal, err.Error(), withDetail("QUERY_FAILED"), withRetryable())
 		return
 	}
 	_ = w.send(&nodev1.ServerFrame{
@@ -241,7 +241,7 @@ func (s *nodeService) handleSubscribe(ctx context.Context, w *streamWriter, reqI
 
 	sub, err := s.index.Subscribe(ctx, expr, callerKey, subOpts)
 	if err != nil {
-		sendErr(w, reqID, codes.Internal, err.Error())
+		sendErr(w, reqID, codes.Internal, err.Error(), withDetail("SUBSCRIBE_FAILED"), withRetryable())
 		return
 	}
 
@@ -311,12 +311,21 @@ func (s *nodeService) handleSubscribe(ctx context.Context, w *streamWriter, reqI
 					deliveryID = s.index.Deliver(entry, sub.ID())
 				}
 
+				var attempt int32
+				var firstDeliveredAt int64
+				if deliveryID != 0 {
+					attempt = 1
+					firstDeliveredAt = time.Now().UnixNano()
+				}
+
 				if err := w.send(&nodev1.ServerFrame{
 					RequestId: 0, // unsolicited push
 					Frame: &nodev1.ServerFrame_Delivery{Delivery: &nodev1.DeliveryFrame{
-						Channel:    channel,
-						Entry:      entryToProto(entry),
-						DeliveryId: deliveryID,
+						Channel:          channel,
+						Entry:            entryToProto(entry),
+						DeliveryId:       deliveryID,
+						Attempt:          attempt,
+						FirstDeliveredAt: firstDeliveredAt,
 					}},
 				}); err != nil {
 					slog.Error("channel delivery send failed", "error", err)
@@ -387,12 +396,21 @@ func (s *nodeService) replayFromCursor(ctx context.Context, w *streamWriter, cha
 			deliveryID = s.index.Deliver(entry, cursorKey)
 		}
 
+		var attempt int32
+		var firstDeliveredAt int64
+		if deliveryID != 0 {
+			attempt = 1
+			firstDeliveredAt = time.Now().UnixNano()
+		}
+
 		if err := w.send(&nodev1.ServerFrame{
 			RequestId: 0,
 			Frame: &nodev1.ServerFrame_Delivery{Delivery: &nodev1.DeliveryFrame{
-				Channel:    channel,
-				Entry:      entryToProto(entry),
-				DeliveryId: deliveryID,
+				Channel:          channel,
+				Entry:            entryToProto(entry),
+				DeliveryId:       deliveryID,
+				Attempt:          attempt,
+				FirstDeliveredAt: firstDeliveredAt,
 			}},
 		}); err != nil {
 			slog.Error("cursor replay send failed", "error", err)
@@ -443,14 +461,18 @@ func (s *nodeService) redeliveryLoop(ctx context.Context, w *streamWriter, chann
 					continue
 				}
 
+				firstDelivered := d.FirstDeliveredAt
+				redeliverAttempt := int32(d.Attempt + 1)
 				newID := dt.Redeliver(d)
 				if d.Entry != nil {
 					_ = w.send(&nodev1.ServerFrame{
 						RequestId: 0,
 						Frame: &nodev1.ServerFrame_Delivery{Delivery: &nodev1.DeliveryFrame{
-							Channel:    channel,
-							Entry:      entryToProto(d.Entry),
-							DeliveryId: newID,
+							Channel:          channel,
+							Entry:            entryToProto(d.Entry),
+							DeliveryId:       newID,
+							Attempt:          redeliverAttempt,
+							FirstDeliveredAt: firstDelivered.UnixNano(),
 						}},
 					})
 				}
@@ -476,7 +498,7 @@ func (s *nodeService) handleAck(ctx context.Context, w *streamWriter, reqID uint
 	if f.DeliveryId > 0 {
 		entry, err := s.index.AckDelivery(ctx, f.DeliveryId)
 		if err != nil {
-			sendErr(w, reqID, codes.Internal, err.Error())
+			sendErr(w, reqID, codes.Internal, err.Error(), withDetail("ACK_FAILED"), withRetryable())
 			return
 		}
 
@@ -494,7 +516,7 @@ func (s *nodeService) handleAck(ctx context.Context, w *streamWriter, reqID uint
 
 	// Legacy: ack by reference.
 	if len(f.Reference) == 0 {
-		sendErr(w, reqID, codes.InvalidArgument, "delivery_id or reference required")
+		sendErr(w, reqID, codes.InvalidArgument, "delivery_id or reference required", withDetail("MISSING_FIELD"))
 		return
 	}
 	// No-op for legacy acks since delivery tracking is now ID-based.
@@ -506,13 +528,13 @@ func (s *nodeService) handleAck(ctx context.Context, w *streamWriter, reqID uint
 
 func (s *nodeService) handleNack(ctx context.Context, w *streamWriter, reqID uint64, f *nodev1.NackFrame) {
 	if f.DeliveryId <= 0 {
-		sendErr(w, reqID, codes.InvalidArgument, "delivery_id required")
+		sendErr(w, reqID, codes.InvalidArgument, "delivery_id required", withDetail("MISSING_FIELD"))
 		return
 	}
 
 	_, err := s.index.NackDelivery(ctx, f.DeliveryId, f.DeadLetter, f.Reason)
 	if err != nil {
-		sendErr(w, reqID, codes.Internal, err.Error())
+		sendErr(w, reqID, codes.Internal, err.Error(), withDetail("NACK_FAILED"), withRetryable())
 		return
 	}
 
@@ -537,7 +559,7 @@ func (s *nodeService) handleSeek(ctx context.Context, w *streamWriter, reqID uin
 	}
 
 	if afterTS == 0 {
-		sendErr(w, reqID, codes.InvalidArgument, "timestamp or cursor required for seek")
+		sendErr(w, reqID, codes.InvalidArgument, "timestamp or cursor required for seek", withDetail("MISSING_FIELD"))
 		return
 	}
 
@@ -553,23 +575,23 @@ func (s *nodeService) handleSeek(ctx context.Context, w *streamWriter, reqID uin
 
 func (s *nodeService) handleFederate(ctx context.Context, w *streamWriter, reqID uint64, f *nodev1.FederateFrame) {
 	if !s.isAdmin(ctx) {
-		sendErr(w, reqID, codes.PermissionDenied, "admin key required")
+		sendErr(w, reqID, codes.PermissionDenied, "admin key required", withDetail("PERMISSION_DENIED"))
 		return
 	}
 
 	if f.Peer == "" {
-		sendErr(w, reqID, codes.InvalidArgument, "peer required")
+		sendErr(w, reqID, codes.InvalidArgument, "peer required", withDetail("MISSING_FIELD"))
 		return
 	}
 	if s.federator == nil {
-		sendErr(w, reqID, codes.FailedPrecondition, "federation unavailable")
+		sendErr(w, reqID, codes.FailedPrecondition, "federation unavailable", withDetail("FEDERATION_UNAVAILABLE"))
 		return
 	}
 
 	peer := normalizePeerAddr(f.Peer)
 	started, err := s.federator.Start(peer, f.Labels)
 	if err != nil {
-		sendErr(w, reqID, codes.Internal, fmt.Sprintf("start federation: %v", err))
+		sendErr(w, reqID, codes.Internal, fmt.Sprintf("start federation: %v", err), withDetail("FEDERATION_FAILED"), withRetryable())
 		return
 	}
 
@@ -591,7 +613,7 @@ func (s *nodeService) handleFederate(ctx context.Context, w *streamWriter, reqID
 
 func (s *nodeService) handleListPeers(ctx context.Context, w *streamWriter, reqID uint64) {
 	if !s.isAdmin(ctx) {
-		sendErr(w, reqID, codes.PermissionDenied, "admin key required")
+		sendErr(w, reqID, codes.PermissionDenied, "admin key required", withDetail("PERMISSION_DENIED"))
 		return
 	}
 
@@ -636,9 +658,9 @@ func (s *nodeService) handleResolveGet(ctx context.Context, w *streamWriter, req
 	resp, err := s.doResolveGet(ctx, f.Prefix)
 	if err != nil {
 		if st, ok := status.FromError(err); ok {
-			sendErr(w, reqID, st.Code(), st.Message())
+			sendErr(w, reqID, st.Code(), st.Message(), withDetail("RESOLVE_FAILED"))
 		} else {
-			sendErr(w, reqID, codes.Internal, err.Error())
+			sendErr(w, reqID, codes.Internal, err.Error(), withDetail("INTERNAL"), withRetryable())
 		}
 		return
 	}
@@ -651,11 +673,11 @@ func (s *nodeService) handleResolveGet(ctx context.Context, w *streamWriter, req
 func (s *nodeService) handleBatchPublish(ctx context.Context, w *streamWriter, reqID uint64, f *nodev1.BatchPublishFrame) {
 	results := make([]*nodev1.ReceiptEntry, len(f.Messages))
 	for i, pub := range f.Messages {
-		ref, err := s.doPublish(ctx, pub.Message, pub.Labels, pub.Dimensions)
+		ref, ts, seq, err := s.doPublish(ctx, pub.Message, pub.Labels, pub.Dimensions)
 		if err != nil {
 			results[i] = &nodev1.ReceiptEntry{Ok: false, Error: err.Error()}
 		} else {
-			results[i] = &nodev1.ReceiptEntry{Reference: ref[:], Ok: true}
+			results[i] = &nodev1.ReceiptEntry{Reference: ref[:], Ok: true, Timestamp: ts, Sequence: seq}
 		}
 	}
 	_ = w.send(&nodev1.ServerFrame{
@@ -677,7 +699,7 @@ func (s *nodeService) handlePing(w *streamWriter, reqID uint64, f *nodev1.PingFr
 func (s *nodeService) handlePresenceSet(ctx context.Context, w *streamWriter, reqID uint64, connID string, f *nodev1.PresenceSetFrame) {
 	caller, ok := envelope.GetCaller(ctx)
 	if !ok {
-		sendErr(w, reqID, codes.Unauthenticated, "identity required")
+		sendErr(w, reqID, codes.Unauthenticated, "identity required", withDetail("UNAUTHENTICATED"))
 		return
 	}
 	s.presence.Set(connID, caller.PublicKey, f.Status, f.Typing, f.Metadata, f.TtlSeconds)
@@ -739,12 +761,26 @@ func pubKeysFromBytes(raw [][]byte) []identity.PublicKey {
 	return keys
 }
 
-func sendErr(w *streamWriter, reqID uint64, code codes.Code, msg string) {
+func sendErr(w *streamWriter, reqID uint64, code codes.Code, msg string, opts ...errOpt) {
+	ef := &nodev1.ErrorFrame{
+		Code:    int32(code),
+		Message: msg,
+	}
+	for _, o := range opts {
+		o(ef)
+	}
 	_ = w.send(&nodev1.ServerFrame{
 		RequestId: reqID,
-		Frame: &nodev1.ServerFrame_Error{Error: &nodev1.ErrorFrame{
-			Code:    int32(code),
-			Message: msg,
-		}},
+		Frame:     &nodev1.ServerFrame_Error{Error: ef},
 	})
+}
+
+type errOpt func(*nodev1.ErrorFrame)
+
+func withDetail(detail string) errOpt {
+	return func(ef *nodev1.ErrorFrame) { ef.Detail = detail }
+}
+
+func withRetryable() errOpt {
+	return func(ef *nodev1.ErrorFrame) { ef.Retryable = true }
 }

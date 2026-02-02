@@ -1461,12 +1461,14 @@ func (x *ResolveGetFrame) GetPrefix() string {
 }
 
 type DeliveryFrame struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Channel       string                 `protobuf:"bytes,1,opt,name=channel,proto3" json:"channel,omitempty"`
-	Entry         *IndexEntry            `protobuf:"bytes,2,opt,name=entry,proto3" json:"entry,omitempty"`
-	DeliveryId    int64                  `protobuf:"varint,3,opt,name=delivery_id,json=deliveryId,proto3" json:"delivery_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Channel          string                 `protobuf:"bytes,1,opt,name=channel,proto3" json:"channel,omitempty"`
+	Entry            *IndexEntry            `protobuf:"bytes,2,opt,name=entry,proto3" json:"entry,omitempty"`
+	DeliveryId       int64                  `protobuf:"varint,3,opt,name=delivery_id,json=deliveryId,proto3" json:"delivery_id,omitempty"`
+	Attempt          int32                  `protobuf:"varint,4,opt,name=attempt,proto3" json:"attempt,omitempty"`
+	FirstDeliveredAt int64                  `protobuf:"varint,5,opt,name=first_delivered_at,json=firstDeliveredAt,proto3" json:"first_delivered_at,omitempty"` // unix nanos
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *DeliveryFrame) Reset() {
@@ -1520,11 +1522,27 @@ func (x *DeliveryFrame) GetDeliveryId() int64 {
 	return 0
 }
 
+func (x *DeliveryFrame) GetAttempt() int32 {
+	if x != nil {
+		return x.Attempt
+	}
+	return 0
+}
+
+func (x *DeliveryFrame) GetFirstDeliveredAt() int64 {
+	if x != nil {
+		return x.FirstDeliveredAt
+	}
+	return 0
+}
+
 type ReceiptFrame struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Reference     []byte                 `protobuf:"bytes,1,opt,name=reference,proto3" json:"reference,omitempty"`
 	Ok            bool                   `protobuf:"varint,2,opt,name=ok,proto3" json:"ok,omitempty"`
 	Error         string                 `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
+	Timestamp     int64                  `protobuf:"varint,4,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	Sequence      uint64                 `protobuf:"varint,5,opt,name=sequence,proto3" json:"sequence,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1578,6 +1596,20 @@ func (x *ReceiptFrame) GetError() string {
 		return x.Error
 	}
 	return ""
+}
+
+func (x *ReceiptFrame) GetTimestamp() int64 {
+	if x != nil {
+		return x.Timestamp
+	}
+	return 0
+}
+
+func (x *ReceiptFrame) GetSequence() uint64 {
+	if x != nil {
+		return x.Sequence
+	}
+	return 0
 }
 
 type ResponseFrame struct {
@@ -1660,6 +1692,8 @@ type ErrorFrame struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Code          int32                  `protobuf:"varint,1,opt,name=code,proto3" json:"code,omitempty"`
 	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	Detail        string                 `protobuf:"bytes,3,opt,name=detail,proto3" json:"detail,omitempty"`        // machine-readable error type (e.g. "BLOB_NOT_FOUND", "CEL_PARSE_ERROR")
+	Retryable     bool                   `protobuf:"varint,4,opt,name=retryable,proto3" json:"retryable,omitempty"` // whether the client should retry
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1706,6 +1740,20 @@ func (x *ErrorFrame) GetMessage() string {
 		return x.Message
 	}
 	return ""
+}
+
+func (x *ErrorFrame) GetDetail() string {
+	if x != nil {
+		return x.Detail
+	}
+	return ""
+}
+
+func (x *ErrorFrame) GetRetryable() bool {
+	if x != nil {
+		return x.Retryable
+	}
+	return false
 }
 
 type FederateResponseFrame struct {
@@ -2345,6 +2393,8 @@ type ReceiptEntry struct {
 	Reference     []byte                 `protobuf:"bytes,1,opt,name=reference,proto3" json:"reference,omitempty"`
 	Ok            bool                   `protobuf:"varint,2,opt,name=ok,proto3" json:"ok,omitempty"`
 	Error         string                 `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
+	Timestamp     int64                  `protobuf:"varint,4,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	Sequence      uint64                 `protobuf:"varint,5,opt,name=sequence,proto3" json:"sequence,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2398,6 +2448,20 @@ func (x *ReceiptEntry) GetError() string {
 		return x.Error
 	}
 	return ""
+}
+
+func (x *ReceiptEntry) GetTimestamp() int64 {
+	if x != nil {
+		return x.Timestamp
+	}
+	return 0
+}
+
+func (x *ReceiptEntry) GetSequence() uint64 {
+	if x != nil {
+		return x.Sequence
+	}
+	return 0
 }
 
 type BatchReceiptFrame struct {
@@ -3318,27 +3382,33 @@ const file_arc_node_v1_node_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x10\n" +
 	"\x0eListPeersFrame\")\n" +
 	"\x0fResolveGetFrame\x12\x16\n" +
-	"\x06prefix\x18\x01 \x01(\tR\x06prefix\"y\n" +
+	"\x06prefix\x18\x01 \x01(\tR\x06prefix\"\xc1\x01\n" +
 	"\rDeliveryFrame\x12\x18\n" +
 	"\achannel\x18\x01 \x01(\tR\achannel\x12-\n" +
 	"\x05entry\x18\x02 \x01(\v2\x17.arc.node.v1.IndexEntryR\x05entry\x12\x1f\n" +
 	"\vdelivery_id\x18\x03 \x01(\x03R\n" +
-	"deliveryId\"R\n" +
+	"deliveryId\x12\x18\n" +
+	"\aattempt\x18\x04 \x01(\x05R\aattempt\x12,\n" +
+	"\x12first_delivered_at\x18\x05 \x01(\x03R\x10firstDeliveredAt\"\x8c\x01\n" +
 	"\fReceiptFrame\x12\x1c\n" +
 	"\treference\x18\x01 \x01(\fR\treference\x12\x0e\n" +
 	"\x02ok\x18\x02 \x01(\bR\x02ok\x12\x14\n" +
-	"\x05error\x18\x03 \x01(\tR\x05error\"\xb5\x01\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error\x12\x1c\n" +
+	"\ttimestamp\x18\x04 \x01(\x03R\ttimestamp\x12\x1a\n" +
+	"\bsequence\x18\x05 \x01(\x04R\bsequence\"\xb5\x01\n" +
 	"\rResponseFrame\x12\x12\n" +
 	"\x04data\x18\x01 \x01(\fR\x04data\x12!\n" +
 	"\fcontent_type\x18\x02 \x01(\tR\vcontentType\x121\n" +
 	"\aentries\x18\x03 \x03(\v2\x17.arc.node.v1.IndexEntryR\aentries\x12\x1f\n" +
 	"\vnext_cursor\x18\x04 \x01(\tR\n" +
 	"nextCursor\x12\x19\n" +
-	"\bhas_more\x18\x05 \x01(\bR\ahasMore\":\n" +
+	"\bhas_more\x18\x05 \x01(\bR\ahasMore\"p\n" +
 	"\n" +
 	"ErrorFrame\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\x05R\x04code\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"I\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\x12\x16\n" +
+	"\x06detail\x18\x03 \x01(\tR\x06detail\x12\x1c\n" +
+	"\tretryable\x18\x04 \x01(\bR\tretryable\"I\n" +
 	"\x15FederateResponseFrame\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\"E\n" +
@@ -3393,11 +3463,13 @@ const file_arc_node_v1_node_proto_rawDesc = "" +
 	"\x15PresenceResponseFrame\x129\n" +
 	"\aentries\x18\x01 \x03(\v2\x1f.arc.node.v1.PresenceEventFrameR\aentries\"J\n" +
 	"\x11BatchPublishFrame\x125\n" +
-	"\bmessages\x18\x01 \x03(\v2\x19.arc.node.v1.PublishFrameR\bmessages\"R\n" +
+	"\bmessages\x18\x01 \x03(\v2\x19.arc.node.v1.PublishFrameR\bmessages\"\x8c\x01\n" +
 	"\fReceiptEntry\x12\x1c\n" +
 	"\treference\x18\x01 \x01(\fR\treference\x12\x0e\n" +
 	"\x02ok\x18\x02 \x01(\bR\x02ok\x12\x14\n" +
-	"\x05error\x18\x03 \x01(\tR\x05error\"H\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error\x12\x1c\n" +
+	"\ttimestamp\x18\x04 \x01(\x03R\ttimestamp\x12\x1a\n" +
+	"\bsequence\x18\x05 \x01(\x04R\bsequence\"H\n" +
 	"\x11BatchReceiptFrame\x123\n" +
 	"\aresults\x18\x01 \x03(\v2\x19.arc.node.v1.ReceiptEntryR\aresults\"\xe8\b\n" +
 	"\vClientFrame\x12\x1d\n" +

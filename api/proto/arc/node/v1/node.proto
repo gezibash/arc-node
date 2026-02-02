@@ -172,12 +172,16 @@ message DeliveryFrame {
   string channel = 1;
   IndexEntry entry = 2;
   int64 delivery_id = 3;
+  int32 attempt = 4;
+  int64 first_delivered_at = 5; // unix nanos
 }
 
 message ReceiptFrame {
   bytes reference = 1;
   bool ok = 2;
   string error = 3;
+  int64 timestamp = 4;
+  uint64 sequence = 5;
 }
 
 message ResponseFrame {
@@ -191,6 +195,8 @@ message ResponseFrame {
 message ErrorFrame {
   int32 code = 1;
   string message = 2;
+  string detail = 3;    // machine-readable error type (e.g. "BLOB_NOT_FOUND", "CEL_PARSE_ERROR")
+  bool retryable = 4;   // whether the client should retry
 }
 
 message FederateResponseFrame {
@@ -267,6 +273,8 @@ message ReceiptEntry {
   bytes reference = 1;
   bool ok = 2;
   string error = 3;
+  int64 timestamp = 4;
+  uint64 sequence = 5;
 }
 
 message BatchReceiptFrame {

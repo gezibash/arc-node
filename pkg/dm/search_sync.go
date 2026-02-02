@@ -164,7 +164,7 @@ func (t *Threads) PushSearchIndex(ctx context.Context, idx *SearchIndex) (refere
 		"db-hash":     reference.Hex(dbHash),
 	}
 
-	ref, err := t.client.SendMessage(ctx, msg, labels, &nodev1.Dimensions{
+	result, err := t.client.SendMessage(ctx, msg, labels, &nodev1.Dimensions{
 		Persistence: nodev1.Persistence_PERSISTENCE_DURABLE,
 		Visibility:  nodev1.Visibility_VISIBILITY_PRIVATE,
 	})
@@ -172,7 +172,7 @@ func (t *Threads) PushSearchIndex(ctx context.Context, idx *SearchIndex) (refere
 		return reference.Reference{}, fmt.Errorf("send search index message: %w", err)
 	}
 
-	return ref, nil
+	return result.Ref, nil
 }
 
 func (t *Threads) recipientKey() identity.PublicKey {

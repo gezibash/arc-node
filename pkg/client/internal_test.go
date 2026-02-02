@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -176,14 +177,16 @@ func TestChannelMuxRoundTripErrorFrame(t *testing.T) {
 	mux := newChannelMux(stream)
 	defer mux.close()
 
-	// Respond with error frame
+	// Respond with error frame with detail and retryable=false.
 	go func() {
 		f := <-stream.sendCh
 		stream.recvCh <- &nodev1.ServerFrame{
 			RequestId: f.RequestId,
 			Frame: &nodev1.ServerFrame_Error{Error: &nodev1.ErrorFrame{
-				Code:    5, // NOT_FOUND
-				Message: "not found",
+				Code:      5, // NOT_FOUND
+				Message:   "not found",
+				Detail:    "BLOB_NOT_FOUND",
+				Retryable: false,
 			}},
 		}
 	}()
@@ -192,7 +195,45 @@ func TestChannelMuxRoundTripErrorFrame(t *testing.T) {
 		Frame: &nodev1.ClientFrame_Get{Get: &nodev1.GetFrame{Reference: make([]byte, 32)}},
 	})
 	if err == nil {
-		t.Error("expected error")
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "BLOB_NOT_FOUND") {
+		t.Errorf("expected detail in error message, got: %s", err)
+	}
+	if Retryable(err) {
+		t.Error("expected non-retryable error")
+	}
+}
+
+func TestChannelMuxRoundTripRetryableError(t *testing.T) {
+	stream := newMockStream()
+	mux := newChannelMux(stream)
+	defer mux.close()
+
+	go func() {
+		f := <-stream.sendCh
+		stream.recvCh <- &nodev1.ServerFrame{
+			RequestId: f.RequestId,
+			Frame: &nodev1.ServerFrame_Error{Error: &nodev1.ErrorFrame{
+				Code:      13, // INTERNAL
+				Message:   "temporary failure",
+				Detail:    "INTERNAL",
+				Retryable: true,
+			}},
+		}
+	}()
+
+	_, err := mux.roundTrip(context.Background(), &nodev1.ClientFrame{
+		Frame: &nodev1.ClientFrame_Put{Put: &nodev1.PutFrame{Data: []byte("x")}},
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !Retryable(err) {
+		t.Error("expected retryable error")
+	}
+	if !strings.Contains(err.Error(), "INTERNAL") {
+		t.Errorf("expected detail in error, got: %s", err)
 	}
 }
 
@@ -486,8 +527,10 @@ func TestSubscribeChannelError(t *testing.T) {
 		return &nodev1.ServerFrame{
 			RequestId: id,
 			Frame: &nodev1.ServerFrame_Error{Error: &nodev1.ErrorFrame{
-				Code:    13,
-				Message: "internal",
+				Code:      13,
+				Message:   "internal",
+				Detail:    "SUBSCRIBE_FAILED",
+				Retryable: true,
 			}},
 		}
 	})
@@ -497,7 +540,13 @@ func TestSubscribeChannelError(t *testing.T) {
 
 	_, _, err := c.SubscribeChannel(context.Background(), "true", nil)
 	if err == nil {
-		t.Error("expected error")
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "SUBSCRIBE_FAILED") {
+		t.Errorf("expected detail in error, got: %s", err)
+	}
+	if !Retryable(err) {
+		t.Error("expected retryable error")
 	}
 }
 
