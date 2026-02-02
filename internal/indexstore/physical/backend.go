@@ -45,6 +45,9 @@ type Entry struct {
 	MaxRedelivery    int32  // per-entry override (0 = use default)
 	AckTimeoutMs     int64  // per-entry override (0 = use default)
 	Correlation      string // request-response correlation ID
+	From             [32]byte
+	To               [32]byte
+	ContentType      string
 }
 
 // Cursor represents a durable subscription position.

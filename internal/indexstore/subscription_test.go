@@ -430,6 +430,7 @@ func TestDirectRouting(t *testing.T) {
 		Timestamp:   time.Now().UnixMilli(),
 		Persistence: 1,
 		Pattern:     1, // PATTERN_REQ_REP — direct
+		To:          targetKey,
 	}
 	if err := store.Index(ctx, entry); err != nil {
 		t.Fatalf("Index: %v", err)

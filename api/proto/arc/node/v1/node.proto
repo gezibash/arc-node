@@ -195,6 +195,8 @@ message ResponseFrame {
 message ErrorFrame {
   int32 code = 1;
   string message = 2;
+  string detail = 3;    // machine-readable error type (e.g. "BLOB_NOT_FOUND", "CEL_PARSE_ERROR")
+  bool retryable = 4;   // whether the client should retry
 }
 
 message FederateResponseFrame {
@@ -329,6 +331,10 @@ message IndexEntry {
   map<string, string> labels = 2;
   int64 timestamp = 3;
   Dimensions dimensions = 4;
+  bytes from = 5;
+  bytes to = 6;
+  string content_type = 7;
+  string correlation = 8;
 }
 
 enum PeerDirection {

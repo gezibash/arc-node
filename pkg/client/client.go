@@ -398,10 +398,14 @@ type QueryResult struct {
 }
 
 type Entry struct {
-	Ref        reference.Reference
-	Labels     map[string]string
-	Timestamp  int64
-	Dimensions *EntryDimensions // nil if not provided by server
+	Ref         reference.Reference
+	Labels      map[string]string
+	Timestamp   int64
+	Dimensions  *EntryDimensions // nil if not provided by server
+	From        identity.PublicKey
+	To          identity.PublicKey
+	ContentType string
+	Correlation string
 }
 
 // EntryDimensions carries dimension metadata from the originating node.
@@ -479,11 +483,18 @@ func protoToEntryDimensions(d *nodev1.Dimensions) *EntryDimensions {
 func protoToEntry(e *nodev1.IndexEntry) *Entry {
 	var ref reference.Reference
 	copy(ref[:], e.Reference)
+	var from, to identity.PublicKey
+	copy(from[:], e.From)
+	copy(to[:], e.To)
 	return &Entry{
-		Ref:        ref,
-		Labels:     e.Labels,
-		Timestamp:  e.Timestamp,
-		Dimensions: protoToEntryDimensions(e.Dimensions),
+		Ref:         ref,
+		Labels:      e.Labels,
+		Timestamp:   e.Timestamp,
+		Dimensions:  protoToEntryDimensions(e.Dimensions),
+		From:        from,
+		To:          to,
+		ContentType: e.ContentType,
+		Correlation: e.Correlation,
 	}
 }
 

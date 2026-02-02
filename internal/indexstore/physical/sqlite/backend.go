@@ -67,7 +67,10 @@ CREATE TABLE IF NOT EXISTS entries (
     priority          INTEGER NOT NULL DEFAULT 0,
     max_redelivery    INTEGER NOT NULL DEFAULT 0,
     ack_timeout_ms    INTEGER NOT NULL DEFAULT 0,
-    correlation       TEXT NOT NULL DEFAULT ''
+    correlation       TEXT NOT NULL DEFAULT '',
+    msg_from          BLOB NOT NULL DEFAULT x'0000000000000000000000000000000000000000000000000000000000000000',
+    msg_to            BLOB NOT NULL DEFAULT x'0000000000000000000000000000000000000000000000000000000000000000',
+    content_type      TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS labels (
@@ -152,6 +155,9 @@ func migrateSchema(ctx context.Context, db *sql.DB) {
 		{"max_redelivery", "INTEGER NOT NULL DEFAULT 0"},
 		{"ack_timeout_ms", "INTEGER NOT NULL DEFAULT 0"},
 		{"correlation", "TEXT NOT NULL DEFAULT ''"},
+		{"msg_from", "BLOB NOT NULL DEFAULT x'0000000000000000000000000000000000000000000000000000000000000000'"},
+		{"msg_to", "BLOB NOT NULL DEFAULT x'0000000000000000000000000000000000000000000000000000000000000000'"},
+		{"content_type", "TEXT NOT NULL DEFAULT ''"},
 	}
 	for _, c := range cols {
 		_, _ = db.ExecContext(ctx, "ALTER TABLE entries ADD COLUMN "+c.name+" "+c.def)
@@ -210,12 +216,14 @@ func (b *Backend) putInTx(ctx context.Context, tx *sql.Tx, entry *physical.Entry
 			ref_hex, ref_bytes, timestamp, expires_at,
 			persistence, visibility, delivery_mode, pattern, affinity, affinity_key,
 			ordering, dedup_mode, idempotency_key, delivery_complete, complete_n,
-			priority, max_redelivery, ack_timeout_ms, correlation
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			priority, max_redelivery, ack_timeout_ms, correlation,
+			msg_from, msg_to, content_type
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		refHex, entry.Ref[:], entry.Timestamp, entry.ExpiresAt,
 		entry.Persistence, entry.Visibility, entry.DeliveryMode, entry.Pattern, entry.Affinity, entry.AffinityKey,
 		entry.Ordering, entry.DedupMode, entry.IdempotencyKey, entry.DeliveryComplete, entry.CompleteN,
 		entry.Priority, entry.MaxRedelivery, entry.AckTimeoutMs, entry.Correlation,
+		entry.From[:], entry.To[:], entry.ContentType,
 	); err != nil {
 		return fmt.Errorf("sqlite put: insert entry: %w", err)
 	}
@@ -253,16 +261,19 @@ func (b *Backend) Get(ctx context.Context, r reference.Reference) (*physical.Ent
 		Labels: make(map[string]string),
 	}
 	var refBytes []byte
+	var fromBytes, toBytes []byte
 	err := b.db.QueryRowContext(ctx,
 		`SELECT ref_bytes, timestamp, expires_at,
 			persistence, visibility, delivery_mode, pattern, affinity, affinity_key,
 			ordering, dedup_mode, idempotency_key, delivery_complete, complete_n,
-			priority, max_redelivery, ack_timeout_ms, correlation
+			priority, max_redelivery, ack_timeout_ms, correlation,
+			msg_from, msg_to, content_type
 		FROM entries WHERE ref_hex = ?`, refHex,
 	).Scan(&refBytes, &entry.Timestamp, &entry.ExpiresAt,
 		&entry.Persistence, &entry.Visibility, &entry.DeliveryMode, &entry.Pattern, &entry.Affinity, &entry.AffinityKey,
 		&entry.Ordering, &entry.DedupMode, &entry.IdempotencyKey, &entry.DeliveryComplete, &entry.CompleteN,
 		&entry.Priority, &entry.MaxRedelivery, &entry.AckTimeoutMs, &entry.Correlation,
+		&fromBytes, &toBytes, &entry.ContentType,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, physical.ErrNotFound
@@ -271,6 +282,8 @@ func (b *Backend) Get(ctx context.Context, r reference.Reference) (*physical.Ent
 		return nil, fmt.Errorf("sqlite get: %w", err)
 	}
 	copy(entry.Ref[:], refBytes)
+	copy(entry.From[:], fromBytes)
+	copy(entry.To[:], toBytes)
 
 	rows, err := b.db.QueryContext(ctx, `SELECT key, value FROM labels WHERE ref_hex = ?`, refHex)
 	if err != nil {
@@ -364,7 +377,8 @@ func (b *Backend) Query(ctx context.Context, opts *physical.QueryOptions) (*phys
 		qb.WriteString("SELECT e.ref_bytes, e.timestamp, e.expires_at, e.ref_hex,")
 		qb.WriteString(" e.persistence, e.visibility, e.delivery_mode, e.pattern, e.affinity, e.affinity_key,")
 		qb.WriteString(" e.ordering, e.dedup_mode, e.idempotency_key, e.delivery_complete, e.complete_n,")
-		qb.WriteString(" e.priority, e.max_redelivery, e.ack_timeout_ms, e.correlation")
+		qb.WriteString(" e.priority, e.max_redelivery, e.ack_timeout_ms, e.correlation,")
+		qb.WriteString(" e.msg_from, e.msg_to, e.content_type")
 		qb.WriteString(" FROM labels d")
 		qb.WriteString(" JOIN entries e ON e.ref_hex = d.ref_hex")
 
@@ -413,7 +427,8 @@ func (b *Backend) Query(ctx context.Context, opts *physical.QueryOptions) (*phys
 		qb.WriteString("SELECT e.ref_bytes, e.timestamp, e.expires_at, e.ref_hex,")
 		qb.WriteString(" e.persistence, e.visibility, e.delivery_mode, e.pattern, e.affinity, e.affinity_key,")
 		qb.WriteString(" e.ordering, e.dedup_mode, e.idempotency_key, e.delivery_complete, e.complete_n,")
-		qb.WriteString(" e.priority, e.max_redelivery, e.ack_timeout_ms, e.correlation")
+		qb.WriteString(" e.priority, e.max_redelivery, e.ack_timeout_ms, e.correlation,")
+		qb.WriteString(" e.msg_from, e.msg_to, e.content_type")
 		qb.WriteString(" FROM entries e")
 
 		if hasLabels {
@@ -467,17 +482,20 @@ func (b *Backend) Query(ctx context.Context, opts *physical.QueryOptions) (*phys
 
 	var entries []*physical.Entry
 	for rows.Next() {
-		var refBytes []byte
+		var refBytes, fromBytes, toBytes []byte
 		var rh string
 		e := &physical.Entry{}
 		if err := rows.Scan(&refBytes, &e.Timestamp, &e.ExpiresAt, &rh,
 			&e.Persistence, &e.Visibility, &e.DeliveryMode, &e.Pattern, &e.Affinity, &e.AffinityKey,
 			&e.Ordering, &e.DedupMode, &e.IdempotencyKey, &e.DeliveryComplete, &e.CompleteN,
 			&e.Priority, &e.MaxRedelivery, &e.AckTimeoutMs, &e.Correlation,
+			&fromBytes, &toBytes, &e.ContentType,
 		); err != nil {
 			return nil, fmt.Errorf("sqlite query: scan: %w", err)
 		}
 		copy(e.Ref[:], refBytes)
+		copy(e.From[:], fromBytes)
+		copy(e.To[:], toBytes)
 		entries = append(entries, e)
 	}
 	if err := rows.Err(); err != nil {
