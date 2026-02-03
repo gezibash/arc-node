@@ -2,6 +2,7 @@ package relay
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"io"
 	"log/slog"
@@ -46,9 +47,20 @@ func (s *Service) Connect(stream relayv1.RelayService_ConnectServer) error {
 	id := uuid.New().String()
 	sub := NewSubscriber(id, stream, sender, s.bufferSize)
 
+	slog.Info("client connected",
+		"component", "service",
+		"subscriber_id", id,
+		"sender", hex.EncodeToString(sender[:]),
+	)
+
 	// Register with table
 	s.relay.Table().Add(sub)
 	defer func() {
+		slog.Info("client disconnected",
+			"component", "service",
+			"subscriber_id", id,
+			"subscriber_name", sub.Name(),
+		)
 		sub.Close()
 		s.relay.Table().Remove(id)
 	}()
@@ -95,8 +107,6 @@ func (s *Service) handleFrame(ctx context.Context, sub *Subscriber, frame *relay
 		return s.handleUnsubscribe(ctx, sub, f.Unsubscribe)
 	case *relayv1.ClientFrame_RegisterName:
 		return s.handleRegisterName(ctx, sub, f.RegisterName)
-	case *relayv1.ClientFrame_RegisterCapability:
-		return s.handleRegisterCapability(ctx, sub, f.RegisterCapability)
 	case *relayv1.ClientFrame_Ping:
 		return s.handlePing(ctx, sub, f.Ping)
 	default:
@@ -111,6 +121,13 @@ func (s *Service) handleSend(_ context.Context, sub *Subscriber, send *relayv1.S
 	}
 
 	delivered, err := s.relay.Route(env)
+
+	slog.Debug("envelope routed",
+		"component", "service",
+		"subscriber_id", sub.ID(),
+		"delivered", delivered,
+		"labels", env.GetLabels(),
+	)
 
 	// Send receipt
 	var receipt *relayv1.Receipt
@@ -162,17 +179,14 @@ func (s *Service) handleRegisterName(_ context.Context, sub *Subscriber, reg *re
 	if errors.Is(err, ErrNameTaken) {
 		return status.Error(codes.AlreadyExists, "name already registered")
 	}
-	return err
-}
-
-func (s *Service) handleRegisterCapability(_ context.Context, sub *Subscriber, reg *relayv1.RegisterCapabilityFrame) error {
-	cap := reg.GetCapability()
-	if cap == "" {
-		return status.Error(codes.InvalidArgument, "capability required")
+	if err == nil {
+		slog.Info("name registered",
+			"component", "service",
+			"subscriber_id", sub.ID(),
+			"name", name,
+		)
 	}
-
-	s.relay.Table().RegisterCapability(sub.ID(), cap)
-	return nil
+	return err
 }
 
 func (s *Service) handlePing(_ context.Context, sub *Subscriber, ping *relayv1.PingFrame) error {

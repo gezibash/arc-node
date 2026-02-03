@@ -72,17 +72,22 @@ func (ReceiptStatus) EnumDescriptor() ([]byte, []int) {
 
 // Envelope is the unit of transmission through the relay.
 // Content-addressed by SHA-256 hash of (labels + payload).
+//
+// Routing labels live here. The payload (typically an arc.Message) may have
+// its own labels for indexing — relay doesn't inspect those.
 type Envelope struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Content-addressed reference (SHA-256 hash). Computed by relay if empty.
 	Ref []byte `protobuf:"bytes,1,opt,name=ref,proto3" json:"ref,omitempty"`
-	// Routing labels. Special keys:
+	// Routing labels (exact-match). Special key:
 	//
-	//	"to"         - addressed routing (@name or @name.relay.arc)
-	//	"capability" - capability routing (storage, index, etc.)
-	//	Other keys   - exact-match subscription filtering
+	//	"to" - addressed routing to @name (requires RegisterNameFrame)
+	//
+	// All other keys use standard label matching. Capabilities are just labels:
+	//
+	//	{"capability": "storage"} - routes to subscribers with that label
 	Labels map[string]string `protobuf:"bytes,2,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	// Opaque payload. Relay does not inspect this.
+	// Opaque payload, typically a serialized arc.Message. Relay does not inspect this.
 	Payload []byte `protobuf:"bytes,3,opt,name=payload,proto3" json:"payload,omitempty"`
 	// Ed25519 signature over (labels + payload) by sender.
 	Signature []byte `protobuf:"bytes,4,opt,name=signature,proto3" json:"signature,omitempty"`
@@ -248,7 +253,6 @@ type ClientFrame struct {
 	//	*ClientFrame_Subscribe
 	//	*ClientFrame_Unsubscribe
 	//	*ClientFrame_RegisterName
-	//	*ClientFrame_RegisterCapability
 	//	*ClientFrame_Ping
 	Frame         isClientFrame_Frame `protobuf_oneof:"frame"`
 	unknownFields protoimpl.UnknownFields
@@ -328,15 +332,6 @@ func (x *ClientFrame) GetRegisterName() *RegisterNameFrame {
 	return nil
 }
 
-func (x *ClientFrame) GetRegisterCapability() *RegisterCapabilityFrame {
-	if x != nil {
-		if x, ok := x.Frame.(*ClientFrame_RegisterCapability); ok {
-			return x.RegisterCapability
-		}
-	}
-	return nil
-}
-
 func (x *ClientFrame) GetPing() *PingFrame {
 	if x != nil {
 		if x, ok := x.Frame.(*ClientFrame_Ping); ok {
@@ -366,12 +361,8 @@ type ClientFrame_RegisterName struct {
 	RegisterName *RegisterNameFrame `protobuf:"bytes,4,opt,name=register_name,json=registerName,proto3,oneof"`
 }
 
-type ClientFrame_RegisterCapability struct {
-	RegisterCapability *RegisterCapabilityFrame `protobuf:"bytes,5,opt,name=register_capability,json=registerCapability,proto3,oneof"`
-}
-
 type ClientFrame_Ping struct {
-	Ping *PingFrame `protobuf:"bytes,6,opt,name=ping,proto3,oneof"`
+	Ping *PingFrame `protobuf:"bytes,5,opt,name=ping,proto3,oneof"`
 }
 
 func (*ClientFrame_Send) isClientFrame_Frame() {}
@@ -381,8 +372,6 @@ func (*ClientFrame_Subscribe) isClientFrame_Frame() {}
 func (*ClientFrame_Unsubscribe) isClientFrame_Frame() {}
 
 func (*ClientFrame_RegisterName) isClientFrame_Frame() {}
-
-func (*ClientFrame_RegisterCapability) isClientFrame_Frame() {}
 
 func (*ClientFrame_Ping) isClientFrame_Frame() {}
 
@@ -590,61 +579,6 @@ func (x *RegisterNameFrame) GetName() string {
 	return ""
 }
 
-// RegisterCapabilityFrame advertises this connection as a capability provider.
-type RegisterCapabilityFrame struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// Capability type (e.g., "storage", "index").
-	Capability string `protobuf:"bytes,1,opt,name=capability,proto3" json:"capability,omitempty"`
-	// Optional metadata about this capability instance.
-	Metadata      map[string]string `protobuf:"bytes,2,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *RegisterCapabilityFrame) Reset() {
-	*x = RegisterCapabilityFrame{}
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[7]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *RegisterCapabilityFrame) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*RegisterCapabilityFrame) ProtoMessage() {}
-
-func (x *RegisterCapabilityFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[7]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use RegisterCapabilityFrame.ProtoReflect.Descriptor instead.
-func (*RegisterCapabilityFrame) Descriptor() ([]byte, []int) {
-	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{7}
-}
-
-func (x *RegisterCapabilityFrame) GetCapability() string {
-	if x != nil {
-		return x.Capability
-	}
-	return ""
-}
-
-func (x *RegisterCapabilityFrame) GetMetadata() map[string]string {
-	if x != nil {
-		return x.Metadata
-	}
-	return nil
-}
-
 // PingFrame is a keepalive.
 type PingFrame struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -655,7 +589,7 @@ type PingFrame struct {
 
 func (x *PingFrame) Reset() {
 	*x = PingFrame{}
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[8]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -667,7 +601,7 @@ func (x *PingFrame) String() string {
 func (*PingFrame) ProtoMessage() {}
 
 func (x *PingFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[8]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -680,7 +614,7 @@ func (x *PingFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PingFrame.ProtoReflect.Descriptor instead.
 func (*PingFrame) Descriptor() ([]byte, []int) {
-	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{8}
+	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *PingFrame) GetNonce() []byte {
@@ -705,7 +639,7 @@ type ServerFrame struct {
 
 func (x *ServerFrame) Reset() {
 	*x = ServerFrame{}
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[9]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -717,7 +651,7 @@ func (x *ServerFrame) String() string {
 func (*ServerFrame) ProtoMessage() {}
 
 func (x *ServerFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[9]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -730,7 +664,7 @@ func (x *ServerFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServerFrame.ProtoReflect.Descriptor instead.
 func (*ServerFrame) Descriptor() ([]byte, []int) {
-	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{9}
+	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ServerFrame) GetFrame() isServerFrame_Frame {
@@ -816,7 +750,7 @@ type DeliverFrame struct {
 
 func (x *DeliverFrame) Reset() {
 	*x = DeliverFrame{}
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[10]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -828,7 +762,7 @@ func (x *DeliverFrame) String() string {
 func (*DeliverFrame) ProtoMessage() {}
 
 func (x *DeliverFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[10]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -841,7 +775,7 @@ func (x *DeliverFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeliverFrame.ProtoReflect.Descriptor instead.
 func (*DeliverFrame) Descriptor() ([]byte, []int) {
-	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{10}
+	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *DeliverFrame) GetEnvelope() *Envelope {
@@ -868,7 +802,7 @@ type ReceiptFrame struct {
 
 func (x *ReceiptFrame) Reset() {
 	*x = ReceiptFrame{}
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[11]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -880,7 +814,7 @@ func (x *ReceiptFrame) String() string {
 func (*ReceiptFrame) ProtoMessage() {}
 
 func (x *ReceiptFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[11]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -893,7 +827,7 @@ func (x *ReceiptFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReceiptFrame.ProtoReflect.Descriptor instead.
 func (*ReceiptFrame) Descriptor() ([]byte, []int) {
-	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{11}
+	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ReceiptFrame) GetReceipt() *Receipt {
@@ -922,7 +856,7 @@ type ErrorFrame struct {
 
 func (x *ErrorFrame) Reset() {
 	*x = ErrorFrame{}
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[12]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -934,7 +868,7 @@ func (x *ErrorFrame) String() string {
 func (*ErrorFrame) ProtoMessage() {}
 
 func (x *ErrorFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[12]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -947,7 +881,7 @@ func (x *ErrorFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ErrorFrame.ProtoReflect.Descriptor instead.
 func (*ErrorFrame) Descriptor() ([]byte, []int) {
-	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{12}
+	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ErrorFrame) GetCode() int32 {
@@ -997,7 +931,7 @@ type PongFrame struct {
 
 func (x *PongFrame) Reset() {
 	*x = PongFrame{}
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[13]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1009,7 +943,7 @@ func (x *PongFrame) String() string {
 func (*PongFrame) ProtoMessage() {}
 
 func (x *PongFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[13]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1022,7 +956,7 @@ func (x *PongFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PongFrame.ProtoReflect.Descriptor instead.
 func (*PongFrame) Descriptor() ([]byte, []int) {
-	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{13}
+	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *PongFrame) GetNonce() []byte {
@@ -1058,14 +992,13 @@ const file_arc_relay_v1_relay_proto_rawDesc = "" +
 	"\vcorrelation\x18\x02 \x01(\tR\vcorrelation\x123\n" +
 	"\x06status\x18\x03 \x01(\x0e2\x1b.arc.relay.v1.ReceiptStatusR\x06status\x12\x1c\n" +
 	"\tdelivered\x18\x04 \x01(\x05R\tdelivered\x12\x16\n" +
-	"\x06reason\x18\x05 \x01(\tR\x06reason\"\x98\x03\n" +
+	"\x06reason\x18\x05 \x01(\tR\x06reason\"\xbe\x02\n" +
 	"\vClientFrame\x12-\n" +
 	"\x04send\x18\x01 \x01(\v2\x17.arc.relay.v1.SendFrameH\x00R\x04send\x12<\n" +
 	"\tsubscribe\x18\x02 \x01(\v2\x1c.arc.relay.v1.SubscribeFrameH\x00R\tsubscribe\x12B\n" +
 	"\vunsubscribe\x18\x03 \x01(\v2\x1e.arc.relay.v1.UnsubscribeFrameH\x00R\vunsubscribe\x12F\n" +
-	"\rregister_name\x18\x04 \x01(\v2\x1f.arc.relay.v1.RegisterNameFrameH\x00R\fregisterName\x12X\n" +
-	"\x13register_capability\x18\x05 \x01(\v2%.arc.relay.v1.RegisterCapabilityFrameH\x00R\x12registerCapability\x12-\n" +
-	"\x04ping\x18\x06 \x01(\v2\x17.arc.relay.v1.PingFrameH\x00R\x04pingB\a\n" +
+	"\rregister_name\x18\x04 \x01(\v2\x1f.arc.relay.v1.RegisterNameFrameH\x00R\fregisterName\x12-\n" +
+	"\x04ping\x18\x05 \x01(\v2\x17.arc.relay.v1.PingFrameH\x00R\x04pingB\a\n" +
 	"\x05frame\"a\n" +
 	"\tSendFrame\x122\n" +
 	"\benvelope\x18\x01 \x01(\v2\x16.arc.relay.v1.EnvelopeR\benvelope\x12 \n" +
@@ -1079,15 +1012,7 @@ const file_arc_relay_v1_relay_proto_rawDesc = "" +
 	"\x10UnsubscribeFrame\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"'\n" +
 	"\x11RegisterNameFrame\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\"\xc7\x01\n" +
-	"\x17RegisterCapabilityFrame\x12\x1e\n" +
-	"\n" +
-	"capability\x18\x01 \x01(\tR\n" +
-	"capability\x12O\n" +
-	"\bmetadata\x18\x02 \x03(\v23.arc.relay.v1.RegisterCapabilityFrame.MetadataEntryR\bmetadata\x1a;\n" +
-	"\rMetadataEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"!\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\"!\n" +
 	"\tPingFrame\x12\x14\n" +
 	"\x05nonce\x18\x01 \x01(\fR\x05nonce\"\xe7\x01\n" +
 	"\vServerFrame\x126\n" +
@@ -1132,52 +1057,48 @@ func file_arc_relay_v1_relay_proto_rawDescGZIP() []byte {
 }
 
 var file_arc_relay_v1_relay_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_arc_relay_v1_relay_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_arc_relay_v1_relay_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_arc_relay_v1_relay_proto_goTypes = []any{
-	(ReceiptStatus)(0),              // 0: arc.relay.v1.ReceiptStatus
-	(*Envelope)(nil),                // 1: arc.relay.v1.Envelope
-	(*Receipt)(nil),                 // 2: arc.relay.v1.Receipt
-	(*ClientFrame)(nil),             // 3: arc.relay.v1.ClientFrame
-	(*SendFrame)(nil),               // 4: arc.relay.v1.SendFrame
-	(*SubscribeFrame)(nil),          // 5: arc.relay.v1.SubscribeFrame
-	(*UnsubscribeFrame)(nil),        // 6: arc.relay.v1.UnsubscribeFrame
-	(*RegisterNameFrame)(nil),       // 7: arc.relay.v1.RegisterNameFrame
-	(*RegisterCapabilityFrame)(nil), // 8: arc.relay.v1.RegisterCapabilityFrame
-	(*PingFrame)(nil),               // 9: arc.relay.v1.PingFrame
-	(*ServerFrame)(nil),             // 10: arc.relay.v1.ServerFrame
-	(*DeliverFrame)(nil),            // 11: arc.relay.v1.DeliverFrame
-	(*ReceiptFrame)(nil),            // 12: arc.relay.v1.ReceiptFrame
-	(*ErrorFrame)(nil),              // 13: arc.relay.v1.ErrorFrame
-	(*PongFrame)(nil),               // 14: arc.relay.v1.PongFrame
-	nil,                             // 15: arc.relay.v1.Envelope.LabelsEntry
-	nil,                             // 16: arc.relay.v1.SubscribeFrame.LabelsEntry
-	nil,                             // 17: arc.relay.v1.RegisterCapabilityFrame.MetadataEntry
+	(ReceiptStatus)(0),        // 0: arc.relay.v1.ReceiptStatus
+	(*Envelope)(nil),          // 1: arc.relay.v1.Envelope
+	(*Receipt)(nil),           // 2: arc.relay.v1.Receipt
+	(*ClientFrame)(nil),       // 3: arc.relay.v1.ClientFrame
+	(*SendFrame)(nil),         // 4: arc.relay.v1.SendFrame
+	(*SubscribeFrame)(nil),    // 5: arc.relay.v1.SubscribeFrame
+	(*UnsubscribeFrame)(nil),  // 6: arc.relay.v1.UnsubscribeFrame
+	(*RegisterNameFrame)(nil), // 7: arc.relay.v1.RegisterNameFrame
+	(*PingFrame)(nil),         // 8: arc.relay.v1.PingFrame
+	(*ServerFrame)(nil),       // 9: arc.relay.v1.ServerFrame
+	(*DeliverFrame)(nil),      // 10: arc.relay.v1.DeliverFrame
+	(*ReceiptFrame)(nil),      // 11: arc.relay.v1.ReceiptFrame
+	(*ErrorFrame)(nil),        // 12: arc.relay.v1.ErrorFrame
+	(*PongFrame)(nil),         // 13: arc.relay.v1.PongFrame
+	nil,                       // 14: arc.relay.v1.Envelope.LabelsEntry
+	nil,                       // 15: arc.relay.v1.SubscribeFrame.LabelsEntry
 }
 var file_arc_relay_v1_relay_proto_depIdxs = []int32{
-	15, // 0: arc.relay.v1.Envelope.labels:type_name -> arc.relay.v1.Envelope.LabelsEntry
+	14, // 0: arc.relay.v1.Envelope.labels:type_name -> arc.relay.v1.Envelope.LabelsEntry
 	0,  // 1: arc.relay.v1.Receipt.status:type_name -> arc.relay.v1.ReceiptStatus
 	4,  // 2: arc.relay.v1.ClientFrame.send:type_name -> arc.relay.v1.SendFrame
 	5,  // 3: arc.relay.v1.ClientFrame.subscribe:type_name -> arc.relay.v1.SubscribeFrame
 	6,  // 4: arc.relay.v1.ClientFrame.unsubscribe:type_name -> arc.relay.v1.UnsubscribeFrame
 	7,  // 5: arc.relay.v1.ClientFrame.register_name:type_name -> arc.relay.v1.RegisterNameFrame
-	8,  // 6: arc.relay.v1.ClientFrame.register_capability:type_name -> arc.relay.v1.RegisterCapabilityFrame
-	9,  // 7: arc.relay.v1.ClientFrame.ping:type_name -> arc.relay.v1.PingFrame
-	1,  // 8: arc.relay.v1.SendFrame.envelope:type_name -> arc.relay.v1.Envelope
-	16, // 9: arc.relay.v1.SubscribeFrame.labels:type_name -> arc.relay.v1.SubscribeFrame.LabelsEntry
-	17, // 10: arc.relay.v1.RegisterCapabilityFrame.metadata:type_name -> arc.relay.v1.RegisterCapabilityFrame.MetadataEntry
-	11, // 11: arc.relay.v1.ServerFrame.deliver:type_name -> arc.relay.v1.DeliverFrame
-	12, // 12: arc.relay.v1.ServerFrame.receipt:type_name -> arc.relay.v1.ReceiptFrame
-	13, // 13: arc.relay.v1.ServerFrame.error:type_name -> arc.relay.v1.ErrorFrame
-	14, // 14: arc.relay.v1.ServerFrame.pong:type_name -> arc.relay.v1.PongFrame
-	1,  // 15: arc.relay.v1.DeliverFrame.envelope:type_name -> arc.relay.v1.Envelope
-	2,  // 16: arc.relay.v1.ReceiptFrame.receipt:type_name -> arc.relay.v1.Receipt
-	3,  // 17: arc.relay.v1.RelayService.Connect:input_type -> arc.relay.v1.ClientFrame
-	10, // 18: arc.relay.v1.RelayService.Connect:output_type -> arc.relay.v1.ServerFrame
-	18, // [18:19] is the sub-list for method output_type
-	17, // [17:18] is the sub-list for method input_type
-	17, // [17:17] is the sub-list for extension type_name
-	17, // [17:17] is the sub-list for extension extendee
-	0,  // [0:17] is the sub-list for field type_name
+	8,  // 6: arc.relay.v1.ClientFrame.ping:type_name -> arc.relay.v1.PingFrame
+	1,  // 7: arc.relay.v1.SendFrame.envelope:type_name -> arc.relay.v1.Envelope
+	15, // 8: arc.relay.v1.SubscribeFrame.labels:type_name -> arc.relay.v1.SubscribeFrame.LabelsEntry
+	10, // 9: arc.relay.v1.ServerFrame.deliver:type_name -> arc.relay.v1.DeliverFrame
+	11, // 10: arc.relay.v1.ServerFrame.receipt:type_name -> arc.relay.v1.ReceiptFrame
+	12, // 11: arc.relay.v1.ServerFrame.error:type_name -> arc.relay.v1.ErrorFrame
+	13, // 12: arc.relay.v1.ServerFrame.pong:type_name -> arc.relay.v1.PongFrame
+	1,  // 13: arc.relay.v1.DeliverFrame.envelope:type_name -> arc.relay.v1.Envelope
+	2,  // 14: arc.relay.v1.ReceiptFrame.receipt:type_name -> arc.relay.v1.Receipt
+	3,  // 15: arc.relay.v1.RelayService.Connect:input_type -> arc.relay.v1.ClientFrame
+	9,  // 16: arc.relay.v1.RelayService.Connect:output_type -> arc.relay.v1.ServerFrame
+	16, // [16:17] is the sub-list for method output_type
+	15, // [15:16] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_arc_relay_v1_relay_proto_init() }
@@ -1190,10 +1111,9 @@ func file_arc_relay_v1_relay_proto_init() {
 		(*ClientFrame_Subscribe)(nil),
 		(*ClientFrame_Unsubscribe)(nil),
 		(*ClientFrame_RegisterName)(nil),
-		(*ClientFrame_RegisterCapability)(nil),
 		(*ClientFrame_Ping)(nil),
 	}
-	file_arc_relay_v1_relay_proto_msgTypes[9].OneofWrappers = []any{
+	file_arc_relay_v1_relay_proto_msgTypes[8].OneofWrappers = []any{
 		(*ServerFrame_Deliver)(nil),
 		(*ServerFrame_Receipt)(nil),
 		(*ServerFrame_Error)(nil),
@@ -1205,7 +1125,7 @@ func file_arc_relay_v1_relay_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_arc_relay_v1_relay_proto_rawDesc), len(file_arc_relay_v1_relay_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   17,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

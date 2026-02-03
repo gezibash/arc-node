@@ -22,11 +22,10 @@ import (
 // Entrypoint returns the listen command.
 func Entrypoint(v *viper.Viper) *cobra.Command {
 	var (
-		labels     []string
-		name       string
-		capability string
-		relay      string
-		raw        bool
+		labels []string
+		name   string
+		relay  string
+		raw    bool
 	)
 
 	cmd := &cobra.Command{
@@ -39,8 +38,8 @@ Outputs received envelopes as JSON (one per line).
 Examples:
   arc listen                              # listen for all (match-all subscription)
   arc listen --labels topic=news          # filter by labels
+  arc listen --labels capability=storage  # subscribe as capability provider
   arc listen --name alice                 # register name, receive addressed messages
-  arc listen --capability storage         # register as capability provider
   arc listen --relay localhost:50051      # specify relay`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
@@ -102,13 +101,6 @@ Examples:
 				}
 			}
 
-			// Register capability if specified
-			if capability != "" {
-				if err := c.RegisterCapability(capability, nil); err != nil {
-					return fmt.Errorf("register capability: %w", err)
-				}
-			}
-
 			// Subscribe
 			subID := uuid.New().String()
 			if err := c.Subscribe(subID, subLabels); err != nil {
@@ -155,7 +147,6 @@ Examples:
 
 	cmd.Flags().StringSliceVarP(&labels, "labels", "l", nil, "filter labels (key=value, can repeat)")
 	cmd.Flags().StringVar(&name, "name", "", "register addressed name (without @ prefix)")
-	cmd.Flags().StringVar(&capability, "capability", "", "register as capability provider")
 	cmd.Flags().StringVar(&relay, "relay", "", "relay address (default localhost:50051, or ARC_RELAY env)")
 	cmd.Flags().BoolVar(&raw, "raw", false, "always output payload as base64")
 

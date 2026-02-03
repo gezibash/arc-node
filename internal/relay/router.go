@@ -1,11 +1,16 @@
 package relay
 
 import (
+	"encoding/hex"
+	"strings"
+
 	relayv1 "github.com/gezibash/arc-node/api/arc/relay/v1"
 )
 
+const pubkeyHexLen = 64
+
 // Router finds subscribers for an envelope based on labels.
-// Routing order: addressed → capability → label-match.
+// Routing order: addressed → label-match.
 type Router struct {
 	table *Table
 }
@@ -25,21 +30,31 @@ func (r *Router) Route(env *relayv1.Envelope) ([]*Subscriber, RouteMode) {
 
 	// 1. Addressed routing: "to" label
 	if to := labels["to"]; to != "" {
-		if s, ok := r.table.LookupName(to); ok {
-			return []*Subscriber{s}, RouteModeAddressed
+		// Check if it's a pubkey (64 hex chars) or a name
+		if looksLikePubkey(to) {
+			if s, ok := r.table.LookupPubkey(strings.ToLower(to)); ok {
+				return []*Subscriber{s}, RouteModeAddressed
+			}
+		} else {
+			if s, ok := r.table.LookupName(to); ok {
+				return []*Subscriber{s}, RouteModeAddressed
+			}
 		}
 		return nil, RouteModeAddressed // no match for addressed
 	}
 
-	// 2. Capability routing: "capability" label
-	if cap := labels["capability"]; cap != "" {
-		subs := r.table.LookupCapability(cap)
-		return subs, RouteModeCapability
-	}
-
-	// 3. Label-match routing: subscription filters
+	// 2. Label-match routing (includes capabilities)
 	subs := r.table.LookupLabels(labels)
 	return subs, RouteModeLabelMatch
+}
+
+// looksLikePubkey returns true if the string is a 64-char hex string (Ed25519 pubkey).
+func looksLikePubkey(s string) bool {
+	if len(s) != pubkeyHexLen {
+		return false
+	}
+	_, err := hex.DecodeString(s)
+	return err == nil
 }
 
 // RouteMode indicates which routing path was used.
@@ -48,16 +63,13 @@ type RouteMode int
 const (
 	RouteModeNone       RouteMode = iota
 	RouteModeAddressed            // "to" label → single recipient
-	RouteModeCapability           // "capability" label → all providers
-	RouteModeLabelMatch           // subscription filters
+	RouteModeLabelMatch           // subscription filters (includes capabilities)
 )
 
 func (m RouteMode) String() string {
 	switch m {
 	case RouteModeAddressed:
 		return "addressed"
-	case RouteModeCapability:
-		return "capability"
 	case RouteModeLabelMatch:
 		return "label-match"
 	default:

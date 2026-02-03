@@ -18,17 +18,20 @@ service RelayService {
 
 // Envelope is the unit of transmission through the relay.
 // Content-addressed by SHA-256 hash of (labels + payload).
+//
+// Routing labels live here. The payload (typically an arc.Message) may have
+// its own labels for indexing — relay doesn't inspect those.
 message Envelope {
   // Content-addressed reference (SHA-256 hash). Computed by relay if empty.
   bytes ref = 1;
 
-  // Routing labels. Special keys:
-  //   "to"         - addressed routing (@name or @name.relay.arc)
-  //   "capability" - capability routing (storage, index, etc.)
-  //   Other keys   - exact-match subscription filtering
+  // Routing labels (exact-match). Special key:
+  //   "to" - addressed routing to @name (requires RegisterNameFrame)
+  // All other keys use standard label matching. Capabilities are just labels:
+  //   {"capability": "storage"} - routes to subscribers with that label
   map<string, string> labels = 2;
 
-  // Opaque payload. Relay does not inspect this.
+  // Opaque payload, typically a serialized arc.Message. Relay does not inspect this.
   bytes payload = 3;
 
   // Ed25519 signature over (labels + payload) by sender.
@@ -73,8 +76,7 @@ message ClientFrame {
     SubscribeFrame subscribe = 2;
     UnsubscribeFrame unsubscribe = 3;
     RegisterNameFrame register_name = 4;
-    RegisterCapabilityFrame register_capability = 5;
-    PingFrame ping = 6;
+    PingFrame ping = 5;
   }
 }
 
@@ -108,15 +110,6 @@ message UnsubscribeFrame {
 message RegisterNameFrame {
   // Name to register (without @ prefix).
   string name = 1;
-}
-
-// RegisterCapabilityFrame advertises this connection as a capability provider.
-message RegisterCapabilityFrame {
-  // Capability type (e.g., "storage", "index").
-  string capability = 1;
-
-  // Optional metadata about this capability instance.
-  map<string, string> metadata = 2;
 }
 
 // PingFrame is a keepalive.

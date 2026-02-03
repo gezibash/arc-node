@@ -1,6 +1,7 @@
 package relay
 
 import (
+	"encoding/hex"
 	"errors"
 	"sync"
 )
@@ -12,9 +13,9 @@ var (
 // Table manages subscriber registrations for routing.
 type Table struct {
 	mu          sync.RWMutex
-	subscribers map[string]*Subscriber            // id → subscriber
-	names       map[string]*Subscriber            // @name → subscriber
-	caps        map[string]map[string]*Subscriber // capability → id → subscriber
+	subscribers map[string]*Subscriber // id → subscriber
+	names       map[string]*Subscriber // @name → subscriber (for "to" routing)
+	pubkeys     map[string]*Subscriber // hex pubkey → subscriber (for pubkey routing)
 }
 
 // NewTable creates an empty subscription table.
@@ -22,7 +23,7 @@ func NewTable() *Table {
 	return &Table{
 		subscribers: make(map[string]*Subscriber),
 		names:       make(map[string]*Subscriber),
-		caps:        make(map[string]map[string]*Subscriber),
+		pubkeys:     make(map[string]*Subscriber),
 	}
 }
 
@@ -31,6 +32,10 @@ func (t *Table) Add(s *Subscriber) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.subscribers[s.id] = s
+
+	// Index by pubkey for direct addressing
+	pubkeyHex := hex.EncodeToString(s.sender[:])
+	t.pubkeys[pubkeyHex] = s
 }
 
 // Remove unregisters a subscriber and cleans up all associations.
@@ -48,15 +53,9 @@ func (t *Table) Remove(id string) {
 		delete(t.names, s.name)
 	}
 
-	// Remove from capabilities
-	for _, cap := range s.caps {
-		if m := t.caps[cap]; m != nil {
-			delete(m, id)
-			if len(m) == 0 {
-				delete(t.caps, cap)
-			}
-		}
-	}
+	// Remove from pubkeys
+	pubkeyHex := hex.EncodeToString(s.sender[:])
+	delete(t.pubkeys, pubkeyHex)
 
 	delete(t.subscribers, id)
 }
@@ -102,38 +101,12 @@ func (t *Table) LookupName(name string) (*Subscriber, bool) {
 	return s, ok
 }
 
-// RegisterCapability adds a capability registration for a subscriber.
-func (t *Table) RegisterCapability(id, cap string) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
-	s, ok := t.subscribers[id]
-	if !ok {
-		return
-	}
-
-	if t.caps[cap] == nil {
-		t.caps[cap] = make(map[string]*Subscriber)
-	}
-	t.caps[cap][id] = s
-	s.caps = append(s.caps, cap)
-}
-
-// LookupCapability returns all subscribers providing a capability.
-func (t *Table) LookupCapability(cap string) []*Subscriber {
+// LookupPubkey finds a subscriber by hex-encoded public key.
+func (t *Table) LookupPubkey(pubkeyHex string) (*Subscriber, bool) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-
-	m := t.caps[cap]
-	if m == nil {
-		return nil
-	}
-
-	subs := make([]*Subscriber, 0, len(m))
-	for _, s := range m {
-		subs = append(subs, s)
-	}
-	return subs
+	s, ok := t.pubkeys[pubkeyHex]
+	return s, ok
 }
 
 // LookupLabels returns subscribers with subscriptions matching the given labels.

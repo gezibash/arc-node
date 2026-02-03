@@ -42,6 +42,7 @@ The monolithic node has been removed. We now have a clean relay architecture:
 | Relay proto | `api/arc/relay/v1/` | Done |
 | Relay client | `pkg/client/` | Done |
 | CLI (send/listen) | `cmd/arc/send/`, `cmd/arc/listen/` | Done |
+| Addressbook | `internal/addressbook/` | Done |
 | Key management | `internal/keyring/` | Stable |
 | Config | `internal/config/` | Stable |
 
@@ -64,13 +65,40 @@ message.Verify(msg) (bool, error)   // Verify Ed25519 signature
 
 **The relay is a postal service, not a warehouse.**
 
-- Routes envelopes by labels (addressed, capability, label-match)
+- Routes envelopes by labels (exact-match)
 - Non-blocking send to subscriber buffers
 - Full buffer = drop (protects the commons)
 - No persistence, no replay, no guaranteed delivery
 - Receipt means "queued in buffer", not "processed"
 
 See `.docs/RELAY.md` for full details.
+
+## Envelope vs Message Labels
+
+Two layers of labels, two purposes:
+
+```
+┌─────────────────────────────────────────────────────┐
+│ ENVELOPE                                            │
+│   labels: {"to": "@alice", "capability": "storage"} │  ← ROUTING (relay)
+│   payload: ┌─────────────────────────────────────┐  │
+│            │ MESSAGE                              │  │
+│            │   labels: {"topic": "btc", ...}     │  │  ← INDEXING (arc-index)
+│            │   content: ...                       │  │
+│            └─────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────┘
+```
+
+| Layer | Labels | Matcher | Owner |
+|-------|--------|---------|-------|
+| Envelope | routing | exact-match | Relay |
+| Message | indexing | CEL | arc-index |
+
+**Relay is dumb:** subscribes with labels, routes by exact-match.
+**arc-index is smart:** parses payload, indexes message labels, supports CEL queries.
+
+Capabilities are just labels. A storage provider subscribes with
+`{"capability": "storage"}`. No special routing mode needed.
 
 ## CLI
 
@@ -87,7 +115,26 @@ arc listen --name myname              # register name
 
 arc relay start                       # run relay server (admin)
 arc keys generate                     # key management
+arc addressbook add alice 7f3a...     # local name resolution
 ```
+
+## Addressbook
+
+Local addressbook maps `@names` to public keys. Stored at `~/.arc/addressbook.json`.
+
+```bash
+arc addressbook add alice 7f3a8b9c...    # add entry
+arc addressbook remove alice             # remove entry
+arc addressbook list                     # list all entries
+arc addressbook lookup alice             # get pubkey for name
+```
+
+When sending to `@alice`, the client checks the local addressbook first:
+- **Found:** rewrites to pubkey, routes directly by pubkey
+- **Not found:** sends name to relay for resolution
+
+This means you can send to someone by name even if they haven't registered
+with the relay, as long as you have their pubkey in your addressbook.
 
 ## Build
 

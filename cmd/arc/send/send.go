@@ -11,6 +11,7 @@ import (
 	"time"
 
 	relayv1 "github.com/gezibash/arc-node/api/arc/relay/v1"
+	"github.com/gezibash/arc-node/internal/addressbook"
 	"github.com/gezibash/arc-node/internal/config"
 	"github.com/gezibash/arc-node/internal/keyring"
 	"github.com/gezibash/arc-node/pkg/client"
@@ -86,7 +87,18 @@ Examples:
 
 			// Add special routing labels
 			if to != "" {
-				envLabels["to"] = to
+				// Try local addressbook first
+				ab := addressbook.New(dataDir(v))
+				if err := ab.Load(); err == nil {
+					resolved, fromAB := ab.ResolveRecipient(to)
+					if fromAB {
+						fmt.Fprintf(os.Stderr, "Resolved @%s from addressbook\n", strings.TrimPrefix(to, "@"))
+					}
+					envLabels["to"] = resolved
+				} else {
+					// Addressbook load failed, use raw value
+					envLabels["to"] = strings.TrimPrefix(to, "@")
+				}
 			}
 			if capability != "" {
 				envLabels["capability"] = capability

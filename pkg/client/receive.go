@@ -81,27 +81,6 @@ func (c *Client) RegisterName(name string) error {
 	return err
 }
 
-// RegisterCapability advertises this connection as a capability provider.
-func (c *Client) RegisterCapability(capability string, meta map[string]string) error {
-	if c.closed.Load() {
-		return ErrClosed
-	}
-
-	frame := &relayv1.ClientFrame{
-		Frame: &relayv1.ClientFrame_RegisterCapability{
-			RegisterCapability: &relayv1.RegisterCapabilityFrame{
-				Capability: capability,
-				Metadata:   meta,
-			},
-		},
-	}
-
-	c.mu.Lock()
-	err := c.stream.Send(frame)
-	c.mu.Unlock()
-	return err
-}
-
 // Receive waits for the next delivered envelope.
 // Returns ErrClosed if the connection is closed.
 func (c *Client) Receive(ctx context.Context) (*Delivery, error) {

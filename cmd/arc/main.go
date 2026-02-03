@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 
+	"github.com/gezibash/arc-node/cmd/arc/addressbook"
 	"github.com/gezibash/arc-node/cmd/arc/discover"
 	"github.com/gezibash/arc-node/cmd/arc/keys"
 	"github.com/gezibash/arc-node/cmd/arc/listen"
@@ -33,6 +34,7 @@ func main() {
 	// Admin/utility commands
 	rootCmd.AddCommand(relay.Entrypoint(v))
 	rootCmd.AddCommand(keys.Entrypoint(v))
+	rootCmd.AddCommand(addressbook.Entrypoint(v))
 	rootCmd.AddCommand(newVersionCmd())
 	rootCmd.AddCommand(newCompletionCmd())
 

@@ -1,6 +1,7 @@
 package relay
 
 import (
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -20,8 +21,7 @@ type Subscriber struct {
 	stream    relayv1.RelayService_ConnectServer
 	buffer    chan *relayv1.ServerFrame
 	sender    identity.PublicKey
-	name      string   // registered @name, if any
-	caps      []string // registered capabilities
+	name      string // registered @name, if any
 	lastSend  atomic.Int64
 	lastRecv  atomic.Int64
 	closed    atomic.Bool
@@ -63,12 +63,6 @@ func (s *Subscriber) Name() string { return s.name }
 // SetName registers an addressed name.
 func (s *Subscriber) SetName(name string) { s.name = name }
 
-// Caps returns registered capabilities.
-func (s *Subscriber) Caps() []string { return s.caps }
-
-// AddCap adds a capability registration.
-func (s *Subscriber) AddCap(cap string) { s.caps = append(s.caps, cap) }
-
 // Subscribe adds a label-match subscription.
 func (s *Subscriber) Subscribe(id string, labels map[string]string) {
 	s.subMu.Lock()
@@ -105,6 +99,12 @@ func (s *Subscriber) Send(frame *relayv1.ServerFrame) bool {
 		s.lastSend.Store(time.Now().UnixNano())
 		return true
 	default:
+		slog.Warn("buffer full, dropping",
+			"component", "subscriber",
+			"subscriber_id", s.id,
+			"subscriber_name", s.name,
+			"buffer_len", len(s.buffer),
+		)
 		return false // buffer full, drop
 	}
 }
