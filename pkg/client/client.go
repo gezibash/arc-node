@@ -1,888 +1,152 @@
 package client
 
 import (
-	"bytes"
 	"context"
-	"crypto/rand"
+	"encoding/hex"
+	"errors"
 	"fmt"
+	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
-	nodev1 "github.com/gezibash/arc-node/api/arc/node/v1"
-	"github.com/gezibash/arc-node/pkg/envelope"
+	relayv1 "github.com/gezibash/arc-node/api/arc/relay/v1"
 	"github.com/gezibash/arc/v2/pkg/identity"
 	"github.com/gezibash/arc/v2/pkg/message"
-	"github.com/gezibash/arc/v2/pkg/reference"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 )
 
-type Client struct {
-	conn     *grpc.ClientConn
-	stub     nodev1.NodeServiceClient
-	nodeInfo *nodeInfoState
+// DefaultRelayAddr is the default relay address.
+const DefaultRelayAddr = "localhost:50051"
 
-	muxMu sync.Mutex
-	mux   *channelMux
-}
-
-type clientConfig struct {
-	kp      *identity.Keypair
-	nodeKey *identity.PublicKey
-}
-
-// NodeInfo describes the remote node as observed by the client.
-type NodeInfo struct {
-	PublicKey      identity.PublicKey
-	ServiceName    string
-	ServiceVersion string
-}
-
-type nodeInfoState struct {
-	mu   sync.RWMutex
-	info NodeInfo
-	ok   bool
-}
-
-func (s *nodeInfoState) set(info NodeInfo) {
-	s.mu.Lock()
-	s.info = info
-	s.ok = true
-	s.mu.Unlock()
-}
-
-func (s *nodeInfoState) get() (NodeInfo, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	if !s.ok {
-		return NodeInfo{}, false
-	}
-	return s.info, true
-}
-
-// Option configures client behavior.
-type Option func(*clientConfig)
-
-// WithIdentity configures the client to sign outgoing requests with the given keypair.
-func WithIdentity(kp *identity.Keypair) Option {
-	return func(c *clientConfig) { c.kp = kp }
-}
-
-// WithNodeKey configures the client to verify response envelopes from the given node key.
-func WithNodeKey(pub identity.PublicKey) Option {
-	return func(c *clientConfig) { c.nodeKey = &pub }
-}
-
-func Dial(addr string, opts ...Option) (*Client, error) {
-	cfg := &clientConfig{}
-	for _, o := range opts {
-		o(cfg)
-	}
-
-	infoState := &nodeInfoState{}
-	if cfg.nodeKey != nil {
-		infoState.set(NodeInfo{PublicKey: *cfg.nodeKey})
-	}
-
-	dialOpts := []grpc.DialOption{
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	}
-
-	if cfg.kp != nil {
-		dialOpts = append(dialOpts,
-			grpc.WithStreamInterceptor(clientStreamInterceptor(cfg.kp, infoState)),
-		)
-	}
-
-	conn, err := grpc.NewClient(addr, dialOpts...)
-	if err != nil {
-		return nil, fmt.Errorf("dial %s: %w", addr, err)
-	}
-	return &Client{
-		conn:     conn,
-		stub:     nodev1.NewNodeServiceClient(conn),
-		nodeInfo: infoState,
-	}, nil
-}
-
-func clientStreamInterceptor(kp *identity.Keypair, infoState *nodeInfoState) grpc.StreamClientInterceptor {
-	return func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, callOpts ...grpc.CallOption) (grpc.ClientStream, error) {
-		var toKey identity.PublicKey
-		if infoState != nil {
-			if info, ok := infoState.get(); ok {
-				toKey = info.PublicKey
-			}
-		}
-
-		// Seal envelope with empty payload for stream open.
-		// toKey may be zero if node key is unknown (e.g. federation bootstrap).
-		env, err := envelope.Seal(kp, toKey, []byte{}, method, kp.PublicKey(), 0, nil, &nodev1.Dimensions{Persistence: nodev1.Persistence_PERSISTENCE_DURABLE})
-		if err != nil {
-			return nil, fmt.Errorf("seal stream envelope: %w", err)
-		}
-
-		ctx = envelope.InjectOutgoing(ctx, env, *env.Message.Signature)
-
-		return streamer(ctx, desc, cc, method, callOpts...)
-	}
-}
-
-func (c *Client) channel(ctx context.Context) (*channelMux, error) {
-	_ = ctx
-	c.muxMu.Lock()
-	defer c.muxMu.Unlock()
-
-	if c.mux != nil {
-		return c.mux, nil
-	}
-
-	stream, err := c.stub.Channel(context.Background())
-	if err != nil {
-		return nil, err
-	}
-	c.mux = newChannelMux(stream)
-	return c.mux, nil
-}
-
-func (c *Client) Close() error {
-	if c.mux != nil {
-		c.mux.close()
-	}
-	return c.conn.Close()
-}
-
-// NodeInfo returns the last observed node info from response envelopes.
-func (c *Client) NodeInfo() (NodeInfo, bool) {
-	if c == nil || c.nodeInfo == nil {
-		return NodeInfo{}, false
-	}
-	return c.nodeInfo.get()
-}
-
-// NodeKey returns the last observed node public key.
-func (c *Client) NodeKey() (identity.PublicKey, bool) {
-	info, ok := c.NodeInfo()
-	if !ok || info.PublicKey == (identity.PublicKey{}) {
-		return identity.PublicKey{}, false
-	}
-	return info.PublicKey, true
-}
-
-// Ping measures round-trip latency to the node using a dedicated PingFrame.
-// Returns the round-trip duration, the server's wall-clock time, and any error.
-func (c *Client) Ping(ctx context.Context) (time.Duration, time.Time, error) {
-	nonce := make([]byte, 8)
-	if _, err := rand.Read(nonce); err != nil {
-		return 0, time.Time{}, fmt.Errorf("generate nonce: %w", err)
-	}
-
-	mux, err := c.channel(ctx)
-	if err != nil {
-		return 0, time.Time{}, fmt.Errorf("channel unavailable: %w", err)
-	}
-
-	start := time.Now()
-	resp, err := mux.roundTrip(ctx, &nodev1.ClientFrame{
-		Frame: &nodev1.ClientFrame_Ping{Ping: &nodev1.PingFrame{Nonce: nonce}},
-	})
-	rtt := time.Since(start)
-	if err != nil {
-		return 0, time.Time{}, err
-	}
-
-	pong, ok := resp.Frame.(*nodev1.ServerFrame_Pong)
-	if !ok {
-		return 0, time.Time{}, fmt.Errorf("unexpected server frame type")
-	}
-	if !bytes.Equal(pong.Pong.Nonce, nonce) {
-		return 0, time.Time{}, fmt.Errorf("nonce mismatch")
-	}
-
-	var serverTime time.Time
-	if pong.Pong.ServerTime != nil {
-		serverTime = pong.Pong.ServerTime.AsTime()
-	}
-	return rtt, serverTime, nil
-}
-
-// GetKind indicates whether a ResolveGet result is a blob or message.
-type GetKind int
-
+// Metadata keys for authentication (must match internal/relay/interceptor.go).
 const (
-	GetKindBlob    GetKind = 0
-	GetKindMessage GetKind = 1
+	MetaFrom      = "arc-from"
+	MetaSignature = "arc-signature"
+	MetaTimestamp = "arc-timestamp"
 )
 
-// GetResult is the result of a ResolveGet call.
-type GetResult struct {
-	Kind      GetKind
-	Ref       reference.Reference
-	Data      []byte            // blob content (GetKindBlob only)
-	Labels    map[string]string // message metadata (GetKindMessage only)
-	Timestamp int64             // message timestamp (GetKindMessage only)
+var (
+	ErrClosed       = errors.New("client closed")
+	ErrNotConnected = errors.New("not connected")
+)
+
+// Client connects to a relay and provides send/receive operations.
+type Client struct {
+	conn    *grpc.ClientConn
+	stream  relayv1.RelayService_ConnectClient
+	keypair *identity.Keypair
+	sender  identity.PublicKey
+
+	recvCh chan *relayv1.ServerFrame
+	errCh  chan error
+
+	mu     sync.Mutex
+	closed atomic.Bool
 }
 
-func (c *Client) ResolveGet(ctx context.Context, prefix string) (*GetResult, error) {
-	mux, err := c.channel(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("channel unavailable: %w", err)
+// Dial connects to a relay at the given address using the provided keypair.
+func Dial(ctx context.Context, addr string, kp *identity.Keypair) (*Client, error) {
+	if addr == "" {
+		addr = DefaultRelayAddr
 	}
-	resp, err := mux.roundTrip(ctx, &nodev1.ClientFrame{
-		Frame: &nodev1.ClientFrame_ResolveGet{ResolveGet: &nodev1.ResolveGetFrame{Prefix: prefix}},
+
+	// Create gRPC connection
+	conn, err := grpc.NewClient(addr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("dial: %w", err)
+	}
+
+	// Create auth metadata
+	ts := time.Now().UnixMilli()
+	from := kp.PublicKey()
+
+	// Sign auth message (from || timestamp)
+	authMsg := message.Message{
+		From:      from,
+		Timestamp: ts,
+	}
+	if err := message.Sign(&authMsg, kp); err != nil {
+		_ = conn.Close()
+		return nil, fmt.Errorf("sign auth: %w", err)
+	}
+
+	md := metadata.New(map[string]string{
+		MetaFrom:      hex.EncodeToString(from[:]),
+		MetaSignature: hex.EncodeToString(authMsg.Signature[:]),
+		MetaTimestamp: strconv.FormatInt(ts, 10),
 	})
+	ctx = metadata.NewOutgoingContext(ctx, md)
+
+	// Connect stream
+	client := relayv1.NewRelayServiceClient(conn)
+	stream, err := client.Connect(ctx)
 	if err != nil {
-		return nil, err
+		_ = conn.Close()
+		return nil, fmt.Errorf("connect: %w", err)
 	}
-	rf, ok := resp.Frame.(*nodev1.ServerFrame_ResolveGetResponse)
-	if !ok {
-		return nil, fmt.Errorf("unexpected server frame type")
+
+	c := &Client{
+		conn:    conn,
+		stream:  stream,
+		keypair: kp,
+		sender:  from,
+		recvCh:  make(chan *relayv1.ServerFrame, 64),
+		errCh:   make(chan error, 1),
 	}
-	var ref reference.Reference
-	copy(ref[:], rf.ResolveGetResponse.Reference)
-	return &GetResult{
-		Kind:      GetKind(rf.ResolveGetResponse.Kind),
-		Ref:       ref,
-		Data:      rf.ResolveGetResponse.Data,
-		Labels:    rf.ResolveGetResponse.Labels,
-		Timestamp: rf.ResolveGetResponse.Timestamp,
-	}, nil
+
+	// Start receiver goroutine
+	go c.receiveLoop()
+
+	return c, nil
 }
 
-func (c *Client) PutContent(ctx context.Context, data []byte) (reference.Reference, error) {
-	mux, err := c.channel(ctx)
-	if err != nil {
-		return reference.Reference{}, fmt.Errorf("channel unavailable: %w", err)
-	}
-	resp, err := mux.roundTrip(ctx, &nodev1.ClientFrame{
-		Frame: &nodev1.ClientFrame_Put{Put: &nodev1.PutFrame{Data: data}},
-	})
-	if err != nil {
-		return reference.Reference{}, err
-	}
-	rc, ok := resp.Frame.(*nodev1.ServerFrame_Receipt)
-	if !ok {
-		return reference.Reference{}, fmt.Errorf("unexpected server frame type")
-	}
-	var ref reference.Reference
-	copy(ref[:], rc.Receipt.Reference)
-	return ref, nil
+// Sender returns the client's public key.
+func (c *Client) Sender() identity.PublicKey {
+	return c.sender
 }
 
-func (c *Client) GetContent(ctx context.Context, ref reference.Reference) ([]byte, error) {
-	mux, err := c.channel(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("channel unavailable: %w", err)
-	}
-	resp, err := mux.roundTrip(ctx, &nodev1.ClientFrame{
-		Frame: &nodev1.ClientFrame_Get{Get: &nodev1.GetFrame{Reference: ref[:]}},
-	})
-	if err != nil {
-		return nil, err
-	}
-	rf, ok := resp.Frame.(*nodev1.ServerFrame_Response)
-	if !ok {
-		return nil, fmt.Errorf("unexpected server frame type")
-	}
-	return rf.Response.Data, nil
-}
-
-// SendMessage sends a signed message with explicit dimensions.
-// Every caller must specify dimensions — they are the protocol.
-// PublishResult contains server-assigned values returned after a successful publish.
-type PublishResult struct {
-	Ref       reference.Reference
-	Timestamp int64
-	Sequence  uint64
-}
-
-func (c *Client) SendMessage(ctx context.Context, msg message.Message, labels map[string]string, dims *nodev1.Dimensions) (*PublishResult, error) {
-	canonical, err := message.CanonicalBytes(msg)
-	if err != nil {
-		return nil, fmt.Errorf("canonical bytes: %w", err)
-	}
-	mux, err := c.channel(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("channel unavailable: %w", err)
-	}
-	resp, err := mux.roundTrip(ctx, &nodev1.ClientFrame{
-		Frame: &nodev1.ClientFrame_Publish{Publish: &nodev1.PublishFrame{
-			Message:    canonical,
-			Labels:     labels,
-			Dimensions: dims,
-		}},
-	})
-	if err != nil {
-		return nil, err
-	}
-	rc, ok := resp.Frame.(*nodev1.ServerFrame_Receipt)
-	if !ok {
-		return nil, fmt.Errorf("unexpected server frame type")
-	}
-	var ref reference.Reference
-	copy(ref[:], rc.Receipt.Reference)
-	return &PublishResult{Ref: ref, Timestamp: rc.Receipt.Timestamp, Sequence: rc.Receipt.Sequence}, nil
-}
-
-// BatchMessage is a single message in a batch publish request.
-type BatchMessage struct {
-	Message    message.Message
-	Labels     map[string]string
-	Dimensions *nodev1.Dimensions
-}
-
-// BatchResult is the result of a single message in a batch publish.
-type BatchResult struct {
-	Ref       reference.Reference
-	Timestamp int64
-	Sequence  uint64
-	Err       error
-}
-
-// BatchSendMessages publishes multiple messages in a single round-trip.
-// Individual messages may fail independently (partial success semantics).
-func (c *Client) BatchSendMessages(ctx context.Context, msgs []BatchMessage) ([]BatchResult, error) {
-	frames := make([]*nodev1.PublishFrame, len(msgs))
-	for i, m := range msgs {
-		canonical, err := message.CanonicalBytes(m.Message)
-		if err != nil {
-			return nil, fmt.Errorf("canonical bytes for message %d: %w", i, err)
-		}
-		frames[i] = &nodev1.PublishFrame{
-			Message:    canonical,
-			Labels:     m.Labels,
-			Dimensions: m.Dimensions,
-		}
-	}
-
-	mux, err := c.channel(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("channel unavailable: %w", err)
-	}
-	resp, err := mux.roundTrip(ctx, &nodev1.ClientFrame{
-		Frame: &nodev1.ClientFrame_BatchPublish{BatchPublish: &nodev1.BatchPublishFrame{
-			Messages: frames,
-		}},
-	})
-	if err != nil {
-		return nil, err
-	}
-	br, ok := resp.Frame.(*nodev1.ServerFrame_BatchReceipt)
-	if !ok {
-		return nil, fmt.Errorf("unexpected server frame type")
-	}
-	results := make([]BatchResult, len(br.BatchReceipt.Results))
-	for i, r := range br.BatchReceipt.Results {
-		if r.Ok {
-			var ref reference.Reference
-			copy(ref[:], r.Reference)
-			results[i] = BatchResult{Ref: ref, Timestamp: r.Timestamp, Sequence: r.Sequence}
-		} else {
-			results[i] = BatchResult{Err: fmt.Errorf("%s", r.Error)}
-		}
-	}
-	return results, nil
-}
-
-type QueryOptions struct {
-	Expression string
-	Labels     map[string]string
-	Limit      int
-	Cursor     string
-	Descending bool
-}
-
-type QueryResult struct {
-	Entries    []*Entry
-	NextCursor string
-	HasMore    bool
-}
-
-type Entry struct {
-	Ref         reference.Reference
-	Labels      map[string]string
-	Timestamp   int64
-	Dimensions  *EntryDimensions // nil if not provided by server
-	From        identity.PublicKey
-	To          identity.PublicKey
-	ContentType string
-	Correlation string
-}
-
-// EntryDimensions carries dimension metadata from the originating node.
-type EntryDimensions struct {
-	Visibility       int32
-	Persistence      int32
-	Delivery         int32
-	Pattern          int32
-	Affinity         int32
-	AffinityKey      string
-	TtlMs            int64
-	Ordering         int32
-	DedupMode        int32
-	IdempotencyKey   string
-	DeliveryComplete int32
-	CompleteN        int32
-	Priority         int32
-	MaxRedelivery    int32
-	AckTimeoutMs     int64
-	Correlation      string
-}
-
-func (c *Client) QueryMessages(ctx context.Context, opts *QueryOptions) (*QueryResult, error) {
-	order := nodev1.Order_ORDER_ASCENDING
-	if opts.Descending {
-		order = nodev1.Order_ORDER_DESCENDING
-	}
-	mux, err := c.channel(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("channel unavailable: %w", err)
-	}
-	resp, err := mux.roundTrip(ctx, &nodev1.ClientFrame{
-		Frame: &nodev1.ClientFrame_Query{Query: &nodev1.QueryFrame{
-			Labels:     opts.Labels,
-			Limit:      int32(opts.Limit),
-			Expression: opts.Expression,
-			Cursor:     opts.Cursor,
-			Order:      order,
-		}},
-	})
-	if err != nil {
-		return nil, err
-	}
-	qrf, ok := resp.Frame.(*nodev1.ServerFrame_Response)
-	if !ok {
-		return nil, fmt.Errorf("unexpected server frame type")
-	}
-	return protoToQueryResult(qrf.Response.Entries, qrf.Response.NextCursor, qrf.Response.HasMore), nil
-}
-
-func protoToEntryDimensions(d *nodev1.Dimensions) *EntryDimensions {
-	if d == nil {
+// Close closes the connection.
+func (c *Client) Close() error {
+	if c.closed.Swap(true) {
 		return nil
 	}
-	return &EntryDimensions{
-		Visibility:       int32(d.Visibility),
-		Persistence:      int32(d.Persistence),
-		Delivery:         int32(d.Delivery),
-		Pattern:          int32(d.Pattern),
-		Affinity:         int32(d.Affinity),
-		AffinityKey:      d.AffinityKey,
-		TtlMs:            d.TtlMs,
-		Ordering:         int32(d.Ordering),
-		DedupMode:        int32(d.Dedup),
-		IdempotencyKey:   d.IdempotencyKey,
-		DeliveryComplete: int32(d.Complete),
-		CompleteN:        d.CompleteN,
-		Priority:         d.Priority,
-		MaxRedelivery:    d.MaxRedelivery,
-		AckTimeoutMs:     d.AckTimeoutMs,
-		Correlation:      d.Correlation,
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.stream != nil {
+		_ = c.stream.CloseSend()
 	}
-}
-
-func protoToEntry(e *nodev1.IndexEntry) *Entry {
-	var ref reference.Reference
-	copy(ref[:], e.Reference)
-	var from, to identity.PublicKey
-	copy(from[:], e.From)
-	copy(to[:], e.To)
-	return &Entry{
-		Ref:         ref,
-		Labels:      e.Labels,
-		Timestamp:   e.Timestamp,
-		Dimensions:  protoToEntryDimensions(e.Dimensions),
-		From:        from,
-		To:          to,
-		ContentType: e.ContentType,
-		Correlation: e.Correlation,
+	if c.conn != nil {
+		return c.conn.Close()
 	}
+	return nil
 }
 
-func protoToQueryResult(entries []*nodev1.IndexEntry, nextCursor string, hasMore bool) *QueryResult {
-	out := make([]*Entry, len(entries))
-	for i, e := range entries {
-		out[i] = protoToEntry(e)
-	}
-	return &QueryResult{
-		Entries:    out,
-		NextCursor: nextCursor,
-		HasMore:    hasMore,
-	}
-}
-
-// SubscribeOption configures a subscription.
-type SubscribeOption func(*subscribeConfig)
-
-type subscribeConfig struct {
-	maxInflight  int32
-	prefetch     int32
-	backpressure nodev1.Backpressure
-}
-
-// WithMaxInflight sets the maximum number of in-flight (unacked) entries.
-func WithMaxInflight(n int32) SubscribeOption {
-	return func(c *subscribeConfig) { c.maxInflight = n }
-}
-
-// WithPrefetch sets the prefetch window hint.
-func WithPrefetch(n int32) SubscribeOption {
-	return func(c *subscribeConfig) { c.prefetch = n }
-}
-
-// WithBackpressure sets the backpressure policy for the subscription.
-func WithBackpressure(p nodev1.Backpressure) SubscribeOption {
-	return func(c *subscribeConfig) { c.backpressure = p }
-}
-
-func (c *Client) SubscribeMessages(ctx context.Context, expression string, labels map[string]string, opts ...SubscribeOption) (<-chan *Entry, <-chan error, error) {
-	mux, err := c.channel(ctx)
-	if err != nil {
-		return nil, nil, fmt.Errorf("channel unavailable: %w", err)
-	}
-	return c.subscribeViaChannel(ctx, mux, expression, labels, opts...)
-}
-
-// SubscribeChannel subscribes using only the Channel bidi stream.
-func (c *Client) SubscribeChannel(ctx context.Context, expression string, labels map[string]string, opts ...SubscribeOption) (<-chan *Entry, <-chan error, error) {
-	mux, err := c.channel(ctx)
-	if err != nil {
-		return nil, nil, fmt.Errorf("channel unavailable: %w", err)
-	}
-	return c.subscribeViaChannel(ctx, mux, expression, labels, opts...)
-}
-
-func (c *Client) subscribeViaChannel(ctx context.Context, mux *channelMux, expression string, labels map[string]string, opts ...SubscribeOption) (<-chan *Entry, <-chan error, error) {
-	channel := "default"
-
-	var cfg subscribeConfig
-	for _, o := range opts {
-		o(&cfg)
-	}
-
-	// Register delivery channel before sending subscribe frame.
-	deliveries := mux.subscribe(channel)
-
-	_, err := mux.roundTrip(ctx, &nodev1.ClientFrame{
-		Frame: &nodev1.ClientFrame_Subscribe{Subscribe: &nodev1.SubscribeFrame{
-			Channel:      channel,
-			Labels:       labels,
-			Expression:   expression,
-			MaxInflight:  cfg.maxInflight,
-			Prefetch:     cfg.prefetch,
-			Backpressure: cfg.backpressure,
-		}},
-	})
-	if err != nil {
-		mux.unsubscribe(channel)
-		return nil, nil, err
-	}
-
-	entries := make(chan *Entry)
-	errs := make(chan error, 1)
-
-	go func() {
-		defer close(entries)
-		defer close(errs)
-		for {
-			select {
-			case <-ctx.Done():
-				// Send unsubscribe (best effort).
-				_, _ = mux.roundTrip(context.Background(), &nodev1.ClientFrame{
-					Frame: &nodev1.ClientFrame_Unsubscribe{Unsubscribe: &nodev1.UnsubscribeFrame{Channel: channel}},
-				})
-				mux.unsubscribe(channel)
-				return
-			case df, ok := <-deliveries:
-				if !ok {
-					return
-				}
-				entry := protoToEntry(df.Entry)
+// receiveLoop reads frames from the stream and dispatches them.
+func (c *Client) receiveLoop() {
+	for {
+		frame, err := c.stream.Recv()
+		if err != nil {
+			if !c.closed.Load() {
 				select {
-				case entries <- entry:
-					// Auto-ack if delivery_id is set (at-least-once).
-					if df.DeliveryId > 0 {
-						_ = mux.send(&nodev1.ClientFrame{
-							Frame: &nodev1.ClientFrame_Ack{Ack: &nodev1.AckFrame{
-								DeliveryId: df.DeliveryId,
-							}},
-						})
-					}
-				case <-ctx.Done():
-					return
+				case c.errCh <- err:
+				default:
 				}
 			}
+			close(c.recvCh)
+			return
 		}
-	}()
 
-	return entries, errs, nil
-}
-
-// PresenceEvent describes the presence state of a peer.
-type PresenceEvent struct {
-	PublicKey identity.PublicKey
-	Status    string
-	Typing    bool
-	Metadata  map[string]string
-	UpdatedAt int64
-	Removed   bool
-}
-
-func protoToPresenceEvent(f *nodev1.PresenceEventFrame) *PresenceEvent {
-	var pk identity.PublicKey
-	copy(pk[:], f.PublicKey)
-	return &PresenceEvent{
-		PublicKey: pk,
-		Status:    f.Status,
-		Typing:    f.Typing,
-		Metadata:  f.Metadata,
-		UpdatedAt: f.UpdatedAt,
-		Removed:   f.Removed,
-	}
-}
-
-// SetPresence announces the caller's presence state to the node.
-func (c *Client) SetPresence(ctx context.Context, status string, typing bool, metadata map[string]string, ttlSeconds int64) error {
-	mux, err := c.channel(ctx)
-	if err != nil {
-		return fmt.Errorf("channel unavailable: %w", err)
-	}
-	_, err = mux.roundTrip(ctx, &nodev1.ClientFrame{
-		Frame: &nodev1.ClientFrame_PresenceSet{PresenceSet: &nodev1.PresenceSetFrame{
-			Status:     status,
-			Typing:     typing,
-			Metadata:   metadata,
-			TtlSeconds: ttlSeconds,
-		}},
-	})
-	return err
-}
-
-// QueryPresence returns the current presence state for the given public keys.
-// Pass nil or empty slice to query all.
-func (c *Client) QueryPresence(ctx context.Context, publicKeys []identity.PublicKey) ([]*PresenceEvent, error) {
-	mux, err := c.channel(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("channel unavailable: %w", err)
-	}
-
-	rawKeys := make([][]byte, len(publicKeys))
-	for i, pk := range publicKeys {
-		rawKeys[i] = pk[:]
-	}
-
-	resp, err := mux.roundTrip(ctx, &nodev1.ClientFrame{
-		Frame: &nodev1.ClientFrame_PresenceQuery{PresenceQuery: &nodev1.PresenceQueryFrame{
-			PublicKeys: rawKeys,
-		}},
-	})
-	if err != nil {
-		return nil, err
-	}
-	pr, ok := resp.Frame.(*nodev1.ServerFrame_PresenceResponse)
-	if !ok {
-		return nil, fmt.Errorf("unexpected server frame type")
-	}
-	events := make([]*PresenceEvent, len(pr.PresenceResponse.Entries))
-	for i, e := range pr.PresenceResponse.Entries {
-		events[i] = protoToPresenceEvent(e)
-	}
-	return events, nil
-}
-
-// PresenceSubscription receives real-time presence updates.
-type PresenceSubscription struct {
-	events <-chan *PresenceEvent
-	cancel func()
-}
-
-// Events returns the channel of presence events.
-func (ps *PresenceSubscription) Events() <-chan *PresenceEvent {
-	return ps.events
-}
-
-// Close stops the subscription.
-func (ps *PresenceSubscription) Close() {
-	ps.cancel()
-}
-
-// SubscribePresence subscribes to presence changes for the given public keys.
-// Pass nil or empty slice to subscribe to all.
-func (c *Client) SubscribePresence(ctx context.Context, publicKeys []identity.PublicKey) (*PresenceSubscription, error) {
-	mux, err := c.channel(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("channel unavailable: %w", err)
-	}
-
-	rawKeys := make([][]byte, len(publicKeys))
-	for i, pk := range publicKeys {
-		rawKeys[i] = pk[:]
-	}
-
-	// Register for unsolicited presence events before the subscribe RPC.
-	presenceCh := mux.subscribePresence()
-
-	resp, err := mux.roundTrip(ctx, &nodev1.ClientFrame{
-		Frame: &nodev1.ClientFrame_PresenceSubscribe{PresenceSubscribe: &nodev1.PresenceSubscribeFrame{
-			PublicKeys: rawKeys,
-		}},
-	})
-	if err != nil {
-		mux.unsubscribePresence()
-		return nil, err
-	}
-
-	events := make(chan *PresenceEvent, 64)
-
-	// Emit initial snapshot from the response.
-	if pr, ok := resp.Frame.(*nodev1.ServerFrame_PresenceResponse); ok {
-		for _, e := range pr.PresenceResponse.Entries {
-			select {
-			case events <- protoToPresenceEvent(e):
-			default:
-			}
+		select {
+		case c.recvCh <- frame:
+		default:
+			// Drop if buffer full
 		}
 	}
-
-	subCtx, cancel := context.WithCancel(ctx)
-
-	go func() {
-		defer close(events)
-		defer mux.unsubscribePresence()
-		for {
-			select {
-			case <-subCtx.Done():
-				// Best-effort unsubscribe.
-				_, _ = mux.roundTrip(context.Background(), &nodev1.ClientFrame{
-					Frame: &nodev1.ClientFrame_PresenceUnsubscribe{PresenceUnsubscribe: &nodev1.PresenceUnsubscribeFrame{}},
-				})
-				return
-			case pf, ok := <-presenceCh:
-				if !ok {
-					return
-				}
-				select {
-				case events <- protoToPresenceEvent(pf):
-				case <-subCtx.Done():
-					return
-				}
-			}
-		}
-	}()
-
-	return &PresenceSubscription{events: events, cancel: cancel}, nil
-}
-
-// PeerDirection indicates whether a peer is inbound or outbound.
-type PeerDirection int
-
-const (
-	PeerDirectionOutbound PeerDirection = 0 // we subscribe to them
-	PeerDirectionInbound  PeerDirection = 1 // they subscribe to us
-)
-
-// PeerInfo describes an active peer connection.
-type PeerInfo struct {
-	Address           string            `json:"address,omitempty"`
-	Labels            map[string]string `json:"labels,omitempty"`
-	BytesReceived     int64             `json:"bytes_received"`
-	EntriesReplicated int64             `json:"entries_replicated"`
-	EntriesSent       int64             `json:"entries_sent"`
-	StartedAt         int64             `json:"started_at"`
-	Direction         PeerDirection     `json:"direction"`
-	PublicKey         []byte            `json:"public_key,omitempty"`
-}
-
-func (c *Client) ListPeers(ctx context.Context) ([]PeerInfo, error) {
-	mux, err := c.channel(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("channel unavailable: %w", err)
-	}
-	resp, err := mux.roundTrip(ctx, &nodev1.ClientFrame{
-		Frame: &nodev1.ClientFrame_ListPeers{ListPeers: &nodev1.ListPeersFrame{}},
-	})
-	if err != nil {
-		return nil, err
-	}
-	lprf, ok := resp.Frame.(*nodev1.ServerFrame_ListPeersResponse)
-	if !ok {
-		return nil, fmt.Errorf("unexpected server frame type")
-	}
-	lpr := lprf.ListPeersResponse
-	peers := make([]PeerInfo, len(lpr.Peers))
-	for i, p := range lpr.Peers {
-		peers[i] = PeerInfo{
-			Address:           p.Address,
-			Labels:            p.Labels,
-			BytesReceived:     p.BytesReceived,
-			EntriesReplicated: p.EntriesReplicated,
-			EntriesSent:       p.EntriesSent,
-			StartedAt:         p.StartedAt,
-			Direction:         PeerDirection(p.Direction),
-			PublicKey:         p.PublicKey,
-		}
-	}
-	return peers, nil
-}
-
-type FederateResult struct {
-	Status  string
-	Message string
-}
-
-func (c *Client) Federate(ctx context.Context, peer string, labels map[string]string) (*FederateResult, error) {
-	mux, err := c.channel(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("channel unavailable: %w", err)
-	}
-	resp, err := mux.roundTrip(ctx, &nodev1.ClientFrame{
-		Frame: &nodev1.ClientFrame_Federate{Federate: &nodev1.FederateFrame{
-			Peer:   peer,
-			Labels: labels,
-		}},
-	})
-	if err != nil {
-		return nil, err
-	}
-	frf, ok := resp.Frame.(*nodev1.ServerFrame_FederateResponse)
-	if !ok {
-		return nil, fmt.Errorf("unexpected server frame type")
-	}
-	fr := frf.FederateResponse
-	return &FederateResult{
-		Status:  fr.Status,
-		Message: fr.Message,
-	}, nil
-}
-
-// Nack explicitly rejects a delivery. If deadLetter is true, the entry skips
-// redelivery and goes straight to the dead letter queue. The reason string is
-// recorded in the dead letter labels.
-func (c *Client) Nack(ctx context.Context, deliveryID int64, reason string, deadLetter bool) error {
-	mux, err := c.channel(ctx)
-	if err != nil {
-		return fmt.Errorf("channel unavailable: %w", err)
-	}
-	_, err = mux.roundTrip(ctx, &nodev1.ClientFrame{
-		Frame: &nodev1.ClientFrame_Nack{Nack: &nodev1.NackFrame{
-			DeliveryId: deliveryID,
-			Reason:     reason,
-			DeadLetter: deadLetter,
-		}},
-	})
-	return err
-}
-
-// Seek repositions an active subscription's cursor.
-func (c *Client) Seek(ctx context.Context, channel string, timestamp int64) error {
-	mux, err := c.channel(ctx)
-	if err != nil {
-		return fmt.Errorf("channel unavailable: %w", err)
-	}
-	_, err = mux.roundTrip(ctx, &nodev1.ClientFrame{
-		Frame: &nodev1.ClientFrame_Seek{Seek: &nodev1.SeekFrame{
-			Channel:   channel,
-			Timestamp: timestamp,
-		}},
-	})
-	return err
 }
