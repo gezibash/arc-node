@@ -194,7 +194,7 @@ func (b *Backend) Close() error {
 
 ```bash
 task build          # go build -o bin/arc ./cmd/arc
-buf generate        # regenerate proto (api/arc/node/v1/)
+buf generate        # required before build — regenerate proto (api/arc/node/v1/)
 go test ./...       # run tests
 ```
 

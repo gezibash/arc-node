@@ -1,6 +1,15 @@
 version: "3"
 
 tasks:
+  generate:
+    desc: Generate protobuf Go code
+    cmds:
+      - buf generate
+    sources:
+      - api/proto/**/*.proto
+      - buf.gen.yaml
+    generates:
+      - api/arc/node/v1/*.pb.go
   lint:
     desc: Run golangci-lint
     cmds:
@@ -16,6 +25,7 @@ tasks:
       - build:docker
   build:bin:
     desc: Build the arc binary
+    deps: [generate]
     vars:
       VERSION:
         sh: git describe --tags --always --dirty 2>/dev/null || echo dev

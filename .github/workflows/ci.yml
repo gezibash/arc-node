@@ -21,24 +21,46 @@ jobs:
         with:
           allowed-commit-types: "feat,fix,refactor,perf,test,ci,docs,build,chore,revert"
 
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: bufbuild/buf-setup-action@v1
+      - run: buf generate
+      - uses: actions/upload-artifact@v4
+        with:
+          name: proto-go
+          path: api/arc/node/v1/*.pb.go
+          retention-days: 1
+
   lint:
+    needs: generate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+      - uses: actions/download-artifact@v4
+        with:
+          name: proto-go
+          path: api/arc/node/v1
       - uses: golangci/golangci-lint-action@v9
         with:
           version: v2.8.0
 
   test:
+    needs: generate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+      - uses: actions/download-artifact@v4
+        with:
+          name: proto-go
+          path: api/arc/node/v1
       - run: go test -race -count=1 -coverprofile=coverage.out ./...
       - name: Check coverage
         run: |
@@ -52,12 +74,17 @@ jobs:
           fi
 
   govulncheck:
+    needs: generate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+      - uses: actions/download-artifact@v4
+        with:
+          name: proto-go
+          path: api/arc/node/v1
       - run: go install golang.org/x/vuln/cmd/govulncheck@latest
       - run: govulncheck ./...
 
@@ -69,12 +96,17 @@ jobs:
       - uses: actions/dependency-review-action@v4
 
   codeql:
+    needs: generate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+      - uses: actions/download-artifact@v4
+        with:
+          name: proto-go
+          path: api/arc/node/v1
       - uses: github/codeql-action/init@v4
         with:
           languages: go

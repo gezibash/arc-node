@@ -44,9 +44,25 @@ jobs:
             echo "tag=v$ver" >> "$GITHUB_OUTPUT"
           fi
 
-  build:
+  generate:
     runs-on: ubuntu-latest
     needs: release
+    if: needs.release.outputs.tag != ''
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.release.outputs.tag }}
+      - uses: bufbuild/buf-setup-action@v1
+      - run: buf generate
+      - uses: actions/upload-artifact@v4
+        with:
+          name: proto-go
+          path: api/arc/node/v1/*.pb.go
+          retention-days: 1
+
+  build:
+    runs-on: ubuntu-latest
+    needs: [release, generate]
     if: needs.release.outputs.tag != ''
     strategy:
       fail-fast: false
@@ -72,6 +88,11 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: proto-go
+          path: api/arc/node/v1
 
       - name: Build
         env:
