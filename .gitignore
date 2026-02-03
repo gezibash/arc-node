@@ -1,6 +1,7 @@
 bin/
 /arc
 .claude/skills
+.docs/
 .task/
 .envrc
 .DS_Store
