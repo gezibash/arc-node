@@ -10,6 +10,8 @@ import (
 	"syscall"
 
 	relayv1 "github.com/gezibash/arc-node/api/arc/relay/v1"
+	"github.com/gezibash/arc-node/internal/config"
+	"github.com/gezibash/arc-node/internal/logging"
 	"github.com/gezibash/arc-node/internal/relay"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -34,23 +36,27 @@ func Entrypoint(_ *viper.Viper) *cobra.Command {
 }
 
 func newStartCmd() *cobra.Command {
-	var (
-		addr       string
-		bufferSize int
-		reflect    bool
-	)
+	v := viper.New()
+	var bufferSize int
 
 	cmd := &cobra.Command{
 		Use:   "start",
 		Short: "Start the relay server",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runRelay(cmd.Context(), addr, bufferSize, reflect)
+			configFile, _ := cmd.Flags().GetString("config")
+			cfg, err := config.Load(v, configFile)
+			if err != nil {
+				return fmt.Errorf("load config: %w", err)
+			}
+
+			logging.Setup(cfg.Observability.LogLevel, cfg.Observability.LogFormat)
+
+			return runRelay(cmd.Context(), cfg.GRPC.Addr, bufferSize, cfg.GRPC.EnableReflection)
 		},
 	}
 
-	cmd.Flags().StringVarP(&addr, "addr", "a", ":50051", "listen address")
+	config.BindServeFlags(cmd, v)
 	cmd.Flags().IntVar(&bufferSize, "buffer-size", relay.DefaultBufferSize, "subscriber buffer size")
-	cmd.Flags().BoolVar(&reflect, "reflect", false, "enable gRPC reflection")
 
 	return cmd
 }

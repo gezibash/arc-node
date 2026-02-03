@@ -3,6 +3,7 @@ package relay
 import (
 	"context"
 	"encoding/hex"
+	"log/slog"
 
 	"github.com/gezibash/arc/v2/pkg/identity"
 	"github.com/gezibash/arc/v2/pkg/message"
@@ -27,6 +28,10 @@ func StreamServerInterceptor() grpc.StreamServerInterceptor {
 
 		sender, err := extractAndVerifySender(ctx)
 		if err != nil {
+			slog.Warn("auth failed",
+				"component", "interceptor",
+				"reason", err.Error(),
+			)
 			return err
 		}
 

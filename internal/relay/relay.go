@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"errors"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 
@@ -57,6 +58,8 @@ func New(cfg Config) *Relay {
 func (r *Relay) Start(ctx context.Context) {
 	ctx, r.cancelFunc = context.WithCancel(ctx)
 
+	slog.Info("relay started", "component", "relay")
+
 	r.wg.Add(1)
 	go func() {
 		defer r.wg.Done()
@@ -69,6 +72,11 @@ func (r *Relay) Close() error {
 	if r.closed.Swap(true) {
 		return nil // already closed
 	}
+
+	slog.Info("relay closing",
+		"component", "relay",
+		"subscriber_count", r.table.Count(),
+	)
 
 	if r.cancelFunc != nil {
 		r.cancelFunc()
