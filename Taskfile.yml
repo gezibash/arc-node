@@ -2,6 +2,15 @@ version: "3"
 
 tasks:
   lint:
+    desc: Run all linters
+    deps:
+      - lint:proto
+      - lint:golang
+  lint:proto:
+    desc: Lint protobuf files
+    cmds:
+      - buf lint
+  lint:golang:
     desc: Run golangci-lint
     cmds:
       - golangci-lint run ./...
