@@ -1,0 +1,177 @@
+syntax = "proto3";
+
+package arc.relay.v1;
+
+option go_package = "github.com/gezibash/arc-node/api/arc/relay/v1;relayv1";
+
+// RelayService provides message routing between connected clients.
+// The relay is stateless - it routes envelopes, nothing else.
+service RelayService {
+  // Connect establishes a bidirectional stream for sending and receiving envelopes.
+  // This is the only RPC - all communication happens over this stream.
+  rpc Connect(stream ClientFrame) returns (stream ServerFrame);
+}
+
+// =============================================================================
+// Core Types
+// =============================================================================
+
+// Envelope is the unit of transmission through the relay.
+// Content-addressed by SHA-256 hash of (labels + payload).
+message Envelope {
+  // Content-addressed reference (SHA-256 hash). Computed by relay if empty.
+  bytes ref = 1;
+
+  // Routing labels. Special keys:
+  //   "to"         - addressed routing (@name or @name.relay.arc)
+  //   "capability" - capability routing (storage, index, etc.)
+  //   Other keys   - exact-match subscription filtering
+  map<string, string> labels = 2;
+
+  // Opaque payload. Relay does not inspect this.
+  bytes payload = 3;
+
+  // Ed25519 signature over (labels + payload) by sender.
+  bytes signature = 4;
+
+  // Sender's public key (32 bytes Ed25519).
+  bytes sender = 5;
+}
+
+// Receipt acknowledges envelope processing by the relay.
+// "Delivered" means queued in subscriber buffers, NOT processed by app.
+message Receipt {
+  // Reference of the envelope this receipt is for.
+  bytes ref = 1;
+
+  // Client-provided correlation ID, echoed back.
+  string correlation = 2;
+
+  // Receipt status.
+  ReceiptStatus status = 3;
+
+  // Number of subscriber buffers that accepted the envelope.
+  int32 delivered = 4;
+
+  // Human-readable reason (for NACK).
+  string reason = 5;
+}
+
+enum ReceiptStatus {
+  RECEIPT_STATUS_UNSPECIFIED = 0;
+  RECEIPT_STATUS_ACK = 1;   // Envelope accepted and routed
+  RECEIPT_STATUS_NACK = 2;  // Envelope rejected (see reason)
+}
+
+// =============================================================================
+// Client Frames (client → relay)
+// =============================================================================
+
+message ClientFrame {
+  oneof frame {
+    SendFrame send = 1;
+    SubscribeFrame subscribe = 2;
+    UnsubscribeFrame unsubscribe = 3;
+    RegisterNameFrame register_name = 4;
+    RegisterCapabilityFrame register_capability = 5;
+    PingFrame ping = 6;
+  }
+}
+
+// SendFrame publishes an envelope through the relay.
+message SendFrame {
+  Envelope envelope = 1;
+
+  // Optional correlation ID for matching receipts.
+  string correlation = 2;
+}
+
+// SubscribeFrame registers interest in envelopes matching labels.
+// Uses exact-match semantics (no CEL, no wildcards).
+message SubscribeFrame {
+  // Subscription ID (client-generated, for unsubscribe).
+  string id = 1;
+
+  // Labels to match. All specified labels must match exactly.
+  // Empty map means "match all" (not recommended).
+  map<string, string> labels = 2;
+}
+
+// UnsubscribeFrame removes a subscription.
+message UnsubscribeFrame {
+  // Subscription ID from SubscribeFrame.
+  string id = 1;
+}
+
+// RegisterNameFrame claims an addressed name for this connection.
+// Names are prefixed with @ (e.g., "@alice").
+message RegisterNameFrame {
+  // Name to register (without @ prefix).
+  string name = 1;
+}
+
+// RegisterCapabilityFrame advertises this connection as a capability provider.
+message RegisterCapabilityFrame {
+  // Capability type (e.g., "storage", "index").
+  string capability = 1;
+
+  // Optional metadata about this capability instance.
+  map<string, string> metadata = 2;
+}
+
+// PingFrame is a keepalive.
+message PingFrame {
+  bytes nonce = 1;
+}
+
+// =============================================================================
+// Server Frames (relay → client)
+// =============================================================================
+
+message ServerFrame {
+  oneof frame {
+    DeliverFrame deliver = 1;
+    ReceiptFrame receipt = 2;
+    ErrorFrame error = 3;
+    PongFrame pong = 4;
+  }
+}
+
+// DeliverFrame delivers an envelope to a subscriber.
+message DeliverFrame {
+  Envelope envelope = 1;
+
+  // Which subscription matched (from SubscribeFrame.id).
+  string subscription_id = 2;
+}
+
+// ReceiptFrame wraps a Receipt for the stream.
+message ReceiptFrame {
+  Receipt receipt = 1;
+}
+
+// ErrorFrame reports an error (subscription failed, registration failed, etc.).
+message ErrorFrame {
+  // gRPC-compatible error code.
+  int32 code = 1;
+
+  // Human-readable message.
+  string message = 2;
+
+  // Machine-readable error type (e.g., "NAME_TAKEN", "INVALID_SIGNATURE").
+  string detail = 3;
+
+  // Whether client should retry.
+  bool retryable = 4;
+
+  // Which request this error is for (correlation or subscription ID).
+  string correlation = 5;
+}
+
+// PongFrame responds to PingFrame.
+message PongFrame {
+  bytes nonce = 1;
+
+  // Server timestamp (unix nanos).
+  int64 server_time = 2;
+}
