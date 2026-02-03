@@ -1,23 +1,19 @@
 # CLAUDE.md — arc-node
 
-## Where We're Going
+## Architecture
 
-Arc is becoming a **relay + capability** architecture. The relay is a dumb
-message router. Everything else (storage, indexing, naming) becomes a
-**capability** that connects to the relay like any other client.
+Arc uses a **relay + capability** architecture. The relay is a dumb message
+router. Everything else (storage, indexing, naming) connects as a capability.
 
 ```
-Before (monolithic node):        After (relay + capabilities):
-┌─────────────────────┐          ┌─────────────┐
-│       Node          │          │    Relay    │  ← routes envelopes, nothing else
-│  ┌───────────────┐  │          └──────┬──────┘
-│  │   blobstore   │  │                 │
-│  ├───────────────┤  │     ┌───────────┼───────────┐
-│  │   indexstore  │  │     ▼           ▼           ▼
-│  ├───────────────┤  │  arc-store  arc-index  arc-naming
-│  │    server     │  │  (storage)  (indexing) (resolution)
-│  └───────────────┘  │
-└─────────────────────┘
+┌─────────────┐
+│    Relay    │  ← routes envelopes, nothing else
+└──────┬──────┘
+       │
+┌──────┼──────────────┐
+▼      ▼              ▼
+Clients          Capabilities
+(send/listen)    (arc-store, arc-index, arc-naming)
 ```
 
 **Key principle:** The relay is stateless. It holds nothing but "who's connected
@@ -36,18 +32,20 @@ For detailed implementation guidance, read `.docs/`:
 
 The architecture spec is GitHub issue #76.
 
-## Current State (Being Refactored)
+## Current State
 
-The existing code is a monolithic node. We're extracting pieces:
+The monolithic node has been removed. We now have a clean relay architecture:
 
-| Current Location | Becomes | Status |
-|------------------|---------|--------|
-| `internal/server/` | `internal/relay/` | Planned (#78-81) |
-| `internal/blobstore/` | `arc-store` capability | Planned (#91) |
-| `internal/indexstore/` | `arc-index` capability | Planned (#92) |
-| `internal/envelope/` | Keep (signing/verification) | Stable |
-| `internal/keyring/` | Keep (key management) | Stable |
-| `pkg/client/` | Refactor for relay | Planned (#93-95) |
+| Component | Location | Status |
+|-----------|----------|--------|
+| Relay server | `internal/relay/` | Done |
+| Relay proto | `api/arc/relay/v1/` | Done |
+| Relay client | `pkg/client/` | Done |
+| CLI (send/listen) | `cmd/arc/send/`, `cmd/arc/listen/` | Done |
+| Key management | `internal/keyring/` | Stable |
+| Config | `internal/config/` | Stable |
+
+Capabilities (arc-store, arc-index, arc-naming) will be separate binaries.
 
 ## Core Primitives (from `github.com/gezibash/arc`)
 
@@ -74,10 +72,28 @@ message.Verify(msg) (bool, error)   // Verify Ed25519 signature
 
 See `.docs/RELAY.md` for full details.
 
+## CLI
+
+The CLI is **client-first**. Primary commands are `send` and `listen`:
+
+```bash
+arc send "hello"                      # send envelope
+arc send --labels topic=news "msg"    # with labels
+arc send --to @alice "hi"             # addressed
+
+arc listen                            # receive all
+arc listen --labels topic=news        # filter by labels
+arc listen --name myname              # register name
+
+arc relay start                       # run relay server (admin)
+arc keys generate                     # key management
+```
+
 ## Build
 
 ```bash
 task build          # go build -o bin/arc ./cmd/arc
+task lint           # run all linters (buf lint + golangci-lint)
 buf generate        # regenerate proto
 go test ./...       # run tests
 ```
