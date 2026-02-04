@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package arc.relay.v1;
 
-option go_package = "github.com/gezibash/arc-node/api/arc/relay/v1;relayv1";
+option go_package = "github.com/gezibash/arc/v2/api/arc/relay/v1;relayv1";
 
 // RelayService provides message routing between connected clients.
 // The relay is stateless - it routes envelopes, nothing else.
@@ -10,6 +10,16 @@ service RelayService {
   // Connect establishes a bidirectional stream for sending and receiving envelopes.
   // This is the only RPC - all communication happens over this stream.
   rpc Connect(stream ClientFrame) returns (stream ServerFrame);
+
+  // ForwardEnvelope forwards an envelope from a peer relay for local routing.
+  // Only accepts requests from relays authenticated via metadata.
+  // The receiving relay routes locally only (no cascading forwards).
+  rpc ForwardEnvelope(ForwardEnvelopeRequest) returns (ForwardEnvelopeResponse);
+
+  // Admin RPCs for gossip cluster management.
+  rpc GossipJoin(GossipJoinRequest) returns (GossipJoinResponse);
+  rpc GossipMembers(GossipMembersRequest) returns (GossipMembersResponse);
+  rpc GossipLeave(GossipLeaveRequest) returns (GossipLeaveResponse);
 }
 
 // =============================================================================
@@ -21,6 +31,11 @@ service RelayService {
 //
 // Routing labels live here. The payload (typically an arc.Message) may have
 // its own labels for indexing — relay doesn't inspect those.
+//
+// Signature model:
+//   - The payload (Message) is signed by the AUTHOR (content provenance)
+//   - The envelope is signed by the RELAY (routing provenance)
+//   - Receivers verify relay sig, then unseal and verify message sig
 message Envelope {
   // Content-addressed reference (SHA-256 hash). Computed by relay if empty.
   bytes ref = 1;
@@ -32,17 +47,23 @@ message Envelope {
   map<string, string> labels = 2;
 
   // Opaque payload, typically a serialized arc.Message. Relay does not inspect this.
+  // The message inside should be signed by its author.
   bytes payload = 3;
 
-  // Ed25519 signature over (labels + payload) by sender.
-  bytes signature = 4;
+  // Sender's public key (32 bytes Ed25519). Set by relay from authenticated connection.
+  bytes sender = 4;
 
-  // Sender's public key (32 bytes Ed25519).
-  bytes sender = 5;
+  // Relay's Ed25519 signature over (ref + labels + payload + sender).
+  // Proves this envelope was handled by this relay.
+  bytes relay_signature = 5;
+
+  // Relay's public key (32 bytes Ed25519). Identifies which relay signed.
+  bytes relay_pubkey = 6;
 }
 
 // Receipt acknowledges envelope processing by the relay.
 // "Delivered" means queued in subscriber buffers, NOT processed by app.
+// Signed by the relay to prove acknowledgment.
 message Receipt {
   // Reference of the envelope this receipt is for.
   bytes ref = 1;
@@ -58,6 +79,13 @@ message Receipt {
 
   // Human-readable reason (for NACK).
   string reason = 5;
+
+  // Relay's Ed25519 signature over (ref + correlation + status + delivered + reason).
+  // Proves this receipt was issued by this relay.
+  bytes relay_signature = 6;
+
+  // Relay's public key (32 bytes Ed25519). Identifies which relay signed.
+  bytes relay_pubkey = 7;
 }
 
 enum ReceiptStatus {
@@ -77,6 +105,8 @@ message ClientFrame {
     UnsubscribeFrame unsubscribe = 3;
     RegisterNameFrame register_name = 4;
     PingFrame ping = 5;
+    DiscoverFrame discover = 6;
+    UpdateLabelsFrame update_labels = 7;
   }
 }
 
@@ -117,6 +147,20 @@ message PingFrame {
   bytes nonce = 1;
 }
 
+// UpdateLabelsFrame updates subscription labels without re-subscribing.
+// Used for dynamic state updates (e.g., free space, load, availability).
+message UpdateLabelsFrame {
+  // Subscription ID to update.
+  string id = 1;
+
+  // Labels to merge into existing subscription labels.
+  // Existing keys are overwritten, new keys are added.
+  map<string, string> labels = 2;
+
+  // Label keys to remove. Applied after merge.
+  repeated string remove = 3;
+}
+
 // =============================================================================
 // Server Frames (relay → client)
 // =============================================================================
@@ -127,6 +171,7 @@ message ServerFrame {
     ReceiptFrame receipt = 2;
     ErrorFrame error = 3;
     PongFrame pong = 4;
+    DiscoverResultFrame discover_result = 5;
   }
 }
 
@@ -168,3 +213,139 @@ message PongFrame {
   // Server timestamp (unix nanos).
   int64 server_time = 2;
 }
+
+// =============================================================================
+// Discovery
+// =============================================================================
+
+// DiscoverFrame requests capability discovery.
+// Returns subscriptions where all filter labels are present in the subscription labels.
+message DiscoverFrame {
+  // Filter labels - subscriptions must have ALL these labels.
+  // Empty filter returns all subscriptions.
+  map<string, string> filter = 1;
+
+  // Optional correlation ID for matching response.
+  string correlation = 2;
+
+  // Maximum results to return. 0 = server default (100).
+  int32 limit = 3;
+}
+
+// DiscoverResultFrame contains discovery results.
+message DiscoverResultFrame {
+  // Correlation ID from request, echoed back.
+  string correlation = 1;
+
+  // Matching providers.
+  repeated ProviderInfo providers = 2;
+
+  // Total number of matches (may be > len(providers) if limited).
+  int32 total = 3;
+
+  // True if more results are available.
+  bool has_more = 4;
+}
+
+// ProviderInfo describes a provider found by discovery.
+message ProviderInfo {
+  // Provider's public key (32 bytes Ed25519).
+  bytes pubkey = 1;
+
+  // Registered @name if any.
+  string name = 2;
+
+  // Full subscription labels.
+  map<string, string> labels = 3;
+
+  // Subscription ID that matched.
+  string subscription_id = 4;
+
+  // Relay's public key this provider is connected to (for federation).
+  // Empty if relay pubkey not configured.
+  bytes relay_pubkey = 5;
+
+  // Infrastructure metadata (measured by relay)
+
+  // Docker-style petname derived from pubkey (e.g., "clever-penguin").
+  // Provides human-readable identifier when no @name is registered.
+  string petname = 6;
+
+  // Round-trip latency to this provider in nanoseconds (measured via ping/pong).
+  // Zero if not yet measured.
+  int64 latency_ns = 7;
+
+  // Last time relay received a message from this provider (unix nanos).
+  int64 last_seen_ns = 8;
+
+  // Connection age in nanoseconds (how long connected to relay).
+  int64 connected_ns = 9;
+}
+
+// =============================================================================
+// Relay-to-Relay Forwarding
+// =============================================================================
+
+message ForwardEnvelopeRequest {
+  // The envelope to route locally on the receiving relay.
+  Envelope envelope = 1;
+
+  // Source relay name (for logging/tracing).
+  string source_relay = 2;
+}
+
+message ForwardEnvelopeResponse {
+  // Number of local subscribers that accepted the envelope.
+  int32 delivered = 1;
+
+  // NACK reason if delivered == 0.
+  string reason = 2;
+}
+
+// =============================================================================
+// Gossip Admin
+// =============================================================================
+
+message GossipJoinRequest {
+  // Peer addresses to join (e.g., "host:port").
+  repeated string peers = 1;
+}
+
+message GossipJoinResponse {
+  // Number of peers successfully joined.
+  int32 joined = 1;
+}
+
+message GossipMembersRequest {}
+
+message GossipMembersResponse {
+  repeated GossipMember members = 1;
+}
+
+// GossipMember describes a node in the gossip cluster.
+message GossipMember {
+  // Node name.
+  string name = 1;
+
+  // Gossip address (host:port).
+  string addr = 2;
+
+  // gRPC data plane address.
+  string grpc_addr = 3;
+
+  // Status: alive, suspect, dead, left.
+  string status = 4;
+
+  // Node's public key.
+  bytes pubkey = 5;
+
+  // Number of connected subscribers.
+  int32 connections = 6;
+
+  // Uptime in nanoseconds.
+  int64 uptime_ns = 7;
+}
+
+message GossipLeaveRequest {}
+
+message GossipLeaveResponse {}

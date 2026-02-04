@@ -1,9 +1,10 @@
 package relay
 
 import (
-	"encoding/hex"
 	"errors"
 	"sync"
+
+	"github.com/gezibash/arc/v2/pkg/identity"
 )
 
 var (
@@ -34,7 +35,7 @@ func (t *Table) Add(s *Subscriber) {
 	t.subscribers[s.id] = s
 
 	// Index by pubkey for direct addressing
-	pubkeyHex := hex.EncodeToString(s.sender[:])
+	pubkeyHex := identity.EncodePublicKey(s.sender)
 	t.pubkeys[pubkeyHex] = s
 }
 
@@ -54,7 +55,7 @@ func (t *Table) Remove(id string) {
 	}
 
 	// Remove from pubkeys
-	pubkeyHex := hex.EncodeToString(s.sender[:])
+	pubkeyHex := identity.EncodePublicKey(s.sender)
 	delete(t.pubkeys, pubkeyHex)
 
 	delete(t.subscribers, id)
@@ -160,4 +161,53 @@ func (t *Table) Count() int {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	return len(t.subscribers)
+}
+
+// DiscoveryResult represents a single subscription match for discovery.
+type DiscoveryResult struct {
+	Subscriber     *Subscriber
+	SubscriptionID string
+	Labels         map[string]string
+}
+
+// Discover finds subscriptions where all filter labels are present in the subscription labels.
+// This is inverted from routing: for discovery, filter ⊆ subLabels (filter is subset of subscription).
+// Returns results up to limit (0 = 100 default) and total count of matches.
+func (t *Table) Discover(filter map[string]string, limit int) ([]DiscoveryResult, int) {
+	if limit <= 0 {
+		limit = 100
+	}
+
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	var results []DiscoveryResult
+	total := 0
+
+	for _, s := range t.subscribers {
+		subs := s.Subscriptions()
+		for subID, subLabels := range subs {
+			if matchesFilter(filter, subLabels) {
+				total++
+				if len(results) < limit {
+					results = append(results, DiscoveryResult{
+						Subscriber:     s,
+						SubscriptionID: subID,
+						Labels:         subLabels,
+					})
+				}
+			}
+		}
+	}
+	return results, total
+}
+
+// matchesFilter returns true if all filter labels are present in subLabels (filter ⊆ subLabels).
+func matchesFilter(filter, subLabels map[string]string) bool {
+	for k, v := range filter {
+		if subLabels[k] != v {
+			return false
+		}
+	}
+	return true
 }

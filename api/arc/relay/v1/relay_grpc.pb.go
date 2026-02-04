@@ -19,7 +19,11 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	RelayService_Connect_FullMethodName = "/arc.relay.v1.RelayService/Connect"
+	RelayService_Connect_FullMethodName         = "/arc.relay.v1.RelayService/Connect"
+	RelayService_ForwardEnvelope_FullMethodName = "/arc.relay.v1.RelayService/ForwardEnvelope"
+	RelayService_GossipJoin_FullMethodName      = "/arc.relay.v1.RelayService/GossipJoin"
+	RelayService_GossipMembers_FullMethodName   = "/arc.relay.v1.RelayService/GossipMembers"
+	RelayService_GossipLeave_FullMethodName     = "/arc.relay.v1.RelayService/GossipLeave"
 )
 
 // RelayServiceClient is the client API for RelayService service.
@@ -32,6 +36,14 @@ type RelayServiceClient interface {
 	// Connect establishes a bidirectional stream for sending and receiving envelopes.
 	// This is the only RPC - all communication happens over this stream.
 	Connect(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ClientFrame, ServerFrame], error)
+	// ForwardEnvelope forwards an envelope from a peer relay for local routing.
+	// Only accepts requests from relays authenticated via metadata.
+	// The receiving relay routes locally only (no cascading forwards).
+	ForwardEnvelope(ctx context.Context, in *ForwardEnvelopeRequest, opts ...grpc.CallOption) (*ForwardEnvelopeResponse, error)
+	// Admin RPCs for gossip cluster management.
+	GossipJoin(ctx context.Context, in *GossipJoinRequest, opts ...grpc.CallOption) (*GossipJoinResponse, error)
+	GossipMembers(ctx context.Context, in *GossipMembersRequest, opts ...grpc.CallOption) (*GossipMembersResponse, error)
+	GossipLeave(ctx context.Context, in *GossipLeaveRequest, opts ...grpc.CallOption) (*GossipLeaveResponse, error)
 }
 
 type relayServiceClient struct {
@@ -55,6 +67,46 @@ func (c *relayServiceClient) Connect(ctx context.Context, opts ...grpc.CallOptio
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type RelayService_ConnectClient = grpc.BidiStreamingClient[ClientFrame, ServerFrame]
 
+func (c *relayServiceClient) ForwardEnvelope(ctx context.Context, in *ForwardEnvelopeRequest, opts ...grpc.CallOption) (*ForwardEnvelopeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ForwardEnvelopeResponse)
+	err := c.cc.Invoke(ctx, RelayService_ForwardEnvelope_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *relayServiceClient) GossipJoin(ctx context.Context, in *GossipJoinRequest, opts ...grpc.CallOption) (*GossipJoinResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GossipJoinResponse)
+	err := c.cc.Invoke(ctx, RelayService_GossipJoin_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *relayServiceClient) GossipMembers(ctx context.Context, in *GossipMembersRequest, opts ...grpc.CallOption) (*GossipMembersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GossipMembersResponse)
+	err := c.cc.Invoke(ctx, RelayService_GossipMembers_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *relayServiceClient) GossipLeave(ctx context.Context, in *GossipLeaveRequest, opts ...grpc.CallOption) (*GossipLeaveResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GossipLeaveResponse)
+	err := c.cc.Invoke(ctx, RelayService_GossipLeave_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // RelayServiceServer is the server API for RelayService service.
 // All implementations must embed UnimplementedRelayServiceServer
 // for forward compatibility.
@@ -65,6 +117,14 @@ type RelayServiceServer interface {
 	// Connect establishes a bidirectional stream for sending and receiving envelopes.
 	// This is the only RPC - all communication happens over this stream.
 	Connect(grpc.BidiStreamingServer[ClientFrame, ServerFrame]) error
+	// ForwardEnvelope forwards an envelope from a peer relay for local routing.
+	// Only accepts requests from relays authenticated via metadata.
+	// The receiving relay routes locally only (no cascading forwards).
+	ForwardEnvelope(context.Context, *ForwardEnvelopeRequest) (*ForwardEnvelopeResponse, error)
+	// Admin RPCs for gossip cluster management.
+	GossipJoin(context.Context, *GossipJoinRequest) (*GossipJoinResponse, error)
+	GossipMembers(context.Context, *GossipMembersRequest) (*GossipMembersResponse, error)
+	GossipLeave(context.Context, *GossipLeaveRequest) (*GossipLeaveResponse, error)
 	mustEmbedUnimplementedRelayServiceServer()
 }
 
@@ -77,6 +137,18 @@ type UnimplementedRelayServiceServer struct{}
 
 func (UnimplementedRelayServiceServer) Connect(grpc.BidiStreamingServer[ClientFrame, ServerFrame]) error {
 	return status.Error(codes.Unimplemented, "method Connect not implemented")
+}
+func (UnimplementedRelayServiceServer) ForwardEnvelope(context.Context, *ForwardEnvelopeRequest) (*ForwardEnvelopeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ForwardEnvelope not implemented")
+}
+func (UnimplementedRelayServiceServer) GossipJoin(context.Context, *GossipJoinRequest) (*GossipJoinResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GossipJoin not implemented")
+}
+func (UnimplementedRelayServiceServer) GossipMembers(context.Context, *GossipMembersRequest) (*GossipMembersResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GossipMembers not implemented")
+}
+func (UnimplementedRelayServiceServer) GossipLeave(context.Context, *GossipLeaveRequest) (*GossipLeaveResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GossipLeave not implemented")
 }
 func (UnimplementedRelayServiceServer) mustEmbedUnimplementedRelayServiceServer() {}
 func (UnimplementedRelayServiceServer) testEmbeddedByValue()                      {}
@@ -106,13 +178,102 @@ func _RelayService_Connect_Handler(srv interface{}, stream grpc.ServerStream) er
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type RelayService_ConnectServer = grpc.BidiStreamingServer[ClientFrame, ServerFrame]
 
+func _RelayService_ForwardEnvelope_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ForwardEnvelopeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RelayServiceServer).ForwardEnvelope(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RelayService_ForwardEnvelope_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RelayServiceServer).ForwardEnvelope(ctx, req.(*ForwardEnvelopeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RelayService_GossipJoin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GossipJoinRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RelayServiceServer).GossipJoin(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RelayService_GossipJoin_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RelayServiceServer).GossipJoin(ctx, req.(*GossipJoinRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RelayService_GossipMembers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GossipMembersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RelayServiceServer).GossipMembers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RelayService_GossipMembers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RelayServiceServer).GossipMembers(ctx, req.(*GossipMembersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RelayService_GossipLeave_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GossipLeaveRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RelayServiceServer).GossipLeave(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RelayService_GossipLeave_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RelayServiceServer).GossipLeave(ctx, req.(*GossipLeaveRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // RelayService_ServiceDesc is the grpc.ServiceDesc for RelayService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var RelayService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "arc.relay.v1.RelayService",
 	HandlerType: (*RelayServiceServer)(nil),
-	Methods:     []grpc.MethodDesc{},
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ForwardEnvelope",
+			Handler:    _RelayService_ForwardEnvelope_Handler,
+		},
+		{
+			MethodName: "GossipJoin",
+			Handler:    _RelayService_GossipJoin_Handler,
+		},
+		{
+			MethodName: "GossipMembers",
+			Handler:    _RelayService_GossipMembers_Handler,
+		},
+		{
+			MethodName: "GossipLeave",
+			Handler:    _RelayService_GossipLeave_Handler,
+		},
+	},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "Connect",

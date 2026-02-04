@@ -47,3 +47,11 @@ docker pull ghcr.io/gezibash/arc:latest
 ## Releases
 
 Release assets include platform binaries and `.sha256` checksum files.
+
+## Repo layout
+
+- `cmd/<binary>/`: executable entrypoints (`package main`).
+- `internal/`: private implementation details (not importable outside this module).
+- `pkg/`: public API surface for external consumers.
+- `api/`: protobuf definitions and generated code.
+- Root-level `arc`, `arc-blob`, `arc-relay`: expected build outputs for local workflows.

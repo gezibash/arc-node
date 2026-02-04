@@ -2,17 +2,15 @@ package keys
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
+	"github.com/gezibash/arc/v2/internal/cli"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
 func newListCmd(v *viper.Viper) *cobra.Command {
-	var outputFmt string
-
-	cmd := &cobra.Command{
+	return &cobra.Command{
 		Use:   "list",
 		Short: "List all keys",
 		Args:  cobra.NoArgs,
@@ -25,16 +23,13 @@ func newListCmd(v *viper.Viper) *cobra.Command {
 				return fmt.Errorf("list keys: %w", err)
 			}
 
+			out := cli.NewOutputFromViper(v)
+
 			if len(infos) == 0 {
-				fmt.Println("No keys found. Create one with: arc keys generate")
-				return nil
+				return out.Result("keys-list", "No keys found. Create one with: arc keys generate").Render()
 			}
 
-			if outputFmt == "json" {
-				return writeJSON(os.Stdout, infos)
-			}
-
-			fmt.Printf("%-66s %-14s %s\n", "PUBLIC KEY", "ALIASES", "DEFAULT")
+			table := out.Table("keys-list", "Public Key", "Aliases", "Default")
 			for _, info := range infos {
 				aliases := strings.Join(info.Aliases, ", ")
 				if aliases == "" {
@@ -44,12 +39,10 @@ func newListCmd(v *viper.Viper) *cobra.Command {
 				if info.IsDefault {
 					def = "*"
 				}
-				fmt.Printf("%-66s %-14s %s\n", info.PublicKey, truncate(aliases, 14), def)
+				table.AddRow(info.PublicKey, aliases, def)
 			}
-			return nil
+
+			return table.Render()
 		},
 	}
-
-	cmd.Flags().StringVarP(&outputFmt, "output", "o", "text", "output format (text, json)")
-	return cmd
 }

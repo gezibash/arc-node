@@ -2,18 +2,16 @@ package keys
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/gezibash/arc/v2/internal/cli"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
 func newShowCmd(v *viper.Viper) *cobra.Command {
-	var outputFmt string
-
-	cmd := &cobra.Command{
+	return &cobra.Command{
 		Use:   "show <alias|public-key>",
 		Short: "Show key details",
 		Args:  cobra.ExactArgs(1),
@@ -26,23 +24,12 @@ func newShowCmd(v *viper.Viper) *cobra.Command {
 				return fmt.Errorf("key %q not found: %w", args[0], err)
 			}
 
-			info := map[string]any{
-				"public_key": key.PublicKey,
-				"created_at": key.Metadata.CreatedAt.Format(time.RFC3339),
-				"key_file":   filepath.Join(dataDir(v), "keys", key.PublicKey+".key"),
-			}
-
-			if outputFmt == "json" {
-				return writeJSON(os.Stdout, info)
-			}
-
-			fmt.Printf("Public Key: %s\n", info["public_key"])
-			fmt.Printf("Created At: %s\n", info["created_at"])
-			fmt.Printf("Key File:   %s\n", info["key_file"])
-			return nil
+			out := cli.NewOutputFromViper(v)
+			return out.KV("key-details").
+				Set("Public Key", key.PublicKey).
+				Set("Created At", key.Metadata.CreatedAt.Format(time.RFC3339)).
+				Set("Key File", filepath.Join(dataDir(v), "keys", key.PublicKey+".key")).
+				Render()
 		},
 	}
-
-	cmd.Flags().StringVarP(&outputFmt, "output", "o", "text", "output format (text, json)")
-	return cmd
 }

@@ -1,0 +1,187 @@
+syntax = "proto3";
+
+package arc.blob.v1;
+
+option go_package = "github.com/gezibash/arc/v2/api/arc/blob/v1;blobv1";
+
+// =============================================================================
+// Direct Connection Service (for large blobs, after REDIRECT)
+// =============================================================================
+
+// BlobService provides direct blob transfer, bypassing the relay.
+// Used when relay sends REDIRECT response for large blobs.
+// All requests are authenticated via envelope signature verification.
+service BlobService {
+  // Put uploads a blob as a stream of chunks.
+  // Client streams chunks, server responds with CID when complete.
+  rpc Put(stream Chunk) returns (PutResponse);
+
+  // Get downloads a blob as a stream of chunks.
+  // Client provides CID, server streams the blob data.
+  rpc Get(GetRequest) returns (stream Chunk);
+}
+
+// Chunk is a piece of blob data for streaming.
+message Chunk {
+  // Raw blob data (recommended: 64KB - 1MB per chunk).
+  bytes data = 1;
+
+  // Offset in the blob (for resumable transfers).
+  int64 offset = 2;
+}
+
+// PutResponse is returned after a successful Put.
+message PutResponse {
+  // Content ID (SHA-256 hash of blob).
+  bytes cid = 1;
+
+  // Size in bytes.
+  int64 size = 2;
+}
+
+// GetRequest asks for a blob by CID.
+message GetRequest {
+  // Content ID to retrieve.
+  bytes cid = 1;
+
+  // Optional: start offset for range requests.
+  int64 offset = 2;
+
+  // Optional: max bytes to return (0 = all).
+  int64 limit = 3;
+}
+
+// =============================================================================
+// Relay Envelope Payloads
+// =============================================================================
+//
+// These messages are used as envelope.payload when communicating through
+// the relay. The envelope labels determine routing:
+//
+//   PUT:  labels = {capability: "blob", op: "put"}
+//   WANT: labels = {capability: "blob", op: "want", cid: "<hex>"}
+//   GET:  labels = {to: "<store-pubkey>", op: "get", cid: "<hex>"}
+//
+// Responses are addressed back to the sender via {to: "<sender-pubkey>"}.
+
+// BlobRequest is the envelope payload for blob requests via relay.
+message BlobRequest {
+  oneof request {
+    PutIntent put = 1;
+    WantIntent want = 2;
+    GetIntent get = 3;
+  }
+}
+
+// BlobResponse is the envelope payload for blob responses via relay.
+message BlobResponse {
+  oneof response {
+    StoredResponse stored = 1;
+    HaveResponse have = 2;
+    RedirectResponse redirect = 3;
+    DataResponse data = 4;
+    ErrorResponse error = 5;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Request Types
+// -----------------------------------------------------------------------------
+
+// PutIntent signals intent to store a blob.
+// For small blobs (< 1MB), include the data inline.
+// For large blobs, leave data empty and expect REDIRECT response.
+message PutIntent {
+  // Blob data (for small blobs, inline here).
+  bytes data = 1;
+
+  // Size hint for large blobs (when data is empty).
+  int64 size = 2;
+
+  // Optional content type (e.g., "application/octet-stream").
+  string content_type = 3;
+}
+
+// WantIntent asks which stores have a blob (discovery).
+message WantIntent {
+  // Content ID to find.
+  bytes cid = 1;
+}
+
+// GetIntent requests blob retrieval.
+message GetIntent {
+  // Content ID to retrieve.
+  bytes cid = 1;
+}
+
+// -----------------------------------------------------------------------------
+// Response Types
+// -----------------------------------------------------------------------------
+
+// StoredResponse confirms blob was stored.
+message StoredResponse {
+  // Content ID (SHA-256 hash).
+  bytes cid = 1;
+
+  // Size in bytes.
+  int64 size = 2;
+}
+
+// HaveResponse indicates this store has the requested blob.
+// Sent in response to WantIntent.
+message HaveResponse {
+  // Content ID.
+  bytes cid = 1;
+
+  // Size in bytes.
+  int64 size = 2;
+
+  // How to retrieve: direct connection or relay tunnel.
+  ConnectionMode mode = 3;
+
+  // Direct connection address (if mode = DIRECT).
+  // Format: "host:port"
+  string address = 4;
+}
+
+// RedirectResponse tells client to connect directly for transfer.
+message RedirectResponse {
+  // Direct connection address.
+  // Format: "host:port"
+  string address = 1;
+
+  // Content ID (for GET) or expected CID (for PUT after hash known).
+  bytes cid = 2;
+}
+
+// DataResponse returns blob data inline (for small blobs).
+message DataResponse {
+  // Content ID.
+  bytes cid = 1;
+
+  // Blob data.
+  bytes data = 2;
+
+  // Content type.
+  string content_type = 3;
+}
+
+// ErrorResponse reports an error.
+message ErrorResponse {
+  // Error code (mirrors gRPC codes).
+  int32 code = 1;
+
+  // Human-readable message.
+  string message = 2;
+}
+
+// ConnectionMode indicates how to connect for blob transfer.
+enum ConnectionMode {
+  CONNECTION_MODE_UNSPECIFIED = 0;
+
+  // Store accepts direct connections.
+  CONNECTION_MODE_DIRECT = 1;
+
+  // Store only supports relay tunnel (firewalled).
+  CONNECTION_MODE_RELAY_ONLY = 2;
+}

@@ -1,7 +1,7 @@
 package relay
 
 import (
-	relayv1 "github.com/gezibash/arc-node/api/arc/relay/v1"
+	relayv1 "github.com/gezibash/arc/v2/api/arc/relay/v1"
 )
 
 // ReceiptReason is a machine-readable reason for NACK.
@@ -78,6 +78,20 @@ func WrapPong(nonce []byte, serverTime int64) *relayv1.ServerFrame {
 			Pong: &relayv1.PongFrame{
 				Nonce:      nonce,
 				ServerTime: serverTime,
+			},
+		},
+	}
+}
+
+// WrapDiscoverResult wraps a discovery result in a ServerFrame.
+func WrapDiscoverResult(correlation string, providers []*relayv1.ProviderInfo, total int32, hasMore bool) *relayv1.ServerFrame {
+	return &relayv1.ServerFrame{
+		Frame: &relayv1.ServerFrame_DiscoverResult{
+			DiscoverResult: &relayv1.DiscoverResultFrame{
+				Correlation: correlation,
+				Providers:   providers,
+				Total:       total,
+				HasMore:     hasMore,
 			},
 		},
 	}

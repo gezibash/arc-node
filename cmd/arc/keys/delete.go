@@ -3,6 +3,7 @@ package keys
 import (
 	"fmt"
 
+	"github.com/gezibash/arc/v2/internal/cli"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -18,8 +19,11 @@ func newDeleteCmd(v *viper.Viper) *cobra.Command {
 			if err := kr.Delete(ctx, args[0]); err != nil {
 				return fmt.Errorf("delete key: %w", err)
 			}
-			fmt.Printf("Key %q deleted\n", args[0])
-			return nil
+
+			out := cli.NewOutputFromViper(v)
+			return out.Result("key-deleted", fmt.Sprintf("Key %q deleted", args[0])).
+				With("Key", args[0]).
+				Render()
 		},
 	}
 }

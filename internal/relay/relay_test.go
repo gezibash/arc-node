@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	relayv1 "github.com/gezibash/arc-node/api/arc/relay/v1"
+	relayv1 "github.com/gezibash/arc/v2/api/arc/relay/v1"
 	"github.com/gezibash/arc/v2/pkg/identity"
 )
 
@@ -127,7 +127,7 @@ func TestPubkeyRouting(t *testing.T) {
 	var pubkey identity.PublicKey
 	pubkeyHex := "7f3a8b9c2d1e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a"
 	pubkeyBytes, _ := hex.DecodeString(pubkeyHex)
-	copy(pubkey[:], pubkeyBytes)
+	pubkey = identity.PublicKey{Algo: identity.AlgEd25519, Bytes: pubkeyBytes}
 
 	bob := NewSubscriber("bob-id", nil, pubkey, 10)
 	table.Add(bob)
@@ -182,7 +182,7 @@ func TestPubkeyRouting(t *testing.T) {
 }
 
 func TestSubscriberNonBlockingSend(t *testing.T) {
-	sub := NewSubscriber("test", nil, [32]byte{}, 2)
+	sub := NewSubscriber("test", nil, identity.PublicKey{}, 2)
 
 	frame := &relayv1.ServerFrame{}
 
@@ -205,5 +205,181 @@ func TestSubscriberNonBlockingSend(t *testing.T) {
 	}
 	if sub.BufferLen() != 2 {
 		t.Errorf("buffer length should be 2, got: %d", sub.BufferLen())
+	}
+}
+
+func TestTableDiscover(t *testing.T) {
+	table := NewTable()
+
+	// Create subscribers with different subscriptions
+	blobProvider := &Subscriber{
+		id:            "blob-id",
+		name:          "blob-1",
+		subscriptions: make(map[string]map[string]string),
+	}
+	blobProvider.Subscribe("cap-blob", map[string]string{
+		"capability": "blob",
+		"transport":  "relay",
+	})
+
+	directBlobProvider := &Subscriber{
+		id:            "direct-blob-id",
+		subscriptions: make(map[string]map[string]string),
+	}
+	directBlobProvider.Subscribe("cap-blob-direct", map[string]string{
+		"capability":  "blob",
+		"transport":   "direct",
+		"direct_addr": "10.0.0.5:8080",
+	})
+
+	indexProvider := &Subscriber{
+		id:            "index-id",
+		subscriptions: make(map[string]map[string]string),
+	}
+	indexProvider.Subscribe("cap-index", map[string]string{
+		"capability": "index",
+	})
+
+	// Add a subscriber with multiple subscriptions
+	multiSub := &Subscriber{
+		id:            "multi-id",
+		subscriptions: make(map[string]map[string]string),
+	}
+	multiSub.Subscribe("topic-news", map[string]string{"topic": "news"})
+	multiSub.Subscribe("topic-sports", map[string]string{"topic": "sports"})
+
+	table.Add(blobProvider)
+	table.Add(directBlobProvider)
+	table.Add(indexProvider)
+	table.Add(multiSub)
+
+	t.Run("discover by capability", func(t *testing.T) {
+		results, total := table.Discover(map[string]string{"capability": "blob"}, 100)
+		if total != 2 {
+			t.Errorf("expected 2 blob providers, got %d", total)
+		}
+		if len(results) != 2 {
+			t.Errorf("expected 2 results, got %d", len(results))
+		}
+	})
+
+	t.Run("discover with multiple filter labels", func(t *testing.T) {
+		results, total := table.Discover(map[string]string{
+			"capability": "blob",
+			"transport":  "direct",
+		}, 100)
+		if total != 1 {
+			t.Errorf("expected 1 direct blob provider, got %d", total)
+		}
+		if len(results) != 1 {
+			t.Errorf("expected 1 result, got %d", len(results))
+		}
+		if len(results) > 0 && results[0].Labels["direct_addr"] != "10.0.0.5:8080" {
+			t.Error("should return direct blob provider")
+		}
+	})
+
+	t.Run("empty filter returns all subscriptions", func(t *testing.T) {
+		results, total := table.Discover(map[string]string{}, 100)
+		// 2 blob + 1 index + 2 topics = 5 subscriptions
+		if total != 5 {
+			t.Errorf("expected 5 total subscriptions, got %d", total)
+		}
+		if len(results) != 5 {
+			t.Errorf("expected 5 results, got %d", len(results))
+		}
+	})
+
+	t.Run("no matches", func(t *testing.T) {
+		results, total := table.Discover(map[string]string{"capability": "naming"}, 100)
+		if total != 0 {
+			t.Errorf("expected 0 matches, got %d", total)
+		}
+		if len(results) != 0 {
+			t.Errorf("expected 0 results, got %d", len(results))
+		}
+	})
+
+	t.Run("limit results", func(t *testing.T) {
+		results, total := table.Discover(map[string]string{}, 2)
+		if total != 5 {
+			t.Errorf("total should still be 5, got %d", total)
+		}
+		if len(results) != 2 {
+			t.Errorf("results should be limited to 2, got %d", len(results))
+		}
+	})
+
+	t.Run("returns subscription details", func(t *testing.T) {
+		results, _ := table.Discover(map[string]string{"capability": "index"}, 100)
+		if len(results) != 1 {
+			t.Fatalf("expected 1 result, got %d", len(results))
+		}
+		r := results[0]
+		if r.Subscriber != indexProvider {
+			t.Error("should return correct subscriber")
+		}
+		if r.SubscriptionID != "cap-index" {
+			t.Errorf("subscription ID should be cap-index, got %s", r.SubscriptionID)
+		}
+		if r.Labels["capability"] != "index" {
+			t.Error("should include labels")
+		}
+	})
+}
+
+func TestMatchesFilter(t *testing.T) {
+	tests := []struct {
+		name      string
+		filter    map[string]string
+		subLabels map[string]string
+		want      bool
+	}{
+		{
+			name:      "empty filter matches all",
+			filter:    map[string]string{},
+			subLabels: map[string]string{"capability": "blob"},
+			want:      true,
+		},
+		{
+			name:      "filter subset of subscription",
+			filter:    map[string]string{"capability": "blob"},
+			subLabels: map[string]string{"capability": "blob", "transport": "relay"},
+			want:      true,
+		},
+		{
+			name:      "exact match",
+			filter:    map[string]string{"capability": "blob"},
+			subLabels: map[string]string{"capability": "blob"},
+			want:      true,
+		},
+		{
+			name:      "filter not subset - extra key",
+			filter:    map[string]string{"capability": "blob", "transport": "relay"},
+			subLabels: map[string]string{"capability": "blob"},
+			want:      false,
+		},
+		{
+			name:      "filter not subset - different value",
+			filter:    map[string]string{"capability": "blob"},
+			subLabels: map[string]string{"capability": "index"},
+			want:      false,
+		},
+		{
+			name:      "empty subscription matches empty filter",
+			filter:    map[string]string{},
+			subLabels: map[string]string{},
+			want:      true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := matchesFilter(tt.filter, tt.subLabels)
+			if got != tt.want {
+				t.Errorf("matchesFilter(%v, %v) = %v, want %v",
+					tt.filter, tt.subLabels, got, tt.want)
+			}
+		})
 	}
 }

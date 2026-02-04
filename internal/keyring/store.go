@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/gezibash/arc/v2/pkg/identity"
+	"github.com/gezibash/arc/v2/pkg/identity/ed25519"
 )
 
 type keyringFile struct {
@@ -40,7 +40,7 @@ func (kr *Keyring) keyExists(pkHex string) bool {
 	return err == nil
 }
 
-func (kr *Keyring) saveKey(kp *identity.Keypair, pkHex string, meta *Metadata) error {
+func (kr *Keyring) saveKey(kp *ed25519.Keypair, pkHex string, meta *Metadata) error {
 	pkHex = normalize(pkHex)
 
 	if err := os.MkdirAll(kr.keysDir(), 0o700); err != nil {
@@ -68,7 +68,7 @@ func (kr *Keyring) saveKey(kp *identity.Keypair, pkHex string, meta *Metadata) e
 	return nil
 }
 
-func (kr *Keyring) loadKey(pkHex string) (*identity.Keypair, *Metadata, error) {
+func (kr *Keyring) loadKey(pkHex string) (*ed25519.Keypair, *Metadata, error) {
 	pkHex = normalize(pkHex)
 
 	seed, err := os.ReadFile(kr.keyPath(pkHex))
@@ -79,7 +79,7 @@ func (kr *Keyring) loadKey(pkHex string) (*identity.Keypair, *Metadata, error) {
 		return nil, nil, fmt.Errorf("read key file: %w", err)
 	}
 
-	kp, err := identity.FromSeed(seed)
+	kp, err := ed25519.FromSeed(seed)
 	if err != nil {
 		return nil, nil, fmt.Errorf("create keypair from seed: %w", err)
 	}
@@ -91,7 +91,7 @@ func (kr *Keyring) loadKey(pkHex string) (*identity.Keypair, *Metadata, error) {
 			return nil, nil, fmt.Errorf("read metadata file: %w", err)
 		}
 		pk := kp.PublicKey()
-		meta = &Metadata{PublicKey: hex.EncodeToString(pk[:])}
+		meta = &Metadata{PublicKey: hex.EncodeToString(pk.Bytes)}
 	} else {
 		meta = &Metadata{}
 		if err := json.Unmarshal(metaJSON, meta); err != nil {

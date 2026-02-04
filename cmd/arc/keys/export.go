@@ -3,6 +3,7 @@ package keys
 import (
 	"fmt"
 
+	"github.com/gezibash/arc/v2/internal/cli"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -19,8 +20,11 @@ func newExportCmd(v *viper.Viper) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("key %q not found: %w", args[0], err)
 			}
-			fmt.Println(key.PublicKey)
-			return nil
+
+			out := cli.NewOutputFromViper(v)
+			return out.KV("key-export").
+				Set("Public Key", key.PublicKey).
+				Render()
 		},
 	}
 }

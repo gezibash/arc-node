@@ -1,0 +1,27 @@
+package transport
+
+import (
+	"time"
+
+	"github.com/gezibash/arc/v2/pkg/identity"
+)
+
+// Provider describes a capability provider discovered via the transport.
+type Provider struct {
+	Pubkey         identity.PublicKey
+	Name           string
+	Petname        string
+	Labels         map[string]string
+	SubscriptionID string
+	RelayPubkey    identity.PublicKey
+	Latency        time.Duration
+	LastSeen       time.Time
+	Connected      time.Duration
+}
+
+// ProviderSet is a discovery result set.
+type ProviderSet struct {
+	Providers []Provider
+	Total     int
+	HasMore   bool
+}

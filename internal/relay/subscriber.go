@@ -6,7 +6,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	relayv1 "github.com/gezibash/arc-node/api/arc/relay/v1"
+	relayv1 "github.com/gezibash/arc/v2/api/arc/relay/v1"
+	"github.com/gezibash/arc/v2/internal/names"
 	"github.com/gezibash/arc/v2/pkg/identity"
 )
 
@@ -17,16 +18,22 @@ const (
 
 // Subscriber represents a connected client with its buffer and subscriptions.
 type Subscriber struct {
-	id        string
-	stream    relayv1.RelayService_ConnectServer
-	buffer    chan *relayv1.ServerFrame
-	sender    identity.PublicKey
-	name      string // registered @name, if any
-	lastSend  atomic.Int64
-	lastRecv  atomic.Int64
-	closed    atomic.Bool
-	closedMu  sync.Mutex
-	closeOnce sync.Once
+	id          string
+	stream      relayv1.RelayService_ConnectServer
+	buffer      chan *relayv1.ServerFrame
+	sender      identity.PublicKey
+	name        string // registered @name, if any
+	connectedAt int64  // connection time (unix nanos)
+	lastSend    atomic.Int64
+	lastRecv    atomic.Int64
+	latency     atomic.Int64 // RTT in nanoseconds (from ping/pong)
+	closed      atomic.Bool
+	closedMu    sync.Mutex
+	closeOnce   sync.Once
+
+	// Pending ping for latency measurement
+	pendingPing      atomic.Int64 // timestamp when ping was sent (unix nanos)
+	pendingPingNonce []byte
 
 	// subscriptions maps subscription ID to label matchers
 	subscriptions map[string]map[string]string
@@ -44,6 +51,7 @@ func NewSubscriber(id string, stream relayv1.RelayService_ConnectServer, sender 
 		stream:        stream,
 		buffer:        make(chan *relayv1.ServerFrame, bufferSize),
 		sender:        sender,
+		connectedAt:   now,
 		subscriptions: make(map[string]map[string]string),
 	}
 	s.lastSend.Store(now)
@@ -60,6 +68,14 @@ func (s *Subscriber) Sender() identity.PublicKey { return s.sender }
 // Name returns the registered name, if any.
 func (s *Subscriber) Name() string { return s.name }
 
+// DisplayName returns the name if set, otherwise a docker-style petname.
+func (s *Subscriber) DisplayName() string {
+	if s.name != "" {
+		return s.name
+	}
+	return names.Petname(s.sender.Bytes)
+}
+
 // SetName registers an addressed name.
 func (s *Subscriber) SetName(name string) { s.name = name }
 
@@ -75,6 +91,29 @@ func (s *Subscriber) Unsubscribe(id string) {
 	s.subMu.Lock()
 	defer s.subMu.Unlock()
 	delete(s.subscriptions, id)
+}
+
+// UpdateLabels merges labels into an existing subscription and removes specified keys.
+func (s *Subscriber) UpdateLabels(id string, merge map[string]string, remove []string) bool {
+	s.subMu.Lock()
+	defer s.subMu.Unlock()
+
+	labels, ok := s.subscriptions[id]
+	if !ok {
+		return false
+	}
+
+	// Merge new labels
+	for k, v := range merge {
+		labels[k] = v
+	}
+
+	// Remove specified keys
+	for _, k := range remove {
+		delete(labels, k)
+	}
+
+	return true
 }
 
 // Subscriptions returns a snapshot of current subscriptions.
@@ -102,7 +141,7 @@ func (s *Subscriber) Send(frame *relayv1.ServerFrame) bool {
 		slog.Warn("buffer full, dropping",
 			"component", "subscriber",
 			"subscriber_id", s.id,
-			"subscriber_name", s.name,
+			"subscriber", s.DisplayName(),
 			"buffer_len", len(s.buffer),
 		)
 		return false // buffer full, drop
@@ -122,6 +161,52 @@ func (s *Subscriber) LastRecv() time.Time {
 // TouchRecv updates the last receive time.
 func (s *Subscriber) TouchRecv() {
 	s.lastRecv.Store(time.Now().UnixNano())
+}
+
+// ConnectedAt returns the time when the subscriber connected.
+func (s *Subscriber) ConnectedAt() time.Time {
+	return time.Unix(0, s.connectedAt)
+}
+
+// ConnectedDuration returns how long the subscriber has been connected.
+func (s *Subscriber) ConnectedDuration() time.Duration {
+	return time.Duration(time.Now().UnixNano() - s.connectedAt)
+}
+
+// Latency returns the last measured RTT latency.
+func (s *Subscriber) Latency() time.Duration {
+	return time.Duration(s.latency.Load())
+}
+
+// SetPendingPing records that a ping was sent for latency measurement.
+func (s *Subscriber) SetPendingPing(nonce []byte) {
+	s.pendingPingNonce = nonce
+	s.pendingPing.Store(time.Now().UnixNano())
+}
+
+// CompletePing calculates latency from a pong response.
+// Returns true if this was a valid response to a pending ping.
+func (s *Subscriber) CompletePing(nonce []byte) bool {
+	sentAt := s.pendingPing.Swap(0)
+	if sentAt == 0 {
+		return false
+	}
+
+	// Verify nonce matches (simple check)
+	if len(nonce) != len(s.pendingPingNonce) {
+		return false
+	}
+	for i := range nonce {
+		if nonce[i] != s.pendingPingNonce[i] {
+			return false
+		}
+	}
+
+	// Calculate and store latency
+	latency := time.Now().UnixNano() - sentAt
+	s.latency.Store(latency)
+	s.pendingPingNonce = nil
+	return true
 }
 
 // BufferLen returns current buffer occupancy.

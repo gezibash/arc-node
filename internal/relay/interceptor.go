@@ -2,11 +2,9 @@ package relay
 
 import (
 	"context"
-	"encoding/hex"
 	"log/slog"
 
 	"github.com/gezibash/arc/v2/pkg/identity"
-	"github.com/gezibash/arc/v2/pkg/message"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	grpcmd "google.golang.org/grpc/metadata"
@@ -19,6 +17,24 @@ const (
 	MetaSignature = "arc-signature" // hex-encoded signature
 	MetaTimestamp = "arc-timestamp" // unix millis
 )
+
+// UnaryServerInterceptor returns a gRPC unary interceptor that verifies
+// the caller's keypair signature and sets the sender in context.
+// If auth metadata is present, it's verified. If absent, the request
+// passes through unauthenticated (handler decides whether to require it).
+func UnaryServerInterceptor() grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		sender, err := extractAndVerifySender(ctx)
+		if err != nil {
+			// No valid auth — pass through without sender in context.
+			// Handlers that require auth (e.g. ForwardEnvelope) check
+			// SenderFromContext themselves and return Unauthenticated.
+			return handler(ctx, req)
+		}
+		ctx = WithSender(ctx, sender)
+		return handler(ctx, req)
+	}
+}
 
 // StreamServerInterceptor returns a gRPC stream interceptor that verifies
 // the caller's envelope signature and sets the sender in context.
@@ -53,13 +69,10 @@ func extractAndVerifySender(ctx context.Context) (identity.PublicKey, error) {
 	if len(fromVals) == 0 {
 		return identity.PublicKey{}, status.Error(codes.Unauthenticated, "missing arc-from")
 	}
-
-	fromBytes, err := hex.DecodeString(fromVals[0])
-	if err != nil || len(fromBytes) != identity.PublicKeySize {
+	from, err := identity.DecodePublicKey(fromVals[0])
+	if err != nil {
 		return identity.PublicKey{}, status.Error(codes.Unauthenticated, "invalid arc-from")
 	}
-	var from identity.PublicKey
-	copy(from[:], fromBytes)
 
 	// Extract signature
 	sigVals := md.Get(MetaSignature)
@@ -67,12 +80,10 @@ func extractAndVerifySender(ctx context.Context) (identity.PublicKey, error) {
 		return identity.PublicKey{}, status.Error(codes.Unauthenticated, "missing arc-signature")
 	}
 
-	sigBytes, err := hex.DecodeString(sigVals[0])
-	if err != nil || len(sigBytes) != identity.SignatureSize {
+	sig, err := identity.DecodeSignature(sigVals[0])
+	if err != nil {
 		return identity.PublicKey{}, status.Error(codes.Unauthenticated, "invalid arc-signature")
 	}
-	var sig identity.Signature
-	copy(sig[:], sigBytes)
 
 	// Extract timestamp
 	tsVals := md.Get(MetaTimestamp)
@@ -87,17 +98,8 @@ func extractAndVerifySender(ctx context.Context) (identity.PublicKey, error) {
 
 	// Verify signature over (from || timestamp)
 	// This is a minimal auth envelope - just proves identity ownership
-	msg := message.Message{
-		From:      from,
-		Timestamp: ts,
-		Signature: &sig,
-	}
-
-	ok, err = message.Verify(msg)
-	if err != nil {
-		return identity.PublicKey{}, status.Errorf(codes.Unauthenticated, "verify failed: %v", err)
-	}
-	if !ok {
+	payload := authPayload(from, ts)
+	if !identity.Verify(from, payload, sig) {
 		return identity.PublicKey{}, status.Error(codes.Unauthenticated, "invalid signature")
 	}
 

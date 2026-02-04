@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/gezibash/arc-node/internal/keyring"
+	"github.com/gezibash/arc/v2/internal/cli"
+	"github.com/gezibash/arc/v2/internal/keyring"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -40,10 +41,11 @@ func newGenerateCmd(v *viper.Viper) *cobra.Command {
 				_ = kr.SetDefault(alias)
 			}
 
-			fmt.Printf("Key created: %s\n", alias)
-			fmt.Printf("  Public Key: %s\n", key.PublicKey)
-			fmt.Printf("  Stored at:  %s\n", filepath.Join(dataDir(v), "keys", key.PublicKey+".key"))
-			return nil
+			out := cli.NewOutputFromViper(v)
+			return out.Result("key-generated", fmt.Sprintf("Key created: %s", alias)).
+				With("Public Key", key.PublicKey).
+				With("Stored at", filepath.Join(dataDir(v), "keys", key.PublicKey+".key")).
+				Render()
 		},
 	}
 

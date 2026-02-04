@@ -3,6 +3,7 @@ package keys
 import (
 	"fmt"
 
+	"github.com/gezibash/arc/v2/internal/cli"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -17,8 +18,12 @@ func newAliasCmd(v *viper.Viper) *cobra.Command {
 			if err := kr.SetAlias(args[0], args[1]); err != nil {
 				return fmt.Errorf("set alias: %w", err)
 			}
-			fmt.Printf("Alias %q set for key %s\n", args[0], args[1])
-			return nil
+
+			out := cli.NewOutputFromViper(v)
+			return out.Result("alias-set", fmt.Sprintf("Alias %q set for key", args[0])).
+				With("Alias", args[0]).
+				With("Public Key", args[1]).
+				Render()
 		},
 	}
 }

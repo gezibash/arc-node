@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
+	"github.com/gezibash/arc/v2/internal/cli"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -32,11 +33,15 @@ func newImportCmd(v *viper.Viper) *cobra.Command {
 				return fmt.Errorf("import key: %w", err)
 			}
 
-			fmt.Printf("Key imported: %s\n", key.PublicKey)
+			out := cli.NewOutputFromViper(v)
+			result := out.Result("key-imported", "Key imported").
+				With("Public Key", key.PublicKey)
+
 			if alias != "" {
-				fmt.Printf("  Alias: %s\n", alias)
+				result.With("Alias", alias)
 			}
-			return nil
+
+			return result.Render()
 		},
 	}
 }

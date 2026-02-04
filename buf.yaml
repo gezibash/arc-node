@@ -8,6 +8,8 @@ lint:
     # Relay uses bidirectional streaming frames, not request/response
     - RPC_REQUEST_STANDARD_NAME
     - RPC_RESPONSE_STANDARD_NAME
+    # Blob service reuses Chunk for streaming in both Put and Get
+    - RPC_REQUEST_RESPONSE_UNIQUE
 breaking:
   use:
     - FILE

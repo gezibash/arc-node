@@ -8,7 +8,9 @@ import (
 	"sync"
 	"sync/atomic"
 
-	relayv1 "github.com/gezibash/arc-node/api/arc/relay/v1"
+	relayv1 "github.com/gezibash/arc/v2/api/arc/relay/v1"
+	"github.com/gezibash/arc/v2/pkg/identity"
+	"github.com/gezibash/arc/v2/pkg/logging"
 )
 
 var (
@@ -22,6 +24,7 @@ type Relay struct {
 	table  *Table
 	router *Router
 	reaper *Reaper
+	signer identity.Signer
 
 	closed     atomic.Bool
 	wg         sync.WaitGroup
@@ -30,7 +33,8 @@ type Relay struct {
 
 // Config holds relay configuration.
 type Config struct {
-	BufferSize int // per-subscriber buffer size
+	BufferSize int             // per-subscriber buffer size
+	Signer     identity.Signer // relay's signing key
 }
 
 // DefaultConfig returns sensible defaults.
@@ -41,24 +45,36 @@ func DefaultConfig() Config {
 }
 
 // New creates a new relay with the given config.
-func New(cfg Config) *Relay {
+// Returns an error if no keypair is provided.
+func New(cfg Config) (*Relay, error) {
+	if cfg.Signer == nil {
+		return nil, errors.New("signer is required")
+	}
+
 	table := NewTable()
 	router := NewRouter(table)
 
 	r := &Relay{
 		table:  table,
 		router: router,
+		signer: cfg.Signer,
 	}
 
 	r.reaper = NewReaper(table, r.disconnect)
-	return r
+	return r, nil
+}
+
+// Signer returns the relay's signing key.
+func (r *Relay) Signer() identity.Signer {
+	return r.signer
 }
 
 // Start begins background tasks (reaper). Call once.
 func (r *Relay) Start(ctx context.Context) {
 	ctx, r.cancelFunc = context.WithCancel(ctx)
 
-	slog.Info("relay started", "component", "relay")
+	pk := r.signer.PublicKey()
+	slog.Info("relay started", "component", "relay", "pubkey", logging.FormatPubkey(pk))
 
 	r.wg.Add(1)
 	go func() {
@@ -104,6 +120,9 @@ func (r *Relay) Route(env *relayv1.Envelope) (int, error) {
 		ref = computeRef(env)
 		env.Ref = ref
 	}
+
+	// Sign the envelope with relay's keypair
+	SignEnvelope(env, r.signer)
 
 	// Route
 	subs, _ := r.router.Route(env)

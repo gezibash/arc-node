@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
+	"fmt"
+	"os"
 	"strings"
 	"time"
 
-	"github.com/gezibash/arc/v2/pkg/identity"
+	"github.com/gezibash/arc/v2/pkg/identity/ed25519"
 )
 
 const (
@@ -27,7 +29,7 @@ type Keyring struct {
 }
 
 type Key struct {
-	Keypair   *identity.Keypair
+	Keypair   *ed25519.Keypair
 	PublicKey string // hex-encoded
 	Metadata  *Metadata
 }
@@ -50,13 +52,13 @@ func New(dir string) *Keyring {
 	return &Keyring{dir: dir}
 }
 
-func pubKeyHex(kp *identity.Keypair) string {
+func pubKeyHex(kp *ed25519.Keypair) string {
 	pk := kp.PublicKey()
-	return hex.EncodeToString(pk[:])
+	return hex.EncodeToString(pk.Bytes)
 }
 
 func (kr *Keyring) Generate(_ context.Context, alias string) (*Key, error) {
-	kp, err := identity.Generate()
+	kp, err := ed25519.Generate()
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +89,7 @@ func (kr *Keyring) Generate(_ context.Context, alias string) (*Key, error) {
 }
 
 func (kr *Keyring) Import(_ context.Context, seed []byte, alias string) (*Key, error) {
-	kp, err := identity.FromSeed(seed)
+	kp, err := ed25519.FromSeed(seed)
 	if err != nil {
 		return nil, err
 	}
@@ -149,6 +151,44 @@ func (kr *Keyring) LoadOrGenerate(ctx context.Context, alias string) (*Key, erro
 		return nil, err
 	}
 	return kr.Generate(ctx, alias)
+}
+
+// LoadSigner loads a signer using a key path or alias, generating if needed.
+func (kr *Keyring) LoadSigner(ctx context.Context, alias, keyPath string) (*ed25519.Keypair, error) {
+	if keyPath != "" {
+		key, err := kr.LoadFromPath(ctx, keyPath)
+		if err != nil {
+			return nil, err
+		}
+		return key.Keypair, nil
+	}
+
+	key, err := kr.LoadOrGenerate(ctx, alias)
+	if err != nil {
+		return nil, err
+	}
+	return key.Keypair, nil
+}
+
+// LoadFromPath loads a keypair from an arbitrary file path.
+// The file should contain a 32-byte Ed25519 seed.
+func (kr *Keyring) LoadFromPath(_ context.Context, path string) (*Key, error) {
+	seed, err := os.ReadFile(path) //nolint:gosec // intentional user-provided path
+	if err != nil {
+		return nil, fmt.Errorf("read key file: %w", err)
+	}
+
+	kp, err := ed25519.FromSeed(seed)
+	if err != nil {
+		return nil, fmt.Errorf("create keypair from seed: %w", err)
+	}
+
+	pkHex := pubKeyHex(kp)
+	return &Key{
+		Keypair:   kp,
+		PublicKey: pkHex,
+		Metadata:  &Metadata{PublicKey: pkHex},
+	}, nil
 }
 
 func (kr *Keyring) List(_ context.Context) ([]*KeyInfo, error) {

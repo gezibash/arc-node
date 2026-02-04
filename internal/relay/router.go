@@ -1,13 +1,11 @@
 package relay
 
 import (
-	"encoding/hex"
 	"strings"
 
-	relayv1 "github.com/gezibash/arc-node/api/arc/relay/v1"
+	relayv1 "github.com/gezibash/arc/v2/api/arc/relay/v1"
+	"github.com/gezibash/arc/v2/pkg/identity"
 )
-
-const pubkeyHexLen = 64
 
 // Router finds subscribers for an envelope based on labels.
 // Routing order: addressed → label-match.
@@ -32,8 +30,12 @@ func (r *Router) Route(env *relayv1.Envelope) ([]*Subscriber, RouteMode) {
 	if to := labels["to"]; to != "" {
 		// Check if it's a pubkey (64 hex chars) or a name
 		if looksLikePubkey(to) {
-			if s, ok := r.table.LookupPubkey(strings.ToLower(to)); ok {
-				return []*Subscriber{s}, RouteModeAddressed
+			pubkey, err := identity.DecodePublicKey(to)
+			if err == nil {
+				canonical := identity.EncodePublicKey(pubkey)
+				if s, ok := r.table.LookupPubkey(canonical); ok {
+					return []*Subscriber{s}, RouteModeAddressed
+				}
 			}
 		} else {
 			if s, ok := r.table.LookupName(to); ok {
@@ -50,10 +52,14 @@ func (r *Router) Route(env *relayv1.Envelope) ([]*Subscriber, RouteMode) {
 
 // looksLikePubkey returns true if the string is a 64-char hex string (Ed25519 pubkey).
 func looksLikePubkey(s string) bool {
-	if len(s) != pubkeyHexLen {
+	if strings.Contains(s, ":") {
+		_, err := identity.DecodePublicKey(s)
+		return err == nil
+	}
+	if len(s) < 64 {
 		return false
 	}
-	_, err := hex.DecodeString(s)
+	_, err := identity.DecodePublicKey(s)
 	return err == nil
 }
 

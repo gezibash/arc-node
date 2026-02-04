@@ -19,11 +19,12 @@ tasks:
     cmds:
       - git ls-files "*.go" | xargs gofmt -w
   build:
-    desc: Build the arc binary and Docker image
+    desc: Build all binaries (arc, arc-relay, arc-blob)
     deps:
-      - build:bin
-      - build:docker
-  build:bin:
+      - build:arc
+      - build:arc-relay
+      - build:arc-blob
+  build:arc:
     desc: Build the arc binary
     vars:
       VERSION:
@@ -40,6 +41,40 @@ tasks:
       - go.sum
     generates:
       - bin/arc
+  build:arc-relay:
+    desc: Build the arc-relay binary
+    vars:
+      VERSION:
+        sh: git describe --tags --always --dirty 2>/dev/null || echo dev
+      COMMIT:
+        sh: git rev-parse --short HEAD 2>/dev/null || echo unknown
+      DATE:
+        sh: date -u +%Y-%m-%dT%H:%M:%SZ
+    cmds:
+      - go build -ldflags "-X main.version={{.VERSION}} -X main.commit={{.COMMIT}} -X main.buildDate={{.DATE}}" -o bin/arc-relay ./cmd/arc-relay
+    sources:
+      - ./**/*.go
+      - go.mod
+      - go.sum
+    generates:
+      - bin/arc-relay
+  build:arc-blob:
+    desc: Build the arc-blob binary
+    vars:
+      VERSION:
+        sh: git describe --tags --always --dirty 2>/dev/null || echo dev
+      COMMIT:
+        sh: git rev-parse --short HEAD 2>/dev/null || echo unknown
+      DATE:
+        sh: date -u +%Y-%m-%dT%H:%M:%SZ
+    cmds:
+      - go build -ldflags "-X main.version={{.VERSION}} -X main.commit={{.COMMIT}} -X main.buildDate={{.DATE}}" -o bin/arc-blob ./cmd/arc-blob
+    sources:
+      - ./**/*.go
+      - go.mod
+      - go.sum
+    generates:
+      - bin/arc-blob
   build:docker:
     desc: Build the Docker image
     vars:

@@ -1,5 +1,6 @@
 bin/
 /arc
+/arc-*
 .claude/skills
 .docs/
 .task/
