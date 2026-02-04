@@ -161,6 +161,9 @@ func (b *Builder) Build() (*Runtime, error) {
 		<-sigCh
 		log.Info("shutting down...")
 		cancel()
+		<-sigCh
+		log.Warn("forced shutdown")
+		os.Exit(1)
 	}()
 
 	signer := b.signer

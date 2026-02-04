@@ -142,17 +142,21 @@ For detailed implementation guidance, read `.docs/`:
 └── DECISIONS.md  # Architecture decisions - "why did we do it this way?"
 ```
 
-## Core Primitives (from `github.com/gezibash/arc`)
+## Core Primitives (`pkg/identity`)
 
 ```go
-identity.Keypair                    // Ed25519 keypair
-identity.PublicKey  [32]byte        // Ed25519 public key
-identity.Signature  [64]byte        // Ed25519 signature
-message.Message                     // From, To, Content, ContentType, Timestamp, Signature
-reference.Reference [32]byte        // SHA-256 content hash
-reference.Compute(data) Reference   // SHA-256
-message.Sign(msg, kp)               // Sign message with keypair
-message.Verify(msg) (bool, error)   // Verify Ed25519 signature
+identity.PublicKey{Algo, Bytes}     // Algorithm-tagged public key
+identity.Signature{Algo, Bytes}     // Algorithm-tagged signature
+identity.Signer                     // Interface: PublicKey(), Sign(), Algorithm()
+identity.EncodePublicKey(pk)        // → "ed25519:hex..."
+identity.DecodePublicKey(s)         // Parse "algo:hex" → PublicKey
+identity.Verify(pk, payload, sig)   // Verify signature
+
+// Implementations
+ed25519.Generate() → (*Keypair, error)
+ed25519.FromSeed(seed) → (*Keypair, error)
+secp256k1.Generate() → (*Keypair, error)
+secp256k1.FromSeed(seed) → (*Keypair, error)
 ```
 
 ## Capability Framework
@@ -243,7 +247,7 @@ case blob.OpWant: // ...
 
 **Control plane** — gossip with peer relays:
 - Observe local state (who's connected, what capabilities, what names)
-- Propagate to peers via memberlist (SWIM protocol over gRPC)
+- Propagate to peers via memberlist (SWIM protocol over UDP/TCP)
 - Converge to full network view (every relay knows about every relay)
 - Answer cross-relay discovery queries from local state
 
@@ -265,6 +269,27 @@ case blob.OpWant: // ...
 - Persistence or history
 
 See `.docs/RELAY.md` for full details.
+
+## Naming — BIP-39 Petnames
+
+All entities get deterministic 3-word names from their public key using BIP-39:
+
+```
+pubkey bytes → BIP-39 mnemonic → first 3 words → join with "-"
+```
+
+Example: `"leader-monkey-parrot"` (2048³ = ~8.5 billion combinations)
+
+```go
+names.Petname(pubkeyBytes)           // []byte → "leader-monkey-parrot"
+names.PetnameFromHex(hexStr)         // hex string → petname
+names.PetnameFromEncoded(encoded)    // "ed25519:hex..." → petname
+```
+
+Used everywhere: relay gossip node names, subscriber names, capability names.
+Gossip defaults to petname from relay pubkey (`--gossip-name` overrides).
+
+Dependency: `github.com/tyler-smith/go-bip39`
 
 ## CLI
 
@@ -380,10 +405,10 @@ default:
 
 ## Roadmap
 
-Foundation → Relay Core → **Gossip (backbone)** → {Naming, Direct Connection, SDK, Capabilities}
+Foundation → Relay Core → Gossip (backbone) → **{Naming, Direct Connection, SDK, Capabilities}**
 
-Gossip is the backbone of the infrastructure. It gives the network consistency
-and makes cross-relay discovery, naming, and capability routing possible.
-Everything after relay core depends on gossip being in place.
+Gossip backbone is implemented (memberlist, sections, cross-relay forwarding,
+capability/name propagation). Current focus: naming system, direct connections,
+capability SDK, and building out capabilities (blob, index, etc.).
 
 See `.docs/INDEX.md` for the full dependency graph and issue links.

@@ -7,6 +7,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"time"
 
 	relayv1 "github.com/gezibash/arc/v2/api/arc/relay/v1"
 	"github.com/gezibash/arc/v2/internal/config"
@@ -108,13 +109,18 @@ Examples:
 			// Create service
 			svc := internalrelay.NewService(r, bufferSize)
 
+			// Gossip and forwarder — hoisted for ordered shutdown
+			var g *internalgossip.Gossip
+			var fwd *internalgossip.Forwarder
+
 			// Start gossip if enabled
 			if cfg.Gossip.Enabled() {
 				gossipPort := cfg.Gossip.BindPort
 				if gossipPort == 0 {
 					gossipPort = 7946 // default gossip port
 				}
-				g, gossipErr := internalgossip.New(internalgossip.Config{
+				var gossipErr error
+				g, gossipErr = internalgossip.New(internalgossip.Config{
 					NodeName:      cfg.Gossip.NodeName,
 					BindAddr:      cfg.Gossip.BindAddr,
 					BindPort:      gossipPort,
@@ -135,7 +141,7 @@ Examples:
 				svc.SetGossipAdmin(internalgossip.NewGossipAdmin(g))
 
 				// Create forwarder for cross-relay envelope routing
-				fwd := internalgossip.NewForwarder(g, rt.Signer())
+				fwd = internalgossip.NewForwarder(g, rt.Signer())
 				defer func() { _ = fwd.Close() }()
 				svc.SetRemoteForwarder(fwd)
 
@@ -187,8 +193,35 @@ Examples:
 			select {
 			case <-rt.Context().Done():
 				slog.Info("shutting down")
+
+				// 1. Stop accepting new connections
 				hs.SetServingStatus("", grpc_health_v1.HealthCheckResponse_NOT_SERVING)
-				grpcServer.GracefulStop()
+
+				// 2. Leave gossip so peers learn immediately
+				if g != nil {
+					slog.Debug("leaving gossip cluster", "component", "shutdown")
+					_ = g.Leave()
+				}
+
+				// 3. Close relay — closes all subscribers, ends their streams
+				slog.Debug("closing relay", "component", "shutdown")
+				_ = r.Close()
+
+				// 4. GracefulStop with timeout, fallback to hard stop
+				stopped := make(chan struct{})
+				go func() {
+					grpcServer.GracefulStop()
+					close(stopped)
+				}()
+				select {
+				case <-stopped:
+					slog.Debug("grpc server stopped gracefully", "component", "shutdown")
+				case <-time.After(5 * time.Second):
+					slog.Warn("graceful stop timed out, forcing", "component", "shutdown")
+					grpcServer.Stop()
+				}
+
+				// 5. Remaining cleanup runs via defers (g.Close, fwd.Close, rt.Close)
 				return nil
 			case err := <-errCh:
 				return err
