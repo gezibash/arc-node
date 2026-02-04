@@ -4,6 +4,7 @@ package logging
 import (
 	"context"
 	"encoding/hex"
+	"io"
 	"log/slog"
 	"os"
 	"strings"
@@ -17,10 +18,17 @@ type Logger struct {
 	attrs []slog.Attr
 }
 
-// Setup initializes logging with the given level and format.
+// Setup initializes logging with the given level and format, writing to stdout.
 // Valid levels: debug, info, warn, error. Valid formats: json, text.
 // Returns the configured Logger and sets it as the slog default.
 func Setup(level, format string) *Logger {
+	return SetupWriter(level, format, os.Stdout)
+}
+
+// SetupWriter initializes logging with the given level, format, and writer.
+// Valid levels: debug, info, warn, error. Valid formats: json, text.
+// Returns the configured Logger and sets it as the slog default.
+func SetupWriter(level, format string, w io.Writer) *Logger {
 	var lvl slog.Level
 	switch strings.ToLower(level) {
 	case "debug":
@@ -37,9 +45,9 @@ func Setup(level, format string) *Logger {
 
 	var handler slog.Handler
 	if strings.ToLower(format) == "json" {
-		handler = slog.NewJSONHandler(os.Stdout, opts)
+		handler = slog.NewJSONHandler(w, opts)
 	} else {
-		handler = slog.NewTextHandler(os.Stdout, opts)
+		handler = slog.NewTextHandler(w, opts)
 	}
 
 	base := slog.New(handler)

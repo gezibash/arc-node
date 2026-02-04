@@ -5,6 +5,7 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -28,6 +29,7 @@ type Builder struct {
 	dataDir   string
 	logLevel  string
 	logFormat string
+	logWriter io.Writer
 
 	signer   identity.Signer
 	provider identity.Provider
@@ -126,6 +128,13 @@ func (b *Builder) Logging(level, format string) *Builder {
 	return b
 }
 
+// LogWriter sets the output destination for logs.
+// Defaults to os.Stdout if not set.
+func (b *Builder) LogWriter(w io.Writer) *Builder {
+	b.logWriter = w
+	return b
+}
+
 // IdentityProvider configures the identity provider.
 func (b *Builder) IdentityProvider(p identity.Provider) *Builder {
 	b.provider = p
@@ -151,7 +160,11 @@ func (b *Builder) Build() (*Runtime, error) {
 
 	log := b.logger
 	if log == nil {
-		log = logging.Setup(b.logLevel, b.logFormat)
+		w := b.logWriter
+		if w == nil {
+			w = os.Stdout
+		}
+		log = logging.SetupWriter(b.logLevel, b.logFormat, w)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

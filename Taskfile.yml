@@ -82,3 +82,19 @@ tasks:
         sh: git describe --tags --always --dirty 2>/dev/null || echo dev
     cmds:
       - docker build -t gezibash/arc:{{.VERSION}} -t gezibash/arc:latest .
+  compose:up:
+    desc: Start 3-relay gossip cluster
+    cmds:
+      - docker compose up --build
+  compose:down:
+    desc: Stop cluster
+    cmds:
+      - docker compose down
+  compose:delete:
+    desc: Stop cluster and delete volumes
+    cmds:
+      - docker compose --profile blob down -v
+  compose:full:
+    desc: Start 3-relay cluster + blob stores
+    cmds:
+      - docker compose --profile blob up -d --build

@@ -35,6 +35,8 @@ type GossipMemberInfo struct {
 	Pubkey      string
 	Connections uint32
 	Uptime      uint64
+	LatencyNs   int64
+	IsLocal     bool
 }
 
 // RemoteForwarder forwards envelopes to remote relays when local routing fails.
@@ -45,10 +47,12 @@ type RemoteForwarder interface {
 // Observer receives notifications about local relay state changes.
 // Used by gossip to propagate state to the cluster.
 type Observer interface {
+	OnConnected(pubkey identity.PublicKey)
 	OnSubscribe(pubkey identity.PublicKey, subID string, labels map[string]string, name string)
 	OnUnsubscribe(pubkey identity.PublicKey, subID string)
 	OnSubscriberRemoved(pubkey identity.PublicKey)
 	OnNameRegistered(name string, pubkey identity.PublicKey)
+	OnLatencyMeasured(pubkey identity.PublicKey, latency time.Duration)
 }
 
 // Service implements the RelayService gRPC interface.
@@ -115,6 +119,9 @@ func (s *Service) Connect(stream relayv1.RelayService_ConnectServer) error {
 
 	// Register with table
 	s.relay.Table().Add(sub)
+	if s.observer != nil {
+		s.observer.OnConnected(sender)
+	}
 	defer func() {
 		slog.Info("client disconnected",
 			"component", "service",
@@ -288,6 +295,15 @@ func (s *Service) handleRegisterName(_ context.Context, sub *Subscriber, reg *re
 func (s *Service) handlePing(_ context.Context, sub *Subscriber, ping *relayv1.PingFrame) error {
 	pong := WrapPong(ping.GetNonce(), time.Now().UnixNano())
 	sub.Send(pong)
+
+	// Client reports its measured RTT — store it as subscriber latency.
+	if rtt := ping.GetMeasuredLatencyNs(); rtt > 0 {
+		sub.SetLatency(time.Duration(rtt))
+		if s.observer != nil {
+			s.observer.OnLatencyMeasured(sub.Sender(), time.Duration(rtt))
+		}
+	}
+
 	return nil
 }
 
@@ -443,6 +459,8 @@ func (s *Service) GossipMembers(_ context.Context, _ *relayv1.GossipMembersReque
 			Pubkey:      []byte(m.Pubkey),
 			Connections: int32(m.Connections),
 			UptimeNs:    int64(m.Uptime),
+			LatencyNs:   m.LatencyNs,
+			IsLocal:     m.IsLocal,
 		})
 	}
 	return &relayv1.GossipMembersResponse{Members: pbMembers}, nil

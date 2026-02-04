@@ -8,15 +8,16 @@ import (
 
 // Provider describes a capability provider discovered via the transport.
 type Provider struct {
-	Pubkey         identity.PublicKey
-	Name           string
-	Petname        string
-	Labels         map[string]string
-	SubscriptionID string
-	RelayPubkey    identity.PublicKey
-	Latency        time.Duration
-	LastSeen       time.Time
-	Connected      time.Duration
+	Pubkey            identity.PublicKey
+	Name              string
+	Petname           string
+	Labels            map[string]string
+	SubscriptionID    string
+	RelayPubkey       identity.PublicKey
+	Latency           time.Duration // relay → capability RTT
+	InterRelayLatency time.Duration // local relay → remote relay RTT (0 for local)
+	LastSeen          time.Time
+	Connected         time.Duration
 }
 
 // ProviderSet is a discovery result set.

@@ -647,12 +647,16 @@ func (x *RegisterNameFrame) GetName() string {
 	return ""
 }
 
-// PingFrame is a keepalive.
+// PingFrame is a keepalive and latency reporter.
 type PingFrame struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Nonce         []byte                 `protobuf:"bytes,1,opt,name=nonce,proto3" json:"nonce,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Nonce []byte                 `protobuf:"bytes,1,opt,name=nonce,proto3" json:"nonce,omitempty"`
+	// Client's last measured round-trip latency to the relay in nanoseconds.
+	// Populated by the client after measuring via ping/pong.
+	// The server reads this to know the subscriber's RTT without initiating its own pings.
+	MeasuredLatencyNs int64 `protobuf:"varint,2,opt,name=measured_latency_ns,json=measuredLatencyNs,proto3" json:"measured_latency_ns,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *PingFrame) Reset() {
@@ -690,6 +694,13 @@ func (x *PingFrame) GetNonce() []byte {
 		return x.Nonce
 	}
 	return nil
+}
+
+func (x *PingFrame) GetMeasuredLatencyNs() int64 {
+	if x != nil {
+		return x.MeasuredLatencyNs
+	}
+	return 0
 }
 
 // UpdateLabelsFrame updates subscription labels without re-subscribing.
@@ -1285,9 +1296,12 @@ type ProviderInfo struct {
 	// Last time relay received a message from this provider (unix nanos).
 	LastSeenNs int64 `protobuf:"varint,8,opt,name=last_seen_ns,json=lastSeenNs,proto3" json:"last_seen_ns,omitempty"`
 	// Connection age in nanoseconds (how long connected to relay).
-	ConnectedNs   int64 `protobuf:"varint,9,opt,name=connected_ns,json=connectedNs,proto3" json:"connected_ns,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	ConnectedNs int64 `protobuf:"varint,9,opt,name=connected_ns,json=connectedNs,proto3" json:"connected_ns,omitempty"`
+	// Inter-relay latency in nanoseconds (local relay → remote relay via gossip SWIM probes).
+	// Zero for local providers (same relay as the querying client).
+	InterRelayLatencyNs int64 `protobuf:"varint,10,opt,name=inter_relay_latency_ns,json=interRelayLatencyNs,proto3" json:"inter_relay_latency_ns,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *ProviderInfo) Reset() {
@@ -1379,6 +1393,13 @@ func (x *ProviderInfo) GetLastSeenNs() int64 {
 func (x *ProviderInfo) GetConnectedNs() int64 {
 	if x != nil {
 		return x.ConnectedNs
+	}
+	return 0
+}
+
+func (x *ProviderInfo) GetInterRelayLatencyNs() int64 {
+	if x != nil {
+		return x.InterRelayLatencyNs
 	}
 	return 0
 }
@@ -1677,7 +1698,11 @@ type GossipMember struct {
 	// Number of connected subscribers.
 	Connections int32 `protobuf:"varint,6,opt,name=connections,proto3" json:"connections,omitempty"`
 	// Uptime in nanoseconds.
-	UptimeNs      int64 `protobuf:"varint,7,opt,name=uptime_ns,json=uptimeNs,proto3" json:"uptime_ns,omitempty"`
+	UptimeNs int64 `protobuf:"varint,7,opt,name=uptime_ns,json=uptimeNs,proto3" json:"uptime_ns,omitempty"`
+	// Inter-relay latency in nanoseconds (0 for local).
+	LatencyNs int64 `protobuf:"varint,8,opt,name=latency_ns,json=latencyNs,proto3" json:"latency_ns,omitempty"`
+	// True if this is the relay we're querying.
+	IsLocal       bool `protobuf:"varint,9,opt,name=is_local,json=isLocal,proto3" json:"is_local,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1759,6 +1784,20 @@ func (x *GossipMember) GetUptimeNs() int64 {
 		return x.UptimeNs
 	}
 	return 0
+}
+
+func (x *GossipMember) GetLatencyNs() int64 {
+	if x != nil {
+		return x.LatencyNs
+	}
+	return 0
+}
+
+func (x *GossipMember) GetIsLocal() bool {
+	if x != nil {
+		return x.IsLocal
+	}
+	return false
 }
 
 type GossipLeaveRequest struct {
@@ -1877,9 +1916,10 @@ const file_arc_relay_v1_relay_proto_rawDesc = "" +
 	"\x10UnsubscribeFrame\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"'\n" +
 	"\x11RegisterNameFrame\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\"!\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\"Q\n" +
 	"\tPingFrame\x12\x14\n" +
-	"\x05nonce\x18\x01 \x01(\fR\x05nonce\"\xbb\x01\n" +
+	"\x05nonce\x18\x01 \x01(\fR\x05nonce\x12.\n" +
+	"\x13measured_latency_ns\x18\x02 \x01(\x03R\x11measuredLatencyNs\"\xbb\x01\n" +
 	"\x11UpdateLabelsFrame\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12C\n" +
 	"\x06labels\x18\x02 \x03(\v2+.arc.relay.v1.UpdateLabelsFrame.LabelsEntryR\x06labels\x12\x16\n" +
@@ -1921,7 +1961,7 @@ const file_arc_relay_v1_relay_proto_rawDesc = "" +
 	"\vcorrelation\x18\x01 \x01(\tR\vcorrelation\x128\n" +
 	"\tproviders\x18\x02 \x03(\v2\x1a.arc.relay.v1.ProviderInfoR\tproviders\x12\x14\n" +
 	"\x05total\x18\x03 \x01(\x05R\x05total\x12\x19\n" +
-	"\bhas_more\x18\x04 \x01(\bR\ahasMore\"\xff\x02\n" +
+	"\bhas_more\x18\x04 \x01(\bR\ahasMore\"\xb4\x03\n" +
 	"\fProviderInfo\x12\x16\n" +
 	"\x06pubkey\x18\x01 \x01(\fR\x06pubkey\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12>\n" +
@@ -1933,7 +1973,9 @@ const file_arc_relay_v1_relay_proto_rawDesc = "" +
 	"latency_ns\x18\a \x01(\x03R\tlatencyNs\x12 \n" +
 	"\flast_seen_ns\x18\b \x01(\x03R\n" +
 	"lastSeenNs\x12!\n" +
-	"\fconnected_ns\x18\t \x01(\x03R\vconnectedNs\x1a9\n" +
+	"\fconnected_ns\x18\t \x01(\x03R\vconnectedNs\x123\n" +
+	"\x16inter_relay_latency_ns\x18\n" +
+	" \x01(\x03R\x13interRelayLatencyNs\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"o\n" +
@@ -1949,7 +1991,7 @@ const file_arc_relay_v1_relay_proto_rawDesc = "" +
 	"\x06joined\x18\x01 \x01(\x05R\x06joined\"\x16\n" +
 	"\x14GossipMembersRequest\"M\n" +
 	"\x15GossipMembersResponse\x124\n" +
-	"\amembers\x18\x01 \x03(\v2\x1a.arc.relay.v1.GossipMemberR\amembers\"\xc2\x01\n" +
+	"\amembers\x18\x01 \x03(\v2\x1a.arc.relay.v1.GossipMemberR\amembers\"\xfc\x01\n" +
 	"\fGossipMember\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04addr\x18\x02 \x01(\tR\x04addr\x12\x1b\n" +
@@ -1957,7 +1999,10 @@ const file_arc_relay_v1_relay_proto_rawDesc = "" +
 	"\x06status\x18\x04 \x01(\tR\x06status\x12\x16\n" +
 	"\x06pubkey\x18\x05 \x01(\fR\x06pubkey\x12 \n" +
 	"\vconnections\x18\x06 \x01(\x05R\vconnections\x12\x1b\n" +
-	"\tuptime_ns\x18\a \x01(\x03R\buptimeNs\"\x14\n" +
+	"\tuptime_ns\x18\a \x01(\x03R\buptimeNs\x12\x1d\n" +
+	"\n" +
+	"latency_ns\x18\b \x01(\x03R\tlatencyNs\x12\x19\n" +
+	"\bis_local\x18\t \x01(\bR\aisLocal\"\x14\n" +
 	"\x12GossipLeaveRequest\"\x15\n" +
 	"\x13GossipLeaveResponse*`\n" +
 	"\rReceiptStatus\x12\x1e\n" +

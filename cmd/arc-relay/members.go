@@ -41,24 +41,42 @@ Examples:
 			defer func() { _ = conn.Close() }()
 
 			client := relayv1.NewRelayServiceClient(conn)
+			// Warm up connection (first call includes HTTP/2 setup)
+			_, _ = client.GossipMembers(ctx, &relayv1.GossipMembersRequest{})
+			start := time.Now()
 			resp, err := client.GossipMembers(ctx, &relayv1.GossipMembersRequest{})
+			clientRTT := time.Since(start)
 			if err != nil {
 				return fmt.Errorf("members: %w", err)
 			}
 
 			t := table.NewWriter()
 			t.SetOutputMirror(os.Stdout)
-			t.AppendHeader(table.Row{"Name", "Addr", "Status", "gRPC Addr", "Connections", "Uptime"})
+			t.SetStyle(table.StyleLight)
+			t.AppendHeader(table.Row{"Name", "Status", "Connections", "Latency", "Uptime", "gRPC Addr"})
 
 			for _, m := range resp.GetMembers() {
 				uptime := time.Duration(m.GetUptimeNs()).Truncate(time.Second)
+
+				name := m.GetName()
+				if m.GetIsLocal() {
+					name += " (local)"
+				}
+
+				latency := "-"
+				if m.GetIsLocal() {
+					latency = formatDuration(clientRTT)
+				} else if m.GetLatencyNs() > 0 {
+					latency = formatDuration(clientRTT + time.Duration(m.GetLatencyNs()))
+				}
+
 				t.AppendRow(table.Row{
-					m.GetName(),
-					m.GetAddr(),
+					name,
 					m.GetStatus(),
-					m.GetGrpcAddr(),
 					m.GetConnections(),
+					latency,
 					uptime,
+					m.GetGrpcAddr(),
 				})
 			}
 

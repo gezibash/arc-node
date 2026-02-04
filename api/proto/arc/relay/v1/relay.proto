@@ -142,9 +142,14 @@ message RegisterNameFrame {
   string name = 1;
 }
 
-// PingFrame is a keepalive.
+// PingFrame is a keepalive and latency reporter.
 message PingFrame {
   bytes nonce = 1;
+
+  // Client's last measured round-trip latency to the relay in nanoseconds.
+  // Populated by the client after measuring via ping/pong.
+  // The server reads this to know the subscriber's RTT without initiating its own pings.
+  int64 measured_latency_ns = 2;
 }
 
 // UpdateLabelsFrame updates subscription labels without re-subscribing.
@@ -280,6 +285,10 @@ message ProviderInfo {
 
   // Connection age in nanoseconds (how long connected to relay).
   int64 connected_ns = 9;
+
+  // Inter-relay latency in nanoseconds (local relay → remote relay via gossip SWIM probes).
+  // Zero for local providers (same relay as the querying client).
+  int64 inter_relay_latency_ns = 10;
 }
 
 // =============================================================================
@@ -344,6 +353,12 @@ message GossipMember {
 
   // Uptime in nanoseconds.
   int64 uptime_ns = 7;
+
+  // Inter-relay latency in nanoseconds (0 for local).
+  int64 latency_ns = 8;
+
+  // True if this is the relay we're querying.
+  bool is_local = 9;
 }
 
 message GossipLeaveRequest {}

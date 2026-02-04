@@ -32,6 +32,8 @@ func (a *GossipAdmin) Members() []relay.GossipMemberInfo {
 			Pubkey:      m.Pubkey,
 			Connections: m.Connections,
 			Uptime:      m.Uptime,
+			LatencyNs:   m.LatencyNs,
+			IsLocal:     m.IsLocal,
 		}
 	}
 	return out

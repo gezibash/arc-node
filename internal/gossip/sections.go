@@ -162,6 +162,7 @@ type CapabilityEntry struct {
 	SubID          string
 	Labels         map[string]string
 	ProviderName   string // @name if registered
+	LatencyNs      int64  // relay → capability RTT in nanoseconds
 }
 
 // capKey uniquely identifies a capability entry: relay + provider + subID.
@@ -233,6 +234,21 @@ func (s *CapabilitiesSection) UpdateProviderName(relayName, providerPubkey, name
 	}
 }
 
+// UpdateLatency sets LatencyNs on all entries for a provider on a given relay.
+// Returns true if any entries were updated.
+func (s *CapabilitiesSection) UpdateLatency(relayName, providerPubkey string, latencyNs int64) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	updated := false
+	for _, entry := range s.entries {
+		if entry.RelayName == relayName && entry.ProviderPubkey == providerPubkey {
+			entry.LatencyNs = latencyNs
+			updated = true
+		}
+	}
+	return updated
+}
+
 // FindByPubkey returns the first entry matching the given provider pubkey.
 // Used for pubkey-addressed forwarding.
 func (s *CapabilitiesSection) FindByPubkey(pubkey string) (*CapabilityEntry, bool) {
@@ -281,6 +297,7 @@ func (s *CapabilitiesSection) Encode() []byte {
 		buf = appendString(buf, e.SubID)
 		buf = appendString(buf, e.ProviderName)
 		buf = encodeLabels(buf, e.Labels)
+		buf = binary.BigEndian.AppendUint64(buf, uint64(e.LatencyNs))
 	}
 	return buf
 }
@@ -384,12 +401,19 @@ func decodeCapabilityEntries(data []byte) ([]*CapabilityEntry, error) {
 		}
 		pos += n
 
+		var latencyNs int64
+		if pos+8 <= len(data) {
+			latencyNs = int64(binary.BigEndian.Uint64(data[pos:]))
+			pos += 8
+		}
+
 		entries = append(entries, &CapabilityEntry{
 			RelayName:      relayName,
 			ProviderPubkey: providerPubkey,
 			SubID:          subID,
 			Labels:         labels,
 			ProviderName:   providerName,
+			LatencyNs:      latencyNs,
 		})
 	}
 	return entries, nil

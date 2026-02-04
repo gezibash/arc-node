@@ -3,7 +3,9 @@ package cli
 
 import (
 	"os"
+	"path/filepath"
 
+	"github.com/gezibash/arc/v2/internal/config"
 	"github.com/gezibash/arc/v2/pkg/capability"
 	"github.com/gezibash/arc/v2/pkg/runtime"
 	"github.com/spf13/viper"
@@ -17,11 +19,24 @@ const DefaultRelayAddr = "localhost:50051"
 //   - data_dir: data directory path
 //   - log_level: logging level (debug, info, warn, error)
 //   - log_format: logging format (text, json)
+//
+// Client-side logs are written to {data_dir}/log/cli.log instead of stdout.
 func NewBuilder(name string, v *viper.Viper) *runtime.Builder {
 	builder := runtime.New(name)
 
-	if dir := v.GetString("data_dir"); dir != "" {
-		builder = builder.DataDir(dir)
+	dataDir := v.GetString("data_dir")
+	if dataDir == "" {
+		dataDir = config.DefaultDataDir()
+	}
+	builder = builder.DataDir(dataDir)
+
+	// Client commands log to file, not stdout.
+	logDir := filepath.Join(dataDir, "log")
+	if err := os.MkdirAll(logDir, 0o700); err == nil {
+		f, err := os.OpenFile(filepath.Join(logDir, "cli.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600) //nolint:gosec // path is constructed from known data dir
+		if err == nil {
+			builder = builder.LogWriter(f)
+		}
 	}
 
 	// Check both "observability.log_level" (from BindCommonFlags) and

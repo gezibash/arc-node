@@ -25,7 +25,9 @@ ENV CGO_ENABLED=0 \
 
 RUN --mount=type=cache,target=/root/.cache/go-build \
 	--mount=type=cache,target=/go/pkg/mod \
-	go build -trimpath -ldflags="-s -w -buildid=" -o /out/arc ./cmd/arc
+	go build -trimpath -ldflags="-s -w -buildid=" -o /out/arc ./cmd/arc && \
+	go build -trimpath -ldflags="-s -w -buildid=" -o /out/arc-relay ./cmd/arc-relay && \
+	go build -trimpath -ldflags="-s -w -buildid=" -o /out/arc-blob ./cmd/arc-blob
 
 # Runtime stage
 FROM ${ALPINE_IMAGE} AS runtime
@@ -42,11 +44,10 @@ WORKDIR /home/arc
 USER arc:arc
 
 COPY --from=builder /out/arc /usr/local/bin/arc
+COPY --from=builder /out/arc-relay /usr/local/bin/arc-relay
+COPY --from=builder /out/arc-blob /usr/local/bin/arc-blob
 
-EXPOSE 50051 9090
+EXPOSE 50051 7946/tcp 7946/udp 9090
 
-HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-	CMD wget -q --spider http://127.0.0.1:9090/health || exit 1
-
-ENTRYPOINT ["/usr/local/bin/arc", "node", "start"]
-# Mount config at /etc/arc and pass --config /etc/arc/arc.hcl (or .yaml/.json).
+HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=3 \
+	CMD nc -z 127.0.0.1 50051 || exit 1

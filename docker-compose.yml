@@ -1,0 +1,105 @@
+services:
+  relay-a:
+    build: .
+    command:
+      - arc-relay
+      - start
+      - --addr=:50051
+      - --gossip-bind=0.0.0.0:7946
+      - --gossip-join=relay-b:7946
+      - --data-dir=/var/lib/arc
+      - --log-level=debug
+    ports:
+      - "50051:50051"
+    volumes:
+      - relay-a-data:/var/lib/arc
+    networks:
+      - arc
+    depends_on:
+      - relay-b
+
+  relay-b:
+    build: .
+    command:
+      - arc-relay
+      - start
+      - --addr=:50051
+      - --gossip-bind=0.0.0.0:7946
+      - --gossip-join=relay-a:7946
+      - --data-dir=/var/lib/arc
+      - --log-level=debug
+    volumes:
+      - relay-b-data:/var/lib/arc
+    networks:
+      - arc
+
+  relay-c:
+    build: .
+    command:
+      - arc-relay
+      - start
+      - --addr=:50051
+      - --gossip-bind=0.0.0.0:7946
+      - --gossip-join=relay-a:7946
+      - --data-dir=/var/lib/arc
+      - --log-level=debug
+    volumes:
+      - relay-c-data:/var/lib/arc
+    networks:
+      - arc
+    depends_on:
+      - relay-a
+
+  blob-a:
+    build: .
+    command:
+      - arc-blob
+      - start
+      - --relay=relay-a:50051
+      - --storage-backend=memory
+      - --data-dir=/var/lib/arc
+      - --log-level=debug
+    healthcheck:
+      disable: true
+    restart: on-failure
+    volumes:
+      - blob-a-data:/var/lib/arc
+    networks:
+      - arc
+    depends_on:
+      relay-a:
+        condition: service_healthy
+    profiles:
+      - blob
+
+  blob-b:
+    build: .
+    command:
+      - arc-blob
+      - start
+      - --relay=relay-b:50051
+      - --storage-backend=memory
+      - --data-dir=/var/lib/arc
+      - --log-level=debug
+    healthcheck:
+      disable: true
+    restart: on-failure
+    volumes:
+      - blob-b-data:/var/lib/arc
+    networks:
+      - arc
+    depends_on:
+      relay-b:
+        condition: service_healthy
+    profiles:
+      - blob
+
+volumes:
+  relay-a-data:
+  relay-b-data:
+  relay-c-data:
+  blob-a-data:
+  blob-b-data:
+
+networks:
+  arc:

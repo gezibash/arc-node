@@ -2,6 +2,7 @@ package relay
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"strconv"
@@ -31,6 +32,13 @@ var (
 	ErrNotConnected = errors.New("not connected")
 )
 
+const (
+	// ClientPingInterval is how often the client pings the relay.
+	ClientPingInterval = 10 * time.Second
+	// clientPingNonceLen is the nonce length for client pings.
+	clientPingNonceLen = 8
+)
+
 // Client connects to a relay and provides send/receive operations.
 type Client struct {
 	conn   *grpc.ClientConn
@@ -50,6 +58,11 @@ type Client struct {
 	// pending maps correlation IDs to channels for request/response frames.
 	pendingMu sync.Mutex
 	pending   map[string]chan *relayv1.ServerFrame
+
+	// Latency measurement (client → relay)
+	latency      atomic.Int64 // RTT in nanoseconds
+	pendingPing  atomic.Int64 // send timestamp (unix nanos), 0 = no pending
+	pendingNonce atomic.Value // []byte nonce of pending ping
 
 	mu          sync.Mutex
 	closed      atomic.Bool
@@ -112,12 +125,93 @@ func Dial(ctx context.Context, addr string, signer identity.Signer) (*Client, er
 	// Start receiver goroutine
 	go c.receiveLoop()
 
+	// Start background pinger for latency measurement
+	go c.pingLoop()
+
 	return c, nil
 }
 
 // Sender returns the client's public key.
 func (c *Client) Sender() identity.PublicKey {
 	return c.sender
+}
+
+// Latency returns the last measured RTT to the relay.
+func (c *Client) Latency() time.Duration {
+	return time.Duration(c.latency.Load())
+}
+
+// Ping sends a ping to the relay for latency measurement.
+func (c *Client) Ping() error {
+	if c.closed.Load() {
+		return ErrClosed
+	}
+
+	nonce := make([]byte, clientPingNonceLen)
+	if _, err := rand.Read(nonce); err != nil {
+		return fmt.Errorf("generate nonce: %w", err)
+	}
+
+	c.pendingNonce.Store(nonce)
+	c.pendingPing.Store(time.Now().UnixNano())
+
+	frame := &relayv1.ClientFrame{
+		Frame: &relayv1.ClientFrame_Ping{
+			Ping: &relayv1.PingFrame{
+				Nonce:             nonce,
+				MeasuredLatencyNs: c.latency.Load(),
+			},
+		},
+	}
+
+	c.mu.Lock()
+	err := c.stream.Send(frame)
+	c.mu.Unlock()
+	return err
+}
+
+// completePing calculates and stores latency from a pong response.
+func (c *Client) completePing(nonce []byte) {
+	sentAt := c.pendingPing.Swap(0)
+	if sentAt == 0 {
+		return
+	}
+
+	// Verify nonce matches
+	pending, _ := c.pendingNonce.Load().([]byte)
+	if len(nonce) != len(pending) {
+		return
+	}
+	for i := range nonce {
+		if nonce[i] != pending[i] {
+			return
+		}
+	}
+
+	rtt := time.Now().UnixNano() - sentAt
+	c.latency.Store(rtt)
+}
+
+// pingLoop periodically pings the relay.
+// Fires immediately on start, then every ClientPingInterval.
+func (c *Client) pingLoop() {
+	// Initial ping — measure before any discover calls.
+	_ = c.Ping()
+
+	ticker := time.NewTicker(ClientPingInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-c.done:
+			return
+		case <-ticker.C:
+			if c.closed.Load() {
+				return
+			}
+			_ = c.Ping()
+		}
+	}
 }
 
 // nextCorrelation returns a unique correlation ID.
@@ -237,7 +331,7 @@ func (c *Client) receiveLoop() {
 			// Errors without correlation are dropped (no global error channel)
 
 		case *relayv1.ServerFrame_Pong:
-			// Discard pong frames
+			c.completePing(f.Pong.GetNonce())
 		}
 	}
 }

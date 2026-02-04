@@ -80,15 +80,16 @@ func (c *Client) waitDiscoverResult(ctx context.Context, ch chan *relayv1.Server
 				}
 
 				providers = append(providers, transport.Provider{
-					Pubkey:         pubkey,
-					Name:           p.GetName(),
-					Petname:        p.GetPetname(),
-					Labels:         p.GetLabels(),
-					SubscriptionID: p.GetSubscriptionId(),
-					RelayPubkey:    relayPubkey,
-					Latency:        time.Duration(p.GetLatencyNs()),
-					LastSeen:       time.Unix(0, p.GetLastSeenNs()),
-					Connected:      time.Duration(p.GetConnectedNs()),
+					Pubkey:            pubkey,
+					Name:              p.GetName(),
+					Petname:           p.GetPetname(),
+					Labels:            p.GetLabels(),
+					SubscriptionID:    p.GetSubscriptionId(),
+					RelayPubkey:       relayPubkey,
+					Latency:           time.Duration(p.GetLatencyNs()),
+					InterRelayLatency: time.Duration(p.GetInterRelayLatencyNs()),
+					LastSeen:          time.Unix(0, p.GetLastSeenNs()),
+					Connected:         time.Duration(p.GetConnectedNs()),
 				})
 			}
 			return &transport.ProviderSet{

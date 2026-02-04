@@ -24,11 +24,14 @@ type Gossip struct {
 	localName  string
 	health     *HealthMeta
 	config     Config
+	pings      *pingDelegate
 
 	// Sections for direct access
 	relays       *RelaysSection
 	capabilities *CapabilitiesSection
 	names        *NamesSection
+
+	connections atomic.Int32
 
 	closed     atomic.Bool
 	wg         sync.WaitGroup
@@ -44,6 +47,8 @@ type MemberInfo struct {
 	Pubkey      string
 	Connections uint32
 	Uptime      uint64
+	LatencyNs   int64
+	IsLocal     bool
 }
 
 // New creates a new gossip instance. Call Start() to join the cluster.
@@ -97,6 +102,8 @@ func New(cfg Config) (*Gossip, error) {
 		names:        names,
 	}
 
+	pings := newPingDelegate()
+
 	// Configure memberlist
 	mlConfig := memberlist.DefaultLANConfig()
 	mlConfig.Name = cfg.NodeName
@@ -110,6 +117,7 @@ func New(cfg Config) (*Gossip, error) {
 	}
 	mlConfig.Delegate = d
 	mlConfig.Events = events
+	mlConfig.Ping = pings
 	mlConfig.LogOutput = &slogWriter{
 		log: logging.New(nil).WithComponent("memberlist"),
 	}
@@ -130,6 +138,7 @@ func New(cfg Config) (*Gossip, error) {
 		localName:    cfg.NodeName,
 		health:       health,
 		config:       cfg,
+		pings:        pings,
 		relays:       relays,
 		capabilities: capabilities,
 		names:        names,
@@ -212,9 +221,11 @@ func (g *Gossip) Members() []MemberInfo {
 
 	for _, m := range members {
 		info := MemberInfo{
-			Name:   m.Name,
-			Addr:   m.Address(),
-			Status: memberStatusString(m.State),
+			Name:      m.Name,
+			Addr:      m.Address(),
+			Status:    memberStatusString(m.State),
+			IsLocal:   m.Name == g.localName,
+			LatencyNs: g.RelayRTT(m.Name).Nanoseconds(),
 		}
 
 		if meta, err := DecodeHealthMeta(m.Meta); err == nil {
@@ -287,6 +298,13 @@ func (g *Gossip) UpdateConnections(count uint32) {
 	g.health.Connections = count
 }
 
+// OnConnected is called when a client connects to the local relay.
+// Implements relay.Observer.
+func (g *Gossip) OnConnected(_ identity.PublicKey) {
+	count := g.connections.Add(1)
+	g.UpdateConnections(uint32(count))
+}
+
 // OnSubscribe is called when a client subscribes on the local relay.
 // Implements relay.Observer.
 func (g *Gossip) OnSubscribe(pubkey identity.PublicKey, subID string, labels map[string]string, name string) {
@@ -310,8 +328,20 @@ func (g *Gossip) OnUnsubscribe(pubkey identity.PublicKey, subID string) {
 // OnSubscriberRemoved is called when a client disconnects.
 // Implements relay.Observer.
 func (g *Gossip) OnSubscriberRemoved(pubkey identity.PublicKey) {
+	count := g.connections.Add(-1)
+	g.UpdateConnections(uint32(count))
+
 	g.capabilities.PurgeProvider(g.localName, identity.EncodePublicKey(pubkey))
 	g.Broadcast(g.capabilities)
+}
+
+// OnLatencyMeasured is called when the relay measures RTT to a subscriber.
+// Implements relay.Observer.
+func (g *Gossip) OnLatencyMeasured(pubkey identity.PublicKey, latency time.Duration) {
+	pubkeyStr := identity.EncodePublicKey(pubkey)
+	if g.capabilities.UpdateLatency(g.localName, pubkeyStr, latency.Nanoseconds()) {
+		g.Broadcast(g.capabilities)
+	}
 }
 
 // OnNameRegistered is called when a name is registered on the local relay.
@@ -348,6 +378,15 @@ func (g *Gossip) IsKnownRelay(pubkey string) bool {
 		}
 	}
 	return false
+}
+
+// RelayRTT returns the last measured RTT to a gossip peer by node name.
+// Returns 0 if not yet measured or if the node is the local relay.
+func (g *Gossip) RelayRTT(nodeName string) time.Duration {
+	if nodeName == g.localName {
+		return 0
+	}
+	return g.pings.RTT(nodeName)
 }
 
 // Capabilities returns the capabilities section for direct access.

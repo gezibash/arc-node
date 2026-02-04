@@ -25,12 +25,14 @@ func (g *Gossip) DiscoverRemote(filter map[string]string, limit int) []*relayv1.
 		}
 
 		providers = append(providers, &relayv1.ProviderInfo{
-			Pubkey:         []byte(entry.ProviderPubkey),
-			Name:           entry.ProviderName,
-			Labels:         entry.Labels,
-			SubscriptionId: entry.SubID,
-			RelayPubkey:    []byte(relayPubkey),
-			Petname:        names.PetnameFromEncoded(entry.ProviderPubkey),
+			Pubkey:              []byte(entry.ProviderPubkey),
+			Name:                entry.ProviderName,
+			Labels:              entry.Labels,
+			SubscriptionId:      entry.SubID,
+			RelayPubkey:         []byte(relayPubkey),
+			Petname:             names.PetnameFromEncoded(entry.ProviderPubkey),
+			LatencyNs:           entry.LatencyNs,
+			InterRelayLatencyNs: g.RelayRTT(entry.RelayName).Nanoseconds(),
 		})
 
 		if len(providers) >= limit {

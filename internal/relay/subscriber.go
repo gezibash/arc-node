@@ -178,6 +178,12 @@ func (s *Subscriber) Latency() time.Duration {
 	return time.Duration(s.latency.Load())
 }
 
+// SetLatency directly sets the subscriber's measured latency.
+// Used when the client reports its own RTT measurement.
+func (s *Subscriber) SetLatency(d time.Duration) {
+	s.latency.Store(int64(d))
+}
+
 // SetPendingPing records that a ping was sent for latency measurement.
 func (s *Subscriber) SetPendingPing(nonce []byte) {
 	s.pendingPingNonce = nonce
