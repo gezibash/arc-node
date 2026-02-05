@@ -1,4 +1,20 @@
+# Arc test mesh: 5 relays, 6 blob stores across 3 logical regions
+#
+#   US-EAST: relay-a <-> relay-b
+#            blob-a (file/2GB), blob-b (badger/1GB), blob-c (memory/512MB)
+#
+#   US-WEST: relay-c <-> relay-d
+#            blob-d (file/4GB), blob-e (badger/2GB)
+#
+#   EU-WEST: relay-e
+#            blob-f (file/1GB)
+#
+# Gossip topology: a<->b, c<->d, a->c, c->e (forms connected mesh)
+
 services:
+  # ============================================================================
+  # REGION: US-EAST (relay-a, relay-b)
+  # ============================================================================
   relay-a:
     build: .
     command:
@@ -6,7 +22,7 @@ services:
       - start
       - --addr=:50051
       - --gossip-bind=0.0.0.0:7946
-      - --gossip-join=relay-b:7946
+      - --gossip-join=relay-b:7946,relay-c:7946
       - --data-dir=/var/lib/arc
       - --log-level=debug
     ports:
@@ -33,30 +49,15 @@ services:
     networks:
       - arc
 
-  relay-c:
-    build: .
-    command:
-      - arc-relay
-      - start
-      - --addr=:50051
-      - --gossip-bind=0.0.0.0:7946
-      - --gossip-join=relay-a:7946
-      - --data-dir=/var/lib/arc
-      - --log-level=debug
-    volumes:
-      - relay-c-data:/var/lib/arc
-    networks:
-      - arc
-    depends_on:
-      - relay-a
-
+  # blob-a: file backend, 2GB capacity (primary US-EAST)
   blob-a:
     build: .
     command:
       - arc-blob
       - start
       - --relay=relay-a:50051
-      - --storage-backend=memory
+      - --storage-backend=file
+      - --capacity=2147483648
       - --data-dir=/var/lib/arc
       - --log-level=debug
     healthcheck:
@@ -72,13 +73,15 @@ services:
     profiles:
       - blob
 
+  # blob-b: badger backend, 1GB capacity (secondary US-EAST)
   blob-b:
     build: .
     command:
       - arc-blob
       - start
       - --relay=relay-b:50051
-      - --storage-backend=memory
+      - --storage-backend=badger
+      - --capacity=1073741824
       - --data-dir=/var/lib/arc
       - --log-level=debug
     healthcheck:
@@ -94,12 +97,163 @@ services:
     profiles:
       - blob
 
+  # blob-c: memory backend, 512MB capacity (hot cache, fills fast)
+  blob-c:
+    build: .
+    command:
+      - arc-blob
+      - start
+      - --relay=relay-a:50051
+      - --storage-backend=memory
+      - --capacity=536870912
+      - --data-dir=/var/lib/arc
+      - --log-level=debug
+    healthcheck:
+      disable: true
+    restart: on-failure
+    networks:
+      - arc
+    depends_on:
+      relay-a:
+        condition: service_healthy
+    profiles:
+      - blob
+
+  # ============================================================================
+  # REGION: US-WEST (relay-c, relay-d)
+  # ============================================================================
+  relay-c:
+    build: .
+    command:
+      - arc-relay
+      - start
+      - --addr=:50051
+      - --gossip-bind=0.0.0.0:7946
+      - --gossip-join=relay-d:7946,relay-e:7946
+      - --data-dir=/var/lib/arc
+      - --log-level=debug
+    volumes:
+      - relay-c-data:/var/lib/arc
+    networks:
+      - arc
+    depends_on:
+      - relay-d
+
+  relay-d:
+    build: .
+    command:
+      - arc-relay
+      - start
+      - --addr=:50051
+      - --gossip-bind=0.0.0.0:7946
+      - --gossip-join=relay-c:7946
+      - --data-dir=/var/lib/arc
+      - --log-level=debug
+    volumes:
+      - relay-d-data:/var/lib/arc
+    networks:
+      - arc
+
+  # blob-d: file backend, 4GB capacity (primary US-WEST, largest)
+  blob-d:
+    build: .
+    command:
+      - arc-blob
+      - start
+      - --relay=relay-c:50051
+      - --storage-backend=file
+      - --capacity=4294967296
+      - --data-dir=/var/lib/arc
+      - --log-level=debug
+    healthcheck:
+      disable: true
+    restart: on-failure
+    volumes:
+      - blob-d-data:/var/lib/arc
+    networks:
+      - arc
+    depends_on:
+      relay-c:
+        condition: service_healthy
+    profiles:
+      - blob
+
+  # blob-e: badger backend, 2GB capacity (secondary US-WEST)
+  blob-e:
+    build: .
+    command:
+      - arc-blob
+      - start
+      - --relay=relay-d:50051
+      - --storage-backend=badger
+      - --capacity=2147483648
+      - --data-dir=/var/lib/arc
+      - --log-level=debug
+    healthcheck:
+      disable: true
+    restart: on-failure
+    volumes:
+      - blob-e-data:/var/lib/arc
+    networks:
+      - arc
+    depends_on:
+      relay-d:
+        condition: service_healthy
+    profiles:
+      - blob
+
+  # ============================================================================
+  # REGION: EU-WEST (relay-e)
+  # ============================================================================
+  relay-e:
+    build: .
+    command:
+      - arc-relay
+      - start
+      - --addr=:50051
+      - --gossip-bind=0.0.0.0:7946
+      - --data-dir=/var/lib/arc
+      - --log-level=debug
+    volumes:
+      - relay-e-data:/var/lib/arc
+    networks:
+      - arc
+
+  # blob-f: file backend, 1GB capacity (EU presence)
+  blob-f:
+    build: .
+    command:
+      - arc-blob
+      - start
+      - --relay=relay-e:50051
+      - --storage-backend=file
+      - --capacity=1073741824
+      - --data-dir=/var/lib/arc
+      - --log-level=debug
+    healthcheck:
+      disable: true
+    restart: on-failure
+    volumes:
+      - blob-f-data:/var/lib/arc
+    networks:
+      - arc
+    depends_on:
+      relay-e:
+        condition: service_healthy
+    profiles:
+      - blob
+
 volumes:
   relay-a-data:
   relay-b-data:
   relay-c-data:
+  relay-d-data:
+  relay-e-data:
   blob-a-data:
   blob-b-data:
+  blob-d-data:
+  blob-e-data:
+  blob-f-data:
 
 networks:
   arc:

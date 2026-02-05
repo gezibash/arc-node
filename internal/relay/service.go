@@ -17,6 +17,7 @@ import (
 // RemoteDiscovery provides cross-relay capability discovery via gossip.
 type RemoteDiscovery interface {
 	DiscoverRemote(filter map[string]string, limit int) []*relayv1.ProviderInfo
+	DiscoverRemoteCEL(expr string, limit int) []*relayv1.ProviderInfo
 }
 
 // GossipAdmin provides gossip cluster management operations.
@@ -42,17 +43,21 @@ type GossipMemberInfo struct {
 // RemoteForwarder forwards envelopes to remote relays when local routing fails.
 type RemoteForwarder interface {
 	Forward(ctx context.Context, env *relayv1.Envelope) (delivered int, err error)
+	// ForwardToRelay forwards an envelope to a specific relay by name.
+	// Used for response routing when we know the target relay from the return path cache.
+	ForwardToRelay(ctx context.Context, env *relayv1.Envelope, relayName string) (delivered int, err error)
 }
 
 // Observer receives notifications about local relay state changes.
 // Used by gossip to propagate state to the cluster.
 type Observer interface {
 	OnConnected(pubkey identity.PublicKey)
-	OnSubscribe(pubkey identity.PublicKey, subID string, labels map[string]string, name string)
+	OnSubscribe(pubkey identity.PublicKey, subID string, labels map[string]any, name string)
 	OnUnsubscribe(pubkey identity.PublicKey, subID string)
 	OnSubscriberRemoved(pubkey identity.PublicKey)
 	OnNameRegistered(name string, pubkey identity.PublicKey)
 	OnLatencyMeasured(pubkey identity.PublicKey, latency time.Duration)
+	OnStateUpdated(pubkey identity.PublicKey, subID string, state map[string]any)
 }
 
 // Service implements the RelayService gRPC interface.
@@ -64,6 +69,7 @@ type Service struct {
 	remoteForwarder RemoteForwarder
 	observer        Observer
 	gossipAdmin     GossipAdmin
+	returnPaths     *ReturnPathCache // caches return paths for cross-relay responses
 }
 
 // SetRemoteDiscovery sets the remote discovery provider (gossip).
@@ -92,8 +98,9 @@ func NewService(relay *Relay, bufferSize int) *Service {
 		bufferSize = DefaultBufferSize
 	}
 	return &Service{
-		relay:      relay,
-		bufferSize: bufferSize,
+		relay:       relay,
+		bufferSize:  bufferSize,
+		returnPaths: NewReturnPathCache(5 * time.Minute),
 	}
 }
 
@@ -183,6 +190,8 @@ func (s *Service) handleFrame(ctx context.Context, sub *Subscriber, frame *relay
 		return s.handleDiscover(ctx, sub, f.Discover)
 	case *relayv1.ClientFrame_UpdateLabels:
 		return s.handleUpdateLabels(ctx, sub, f.UpdateLabels)
+	case *relayv1.ClientFrame_UpdateState:
+		return s.handleUpdateState(ctx, sub, f.UpdateState)
 	default:
 		return status.Error(codes.Unimplemented, "unknown frame type")
 	}
@@ -198,6 +207,7 @@ func (s *Service) handleSend(ctx context.Context, sub *Subscriber, send *relayv1
 
 	// Try cross-relay forwarding when local routing fails
 	if errors.Is(err, ErrNoRoute) && s.remoteForwarder != nil {
+		// First try gossip-based forwarding (for capability providers)
 		fwdDelivered, fwdErr := s.remoteForwarder.Forward(ctx, env)
 		if fwdErr == nil && fwdDelivered > 0 {
 			delivered = fwdDelivered
@@ -208,6 +218,23 @@ func (s *Service) handleSend(ctx context.Context, sub *Subscriber, send *relayv1
 				"delivered", delivered,
 				"labels", env.GetLabels(),
 			)
+		} else if to := env.GetLabels()["to"]; to != "" {
+			// Gossip forwarding failed for addressed envelope — check return path cache
+			// This handles responses going back to clients on other relays
+			if relayName, ok := s.returnPaths.Get(to); ok {
+				fwdDelivered, fwdErr = s.remoteForwarder.ForwardToRelay(ctx, env, relayName)
+				if fwdErr == nil && fwdDelivered > 0 {
+					delivered = fwdDelivered
+					err = nil
+					slog.Debug("envelope forwarded via return path",
+						"component", "service",
+						"subscriber_id", sub.ID(),
+						"to", to[:min(32, len(to))],
+						"relay", relayName,
+						"delivered", delivered,
+					)
+				}
+			}
 		}
 	}
 
@@ -244,7 +271,8 @@ func (s *Service) handleSubscribe(_ context.Context, sub *Subscriber, subscribe 
 		return status.Error(codes.InvalidArgument, "subscription ID required")
 	}
 
-	labels := subscribe.GetLabels()
+	// Build typed labels: typed_labels first, fall back to string labels
+	labels := mergeProtoLabels(subscribe.GetLabels(), subscribe.GetTypedLabels())
 	sub.Subscribe(id, labels)
 
 	if s.observer != nil {
@@ -308,10 +336,34 @@ func (s *Service) handlePing(_ context.Context, sub *Subscriber, ping *relayv1.P
 }
 
 func (s *Service) handleDiscover(_ context.Context, sub *Subscriber, discover *relayv1.DiscoverFrame) error {
+	expr := discover.GetExpression()
 	filter := discover.GetFilter()
 	limit := int(discover.GetLimit())
+	if limit <= 0 {
+		limit = 100 // default limit
+	}
 
-	results, total := s.relay.Table().Discover(filter, limit)
+	var results []DiscoveryResult
+	var total int
+	var err error
+
+	if expr != "" {
+		results, total, err = s.relay.Table().DiscoverCEL(expr, limit)
+		if err != nil {
+			return status.Errorf(codes.InvalidArgument, "invalid expression: %v", err)
+		}
+	} else {
+		results, total = s.relay.Table().Discover(filter, limit)
+	}
+
+	slog.Debug("local discovery",
+		"component", "service",
+		"filter", filter,
+		"expression", expr,
+		"local_results", len(results),
+		"local_total", total,
+		"table_count", s.relay.Table().Count(),
+	)
 
 	// Build provider info list
 	providers := make([]*relayv1.ProviderInfo, 0, len(results))
@@ -323,7 +375,9 @@ func (s *Service) handleDiscover(_ context.Context, sub *Subscriber, discover *r
 		providers = append(providers, &relayv1.ProviderInfo{
 			Pubkey:         []byte(identity.EncodePublicKey(sender)),
 			Name:           r.Subscriber.Name(),
-			Labels:         r.Labels,
+			Labels:         anyToStringMap(r.Labels),
+			TypedLabels:    anyToProtoMap(r.Labels),
+			State:          anyToProtoMap(r.State),
 			SubscriptionId: r.SubscriptionID,
 			RelayPubkey:    []byte(identity.EncodePublicKey(relayPubkey)),
 			Petname:        r.Subscriber.DisplayName(),
@@ -337,11 +391,28 @@ func (s *Service) handleDiscover(_ context.Context, sub *Subscriber, discover *r
 	if s.remoteDiscovery != nil {
 		remaining := limit - len(providers)
 		if remaining <= 0 {
-			remaining = limit // use same limit for remote
+			remaining = limit
 		}
-		remote := s.remoteDiscovery.DiscoverRemote(filter, remaining)
+		slog.Debug("calling remote discovery",
+			"component", "service",
+			"filter", filter,
+			"remaining", remaining,
+			"local_providers", len(providers),
+		)
+		var remote []*relayv1.ProviderInfo
+		if expr != "" {
+			remote = s.remoteDiscovery.DiscoverRemoteCEL(expr, remaining)
+		} else {
+			remote = s.remoteDiscovery.DiscoverRemote(filter, remaining)
+		}
+		slog.Debug("remote discovery returned",
+			"component", "service",
+			"remote_count", len(remote),
+		)
 		providers = append(providers, remote...)
 		total += len(remote)
+	} else {
+		slog.Debug("no remote discovery configured", "component", "service")
 	}
 
 	hasMore := total > len(providers)
@@ -352,6 +423,7 @@ func (s *Service) handleDiscover(_ context.Context, sub *Subscriber, discover *r
 		"component", "service",
 		"subscriber_id", sub.ID(),
 		"filter", filter,
+		"expression", expr,
 		"results", len(providers),
 		"total", total,
 	)
@@ -364,7 +436,8 @@ func (s *Service) handleUpdateLabels(_ context.Context, sub *Subscriber, update 
 		return status.Error(codes.InvalidArgument, "subscription ID required")
 	}
 
-	if !sub.UpdateLabels(id, update.GetLabels(), update.GetRemove()) {
+	merge := mergeProtoLabels(update.GetLabels(), update.GetTypedLabels())
+	if !sub.UpdateLabels(id, merge, update.GetRemove()) {
 		return status.Error(codes.NotFound, "subscription not found")
 	}
 
@@ -372,7 +445,32 @@ func (s *Service) handleUpdateLabels(_ context.Context, sub *Subscriber, update 
 		"component", "service",
 		"subscriber_id", sub.ID(),
 		"subscription_id", id,
-		"merged", len(update.GetLabels()),
+		"merged", len(merge),
+		"removed", len(update.GetRemove()),
+	)
+	return nil
+}
+
+func (s *Service) handleUpdateState(_ context.Context, sub *Subscriber, update *relayv1.UpdateStateFrame) error {
+	id := update.GetId()
+	if id == "" {
+		return status.Error(codes.InvalidArgument, "subscription ID required")
+	}
+
+	state := protoToAnyMap(update.GetState())
+	if !sub.UpdateState(id, state, update.GetRemove()) {
+		return status.Error(codes.NotFound, "subscription not found")
+	}
+
+	if s.observer != nil {
+		s.observer.OnStateUpdated(sub.Sender(), id, state)
+	}
+
+	slog.Debug("state updated",
+		"component", "service",
+		"subscriber_id", sub.ID(),
+		"subscription_id", id,
+		"state_keys", len(state),
 		"removed", len(update.GetRemove()),
 	)
 	return nil
@@ -406,12 +504,25 @@ func (s *Service) ForwardEnvelope(ctx context.Context, req *relayv1.ForwardEnvel
 		return nil, status.Error(codes.InvalidArgument, "missing envelope")
 	}
 
+	// Cache return path: sender pubkey → source relay
+	// This allows responses to be routed back to the original client
+	sourceRelay := req.GetSourceRelay()
+	if sourceRelay != "" && env.GetSender() != nil {
+		senderPubkey := string(env.GetSender())
+		s.returnPaths.Set(senderPubkey, sourceRelay)
+		slog.Debug("cached return path",
+			"component", "service",
+			"sender", senderPubkey[:min(32, len(senderPubkey))],
+			"source_relay", sourceRelay,
+		)
+	}
+
 	// Route locally only — no forwarding (1-hop limit enforced structurally)
 	delivered, err := s.relay.Route(env)
 
 	slog.Debug("forwarded envelope routed locally",
 		"component", "service",
-		"source_relay", req.GetSourceRelay(),
+		"source_relay", sourceRelay,
 		"delivered", delivered,
 		"labels", env.GetLabels(),
 	)

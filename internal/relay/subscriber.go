@@ -35,9 +35,15 @@ type Subscriber struct {
 	pendingPing      atomic.Int64 // timestamp when ping was sent (unix nanos)
 	pendingPingNonce []byte
 
-	// subscriptions maps subscription ID to label matchers
-	subscriptions map[string]map[string]string
+	// subscriptions maps subscription ID to subscription data (labels + state)
+	subscriptions map[string]*SubscriptionData
 	subMu         sync.RWMutex
+}
+
+// SubscriptionData holds typed labels and dynamic state for a subscription.
+type SubscriptionData struct {
+	Labels map[string]any // structural labels (gossip on change)
+	State  map[string]any // dynamic metrics (gossip on timer)
 }
 
 // NewSubscriber creates a subscriber with a bounded buffer.
@@ -52,7 +58,7 @@ func NewSubscriber(id string, stream relayv1.RelayService_ConnectServer, sender 
 		buffer:        make(chan *relayv1.ServerFrame, bufferSize),
 		sender:        sender,
 		connectedAt:   now,
-		subscriptions: make(map[string]map[string]string),
+		subscriptions: make(map[string]*SubscriptionData),
 	}
 	s.lastSend.Store(now)
 	s.lastRecv.Store(now)
@@ -79,11 +85,14 @@ func (s *Subscriber) DisplayName() string {
 // SetName registers an addressed name.
 func (s *Subscriber) SetName(name string) { s.name = name }
 
-// Subscribe adds a label-match subscription.
-func (s *Subscriber) Subscribe(id string, labels map[string]string) {
+// Subscribe adds a label-match subscription with typed labels.
+func (s *Subscriber) Subscribe(id string, labels map[string]any) {
 	s.subMu.Lock()
 	defer s.subMu.Unlock()
-	s.subscriptions[id] = labels
+	s.subscriptions[id] = &SubscriptionData{
+		Labels: labels,
+		State:  make(map[string]any),
+	}
 }
 
 // Unsubscribe removes a subscription.
@@ -93,38 +102,53 @@ func (s *Subscriber) Unsubscribe(id string) {
 	delete(s.subscriptions, id)
 }
 
-// UpdateLabels merges labels into an existing subscription and removes specified keys.
-func (s *Subscriber) UpdateLabels(id string, merge map[string]string, remove []string) bool {
+// UpdateLabels merges typed labels into an existing subscription and removes specified keys.
+func (s *Subscriber) UpdateLabels(id string, merge map[string]any, remove []string) bool {
 	s.subMu.Lock()
 	defer s.subMu.Unlock()
 
-	labels, ok := s.subscriptions[id]
+	data, ok := s.subscriptions[id]
 	if !ok {
 		return false
 	}
 
-	// Merge new labels
 	for k, v := range merge {
-		labels[k] = v
+		data.Labels[k] = v
 	}
-
-	// Remove specified keys
 	for _, k := range remove {
-		delete(labels, k)
+		delete(data.Labels, k)
+	}
+	return true
+}
+
+// UpdateState merges state entries into an existing subscription and removes specified keys.
+func (s *Subscriber) UpdateState(id string, state map[string]any, remove []string) bool {
+	s.subMu.Lock()
+	defer s.subMu.Unlock()
+
+	data, ok := s.subscriptions[id]
+	if !ok {
+		return false
 	}
 
+	for k, v := range state {
+		data.State[k] = v
+	}
+	for _, k := range remove {
+		delete(data.State, k)
+	}
 	return true
 }
 
 // Subscriptions returns a snapshot of current subscriptions.
-func (s *Subscriber) Subscriptions() map[string]map[string]string {
+func (s *Subscriber) Subscriptions() map[string]*SubscriptionData {
 	s.subMu.RLock()
 	defer s.subMu.RUnlock()
-	copy := make(map[string]map[string]string, len(s.subscriptions))
-	for id, labels := range s.subscriptions {
-		copy[id] = labels
+	cp := make(map[string]*SubscriptionData, len(s.subscriptions))
+	for id, data := range s.subscriptions {
+		cp[id] = data
 	}
-	return copy
+	return cp
 }
 
 // Send attempts non-blocking send to the subscriber's buffer.

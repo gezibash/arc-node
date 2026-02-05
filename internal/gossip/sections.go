@@ -3,8 +3,11 @@ package gossip
 import (
 	"encoding/binary"
 	"errors"
+	"math"
 	"sync"
 	"time"
+
+	arccel "github.com/gezibash/arc/v2/internal/cel"
 )
 
 // =============================================================================
@@ -160,9 +163,10 @@ type CapabilityEntry struct {
 	RelayName      string
 	ProviderPubkey string
 	SubID          string
-	Labels         map[string]string
-	ProviderName   string // @name if registered
-	LatencyNs      int64  // relay → capability RTT in nanoseconds
+	Labels         map[string]any // structural labels (gossip on change)
+	State          map[string]any // dynamic metrics (gossip on timer)
+	ProviderName   string         // @name if registered
+	LatencyNs      int64          // relay → capability RTT in nanoseconds
 }
 
 // capKey uniquely identifies a capability entry: relay + provider + subID.
@@ -262,7 +266,27 @@ func (s *CapabilitiesSection) FindByPubkey(pubkey string) (*CapabilityEntry, boo
 	return nil, false
 }
 
+// UpdateState merges state entries for a given subscription.
+// Returns true if the subscription was found and updated.
+func (s *CapabilitiesSection) UpdateState(relayName, providerPubkey, subID string, state map[string]any) bool {
+	key := capKey(relayName, providerPubkey, subID)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	entry, ok := s.entries[key]
+	if !ok {
+		return false
+	}
+	if entry.State == nil {
+		entry.State = make(map[string]any, len(state))
+	}
+	for k, v := range state {
+		entry.State[k] = v
+	}
+	return true
+}
+
 // Match finds entries where all filter labels are present in the entry labels.
+// Compares string filter values against string-valued entries in the typed labels.
 func (s *CapabilitiesSection) Match(filter map[string]string, limit int) []*CapabilityEntry {
 	if limit <= 0 {
 		limit = 100
@@ -283,6 +307,50 @@ func (s *CapabilitiesSection) Match(filter map[string]string, limit int) []*Capa
 	return results
 }
 
+// MatchCEL finds entries matching a CEL expression against merged labels ∪ state.
+func (s *CapabilitiesSection) MatchCEL(expr string, limit int) ([]*CapabilityEntry, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Collect all unique keys across entries for CEL environment.
+	keys := make(map[string]bool)
+	for _, entry := range s.entries {
+		for k := range entry.Labels {
+			keys[k] = true
+		}
+		for k := range entry.State {
+			keys[k] = true
+		}
+	}
+
+	filter, err := arccel.Compile(expr, keys)
+	if err != nil {
+		return nil, err
+	}
+
+	var results []*CapabilityEntry
+	for _, entry := range s.entries {
+		merged := make(map[string]any, len(entry.Labels)+len(entry.State))
+		for k, v := range entry.State {
+			merged[k] = v
+		}
+		for k, v := range entry.Labels {
+			merged[k] = v // labels win on conflict
+		}
+		if filter.Match(merged) {
+			results = append(results, entry)
+			if len(results) >= limit {
+				break
+			}
+		}
+	}
+	return results, nil
+}
+
 // Encode serializes all capability entries.
 func (s *CapabilitiesSection) Encode() []byte {
 	s.mu.RLock()
@@ -296,7 +364,8 @@ func (s *CapabilitiesSection) Encode() []byte {
 		buf = appendString(buf, e.ProviderPubkey)
 		buf = appendString(buf, e.SubID)
 		buf = appendString(buf, e.ProviderName)
-		buf = encodeLabels(buf, e.Labels)
+		buf = encodeAnyMap(buf, e.Labels)
+		buf = encodeAnyMap(buf, e.State)
 		buf = binary.BigEndian.AppendUint64(buf, uint64(e.LatencyNs))
 	}
 	return buf
@@ -395,7 +464,13 @@ func decodeCapabilityEntries(data []byte) ([]*CapabilityEntry, error) {
 		}
 		pos += n
 
-		labels, n, err := decodeLabels(data, pos)
+		labels, n, err := decodeAnyMap(data, pos)
+		if err != nil {
+			return nil, err
+		}
+		pos += n
+
+		state, n, err := decodeAnyMap(data, pos)
 		if err != nil {
 			return nil, err
 		}
@@ -412,6 +487,7 @@ func decodeCapabilityEntries(data []byte) ([]*CapabilityEntry, error) {
 			ProviderPubkey: providerPubkey,
 			SubID:          subID,
 			Labels:         labels,
+			State:          state,
 			ProviderName:   providerName,
 			LatencyNs:      latencyNs,
 		})
@@ -616,10 +692,16 @@ func decodeNameEntries(data []byte) ([]*NameEntry, error) {
 
 var errTruncated = errors.New("truncated data")
 
-// matchLabels returns true if all filter labels are present in the entry labels.
-func matchLabels(filter, labels map[string]string) bool {
+// matchLabels returns true if all string filter labels are present in the entry labels.
+// Compares filter strings against string-valued entries in the typed labels.
+func matchLabels(filter map[string]string, labels map[string]any) bool {
 	for k, v := range filter {
-		if labels[k] != v {
+		lv, ok := labels[k]
+		if !ok {
+			return false
+		}
+		s, ok := lv.(string)
+		if !ok || s != v {
 			return false
 		}
 	}
@@ -646,26 +728,56 @@ func readString(data []byte, pos int) (string, int, error) {
 	return string(data[pos2 : pos2+length]), 2 + length, nil
 }
 
-// encodeLabels writes labels as [count:2][key:lenprefix][value:lenprefix]...
-func encodeLabels(buf []byte, labels map[string]string) []byte {
-	buf = binary.BigEndian.AppendUint16(buf, uint16(len(labels)))
-	for k, v := range labels {
+// Type tags for encodeAnyMap wire format.
+const (
+	typeTagString  byte = 0
+	typeTagInt64   byte = 1
+	typeTagFloat64 byte = 2
+	typeTagBool    byte = 3
+)
+
+// encodeAnyMap writes a typed map as [count:2][key:lenprefix][type:1][value:varies]...
+// Type tags: 0=string(lenprefix), 1=int64(8B BE), 2=float64(8B IEEE754), 3=bool(1B).
+func encodeAnyMap(buf []byte, m map[string]any) []byte {
+	buf = binary.BigEndian.AppendUint16(buf, uint16(len(m)))
+	for k, v := range m {
 		buf = appendString(buf, k)
-		buf = appendString(buf, v)
+		switch val := v.(type) {
+		case string:
+			buf = append(buf, typeTagString)
+			buf = appendString(buf, val)
+		case int64:
+			buf = append(buf, typeTagInt64)
+			buf = binary.BigEndian.AppendUint64(buf, uint64(val))
+		case float64:
+			buf = append(buf, typeTagFloat64)
+			buf = binary.BigEndian.AppendUint64(buf, math.Float64bits(val))
+		case bool:
+			buf = append(buf, typeTagBool)
+			if val {
+				buf = append(buf, 1)
+			} else {
+				buf = append(buf, 0)
+			}
+		default:
+			// Fallback: encode as string
+			buf = append(buf, typeTagString)
+			buf = appendString(buf, "")
+		}
 	}
 	return buf
 }
 
-// decodeLabels reads labels from data at offset.
-// Returns the labels, bytes consumed, and error.
-func decodeLabels(data []byte, pos int) (map[string]string, int, error) {
+// decodeAnyMap reads a typed map from data at offset.
+// Returns the map, bytes consumed, and error.
+func decodeAnyMap(data []byte, pos int) (map[string]any, int, error) {
 	if pos+2 > len(data) {
 		return nil, 0, errTruncated
 	}
 	count := int(binary.BigEndian.Uint16(data[pos:]))
 	consumed := 2
 
-	labels := make(map[string]string, count)
+	m := make(map[string]any, count)
 	for i := 0; i < count; i++ {
 		key, n, err := readString(data, pos+consumed)
 		if err != nil {
@@ -673,13 +785,41 @@ func decodeLabels(data []byte, pos int) (map[string]string, int, error) {
 		}
 		consumed += n
 
-		val, n, err := readString(data, pos+consumed)
-		if err != nil {
-			return nil, 0, err
+		if pos+consumed >= len(data) {
+			return nil, 0, errTruncated
 		}
-		consumed += n
+		tag := data[pos+consumed]
+		consumed++
 
-		labels[key] = val
+		switch tag {
+		case typeTagString:
+			val, n, err := readString(data, pos+consumed)
+			if err != nil {
+				return nil, 0, err
+			}
+			consumed += n
+			m[key] = val
+		case typeTagInt64:
+			if pos+consumed+8 > len(data) {
+				return nil, 0, errTruncated
+			}
+			m[key] = int64(binary.BigEndian.Uint64(data[pos+consumed:]))
+			consumed += 8
+		case typeTagFloat64:
+			if pos+consumed+8 > len(data) {
+				return nil, 0, errTruncated
+			}
+			m[key] = math.Float64frombits(binary.BigEndian.Uint64(data[pos+consumed:]))
+			consumed += 8
+		case typeTagBool:
+			if pos+consumed+1 > len(data) {
+				return nil, 0, errTruncated
+			}
+			m[key] = data[pos+consumed] != 0
+			consumed++
+		default:
+			return nil, 0, errors.New("unknown type tag in any map")
+		}
 	}
-	return labels, consumed, nil
+	return m, consumed, nil
 }

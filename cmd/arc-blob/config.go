@@ -11,6 +11,8 @@ import (
 type Config struct {
 	config.BaseConfig `mapstructure:",squash"`
 	ListenAddr        string        `mapstructure:"listen_addr"`
+	Capacity          int64         `mapstructure:"capacity"`
+	MaxBlobSize       int64         `mapstructure:"max_blob_size"`
 	Storage           StorageConfig `mapstructure:"storage"`
 }
 
@@ -23,6 +25,8 @@ type StorageConfig struct {
 func loadConfig(v *viper.Viper, configFile string) (Config, error) {
 	v.SetDefault("key_name", config.BlobDefaults.KeyName)
 	v.SetDefault("listen_addr", config.BlobDefaults.ListenAddr)
+	v.SetDefault("capacity", config.BlobDefaults.Capacity)
+	v.SetDefault("max_blob_size", config.BlobDefaults.MaxBlobSize)
 	v.SetDefault("storage.backend", config.BlobDefaults.Backend)
 
 	var cfg Config

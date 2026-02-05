@@ -56,8 +56,8 @@ Examples:
 				return fmt.Errorf("relay not connected")
 			}
 
-			// Build labels
-			subLabels, err := arclabels.Parse(labels)
+			// Build labels (typed — supports int64, float64, bool inference)
+			subLabels, err := arclabels.ParseTyped(labels)
 			if err != nil {
 				return err
 			}

@@ -49,11 +49,15 @@ var RelayDefaults = struct {
 
 // BlobDefaults contains default values for the blob capability.
 var BlobDefaults = struct {
-	Backend    string
-	KeyName    string
-	ListenAddr string
+	Backend     string
+	KeyName     string
+	ListenAddr  string
+	Capacity    int64
+	MaxBlobSize int64
 }{
-	Backend:    "file",
-	KeyName:    "blob",
-	ListenAddr: "", // relay-only by default
+	Backend:     "file",
+	KeyName:     "blob",
+	ListenAddr:  "",               // relay-only by default
+	Capacity:    1 << 30,          // 1GB
+	MaxBlobSize: 64 * 1024 * 1024, // 64MB
 }

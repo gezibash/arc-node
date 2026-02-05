@@ -11,7 +11,8 @@ type Provider struct {
 	Pubkey            identity.PublicKey
 	Name              string
 	Petname           string
-	Labels            map[string]string
+	Labels            map[string]any // structural labels (typed)
+	State             map[string]any // dynamic metrics (typed)
 	SubscriptionID    string
 	RelayPubkey       identity.PublicKey
 	Latency           time.Duration // relay → capability RTT

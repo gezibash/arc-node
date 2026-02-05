@@ -26,7 +26,7 @@ type ServerConfig struct {
 
 	// Labels are additional subscription labels beyond {"capability": Name}.
 	// Can be nil for capability-only subscription.
-	Labels map[string]string
+	Labels map[string]any
 
 	// Handler processes incoming envelopes.
 	Handler Handler
@@ -47,7 +47,7 @@ type ServerConfig struct {
 type Server struct {
 	name         string
 	registerName string
-	labels       map[string]string
+	labels       map[string]any
 	handler      Handler
 	tr           transport.Transport
 	log          *logging.Logger
@@ -86,7 +86,7 @@ func NewServer(cfg ServerConfig) (*Server, error) {
 	}
 
 	// Build subscription labels: capability name + any additional labels
-	labels := make(map[string]string)
+	labels := make(map[string]any)
 	labels["capability"] = cfg.Name
 	for k, v := range cfg.Labels {
 		labels[k] = v
@@ -213,6 +213,12 @@ func (s *Server) sendResponse(ctx context.Context, to identity.PublicKey, resp *
 
 	_, err := s.tr.Send(ctx, env)
 	return err
+}
+
+// ReportState sends a state update for this server's subscription.
+// State is visible in discovery but gossips on a timer, not immediately.
+func (s *Server) ReportState(state map[string]any) error {
+	return s.tr.UpdateState(s.subID, state)
 }
 
 // Close stops the server.

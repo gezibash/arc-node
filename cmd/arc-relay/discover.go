@@ -20,6 +20,7 @@ func newDiscoverCmd(v *viper.Viper) *cobra.Command {
 	var (
 		capability  string
 		labels      []string
+		expr        string
 		relayServer string
 		limit       int
 		verbose     bool
@@ -31,10 +32,11 @@ func newDiscoverCmd(v *viper.Viper) *cobra.Command {
 		Long: `Discover capability providers currently connected to the relay.
 
 Examples:
-  arc-relay discover --capability blob       # find blob providers
-  arc-relay discover --labels topic=news     # find by labels
-  arc-relay discover                          # list all subscriptions
-  arc-relay discover --verbose               # show per-hop latency breakdown`,
+  arc-relay discover --capability blob                          # find blob providers
+  arc-relay discover --labels topic=news                        # find by labels
+  arc-relay discover --expr 'capability == "blob" && capacity > 1000000000'  # CEL expression
+  arc-relay discover                                             # list all subscriptions
+  arc-relay discover --verbose                                  # show per-hop latency breakdown`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Build runtime with relay capability
 			builder := cli.NewBuilder("discover", v).
@@ -50,24 +52,33 @@ Examples:
 			}
 			defer func() { _ = rt.Close() }()
 
-			// Build filter
-			filter, err := arclabels.Parse(labels)
-			if err != nil {
-				return err
-			}
-			if capability != "" {
-				filter["capability"] = capability
-			}
-
-			// Get relay client and discover
+			// Get relay client
 			c := relay.From(rt)
 			if c == nil {
 				return fmt.Errorf("relay not connected")
 			}
 
-			result, err := c.DiscoverWithLimit(rt.Context(), filter, limit)
-			if err != nil {
-				return fmt.Errorf("discover: %w", err)
+			var result *transport.ProviderSet
+
+			if expr != "" {
+				// CEL expression-based discovery
+				result, err = c.DiscoverExpr(rt.Context(), expr, limit)
+				if err != nil {
+					return fmt.Errorf("discover: %w", err)
+				}
+			} else {
+				// Exact-match label filter
+				filter, err := arclabels.Parse(labels)
+				if err != nil {
+					return err
+				}
+				if capability != "" {
+					filter["capability"] = capability
+				}
+				result, err = c.DiscoverWithLimit(rt.Context(), filter, limit)
+				if err != nil {
+					return fmt.Errorf("discover: %w", err)
+				}
 			}
 
 			// Client → relay latency (hop 1)
@@ -91,7 +102,7 @@ Examples:
 					name = "-"
 				}
 
-				labelsStr := arclabels.Format(p.Labels)
+				labelsStr := arclabels.FormatAny(p.Labels)
 				relayName := names.Petname(p.RelayPubkey.Bytes)
 				if p.InterRelayLatency == 0 {
 					relayName += " (local)"
@@ -119,6 +130,7 @@ Examples:
 
 	cmd.Flags().StringVar(&capability, "capability", "", "capability to discover (e.g., blob, index)")
 	cmd.Flags().StringSliceVarP(&labels, "labels", "l", nil, "filter labels (key=value, can repeat)")
+	cmd.Flags().StringVar(&expr, "expr", "", "CEL expression filter (e.g., 'capability == \"blob\" && capacity > 1e9')")
 	cmd.Flags().StringVar(&relayServer, "relay", "", "relay address (default localhost:50051, or ARC_RELAY env)")
 	cmd.Flags().IntVar(&limit, "limit", 100, "maximum number of results")
 	cmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "show per-hop latency breakdown")

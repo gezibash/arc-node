@@ -23,10 +23,17 @@ type Client struct {
 // Discover finds blob storage targets matching the filter.
 // Returns a TargetSet that can be further filtered, picked from, or iterated.
 func (c *Client) Discover(ctx context.Context, filter DiscoverFilter) (*capability.TargetSet, error) {
-	ts, err := c.cap.Discover(ctx, capability.DiscoverConfig{
+	cfg := capability.DiscoverConfig{
 		Capability: CapabilityName,
 		Labels:     filter.toLabels(),
-	})
+	}
+
+	// Use CEL expression when numeric filtering is needed
+	if filter.MinCapacity > 0 {
+		cfg.Expression = filter.toExpression()
+	}
+
+	ts, err := c.cap.Discover(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -102,12 +109,8 @@ func (c *Client) PutWithOptions(ctx context.Context, data []byte, opts PutOption
 		if ts.IsEmpty() {
 			return nil, fmt.Errorf("no blob targets available")
 		}
-		// Select best target (lowest latency with direct if requested)
-		if opts.Direct {
-			target = ts.SortByLatency().First()
-		} else {
-			target = ts.SortByLatency().First()
-		}
+		// Select best target (most free capacity)
+		target = ts.Sort(ByFreeCapacity).First()
 	}
 
 	// Direct upload if requested and target supports it
@@ -120,6 +123,123 @@ func (c *Client) PutWithOptions(ctx context.Context, data []byte, opts PutOption
 
 	// Auto mode: inline for small, direct for large
 	return c.putAutoTo(ctx, target, data)
+}
+
+// ReplicatedPutOptions configures a replicated put.
+type ReplicatedPutOptions struct {
+	// Replicas is the number of targets to send to (N).
+	Replicas int
+	// MinAcks is the minimum acknowledgments needed for success (M).
+	// Must be <= Replicas.
+	MinAcks int
+	// Direct forces direct gRPC upload for all replicas.
+	Direct bool
+	// Targets overrides auto-discovery. If provided, up to Replicas targets are used.
+	Targets *capability.TargetSet
+}
+
+// TargetResult is the outcome for a single target in a replicated put.
+type TargetResult struct {
+	Target string // display name
+	CID    [32]byte
+	Size   int64
+	Direct bool
+	Err    error
+}
+
+// ReplicatedPutResult is the result of a replicated put.
+type ReplicatedPutResult struct {
+	CID     [32]byte // content ID (same for all successful targets)
+	Size    int64
+	Acked   int            // number of successful stores
+	Results []TargetResult // per-target outcomes
+}
+
+// PutReplicated stores a blob to N targets, returning after M acknowledge.
+func (c *Client) PutReplicated(ctx context.Context, data []byte, opts ReplicatedPutOptions) (*ReplicatedPutResult, error) {
+	if opts.MinAcks <= 0 {
+		opts.MinAcks = 1
+	}
+	if opts.Replicas < opts.MinAcks {
+		opts.Replicas = opts.MinAcks
+	}
+
+	// Discover or use provided targets
+	var targets []capability.Target
+	if opts.Targets != nil && !opts.Targets.IsEmpty() {
+		targets = opts.Targets.Sort(ByFreeCapacity).Take(opts.Replicas).All()
+	} else {
+		ts, err := c.Discover(ctx, DiscoverFilter{Direct: opts.Direct})
+		if err != nil {
+			return nil, fmt.Errorf("discover: %w", err)
+		}
+		targets = ts.Sort(ByFreeCapacity).Take(opts.Replicas).All()
+	}
+
+	if len(targets) == 0 {
+		return nil, fmt.Errorf("no blob targets available")
+	}
+	if len(targets) < opts.MinAcks {
+		return nil, fmt.Errorf("need %d targets but only %d available", opts.MinAcks, len(targets))
+	}
+
+	// Fan out to all targets concurrently
+	type indexedResult struct {
+		idx int
+		tr  TargetResult
+	}
+	ch := make(chan indexedResult, len(targets))
+
+	putCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	for i, t := range targets {
+		go func(idx int, target capability.Target) {
+			putOpts := PutOptions{Target: &target, Direct: opts.Direct}
+			pr, err := c.PutWithOptions(putCtx, data, putOpts)
+			tr := TargetResult{
+				Target: target.DisplayName(),
+				Err:    err,
+			}
+			if pr != nil {
+				tr.CID = pr.CID
+				tr.Size = pr.Size
+				tr.Direct = pr.Direct
+			}
+			ch <- indexedResult{idx: idx, tr: tr}
+		}(i, t)
+	}
+
+	// Collect results, succeed when MinAcks reached
+	results := make([]TargetResult, len(targets))
+	var acked int
+	var firstCID [32]byte
+	var firstSize int64
+
+	for range targets {
+		r := <-ch
+		results[r.idx] = r.tr
+		if r.tr.Err == nil {
+			acked++
+			if acked == 1 {
+				firstCID = r.tr.CID
+				firstSize = r.tr.Size
+			}
+			if acked >= opts.MinAcks {
+				cancel() // cancel remaining puts (best effort — they may still complete)
+			}
+		}
+	}
+
+	if acked < opts.MinAcks {
+		return &ReplicatedPutResult{
+			CID: firstCID, Size: firstSize, Acked: acked, Results: results,
+		}, fmt.Errorf("need %d acks but only got %d", opts.MinAcks, acked)
+	}
+
+	return &ReplicatedPutResult{
+		CID: firstCID, Size: firstSize, Acked: acked, Results: results,
+	}, nil
 }
 
 // putDirectTo uploads directly to a specific target.

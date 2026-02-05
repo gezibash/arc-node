@@ -98,7 +98,11 @@ func TestServicePut(t *testing.T) {
 	}
 
 	// Verify it's in the store
-	if !store.Has(expectedCID[:]) {
+	exists, err := store.Has(ctx, expectedCID[:])
+	if err != nil {
+		t.Fatalf("Has failed: %v", err)
+	}
+	if !exists {
 		t.Error("Blob not found in store after Put")
 	}
 }
@@ -109,7 +113,7 @@ func TestServiceGet(t *testing.T) {
 
 	ctx := context.Background()
 	data := []byte("test blob data for get service")
-	cid, _ := store.Put(data)
+	cid, _ := store.Put(ctx, data)
 
 	// Get via service
 	stream, err := client.Get(ctx, &blobv1.GetRequest{Cid: cid[:]})
@@ -176,7 +180,7 @@ func TestServiceGetWithOffset(t *testing.T) {
 
 	ctx := context.Background()
 	data := []byte("0123456789abcdef")
-	cid, _ := store.Put(data)
+	cid, _ := store.Put(ctx, data)
 
 	// Get with offset
 	stream, err := client.Get(ctx, &blobv1.GetRequest{
@@ -211,7 +215,7 @@ func TestServiceGetWithLimit(t *testing.T) {
 
 	ctx := context.Background()
 	data := []byte("0123456789abcdef")
-	cid, _ := store.Put(data)
+	cid, _ := store.Put(ctx, data)
 
 	// Get with limit
 	stream, err := client.Get(ctx, &blobv1.GetRequest{

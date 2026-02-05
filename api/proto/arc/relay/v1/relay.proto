@@ -95,6 +95,22 @@ enum ReceiptStatus {
 }
 
 // =============================================================================
+// Typed Label Values (for discovery, not routing)
+// =============================================================================
+
+// LabelValue carries a typed label value for discovery and state reporting.
+// Envelope routing labels stay map<string, string> — these typed values are
+// only used in subscriptions, discovery, and state.
+message LabelValue {
+  oneof value {
+    string string_value = 1;
+    int64 int_value = 2;
+    double double_value = 3;
+    bool bool_value = 4;
+  }
+}
+
+// =============================================================================
 // Client Frames (client → relay)
 // =============================================================================
 
@@ -107,6 +123,7 @@ message ClientFrame {
     PingFrame ping = 5;
     DiscoverFrame discover = 6;
     UpdateLabelsFrame update_labels = 7;
+    UpdateStateFrame update_state = 8;
   }
 }
 
@@ -124,9 +141,15 @@ message SubscribeFrame {
   // Subscription ID (client-generated, for unsubscribe).
   string id = 1;
 
-  // Labels to match. All specified labels must match exactly.
+  // Labels to match (string-only, for backward compatibility).
+  // All specified labels must match exactly.
   // Empty map means "match all" (not recommended).
   map<string, string> labels = 2;
+
+  // Typed labels (string, int64, double, bool). Server reads these first,
+  // falling back to `labels` for keys not present here.
+  // Non-string values participate in discovery/CEL only, not envelope routing.
+  map<string, LabelValue> typed_labels = 3;
 }
 
 // UnsubscribeFrame removes a subscription.
@@ -153,16 +176,33 @@ message PingFrame {
 }
 
 // UpdateLabelsFrame updates subscription labels without re-subscribing.
-// Used for dynamic state updates (e.g., free space, load, availability).
+// Used for dynamic label updates (e.g., region, tier changes).
 message UpdateLabelsFrame {
   // Subscription ID to update.
   string id = 1;
 
-  // Labels to merge into existing subscription labels.
+  // Labels to merge into existing subscription labels (string-only, backward compat).
   // Existing keys are overwritten, new keys are added.
   map<string, string> labels = 2;
 
   // Label keys to remove. Applied after merge.
+  repeated string remove = 3;
+
+  // Typed labels to merge. Overrides string-only labels for same key.
+  map<string, LabelValue> typed_labels = 4;
+}
+
+// UpdateStateFrame updates dynamic state (metrics, load, capacity) without
+// affecting subscription labels. State is visible in discovery but gossips
+// on a timer (30s) rather than immediately.
+message UpdateStateFrame {
+  // Subscription ID to update.
+  string id = 1;
+
+  // State entries to set or overwrite.
+  map<string, LabelValue> state = 2;
+
+  // State keys to remove.
   repeated string remove = 3;
 }
 
@@ -235,6 +275,11 @@ message DiscoverFrame {
 
   // Maximum results to return. 0 = server default (100).
   int32 limit = 3;
+
+  // CEL expression for discovery filtering. If set, filter is ignored and this
+  // expression is evaluated against merged labels ∪ state for each subscription.
+  // Example: 'capability == "blob" && capacity > 1000000000'
+  string expression = 4;
 }
 
 // DiscoverResultFrame contains discovery results.
@@ -289,6 +334,13 @@ message ProviderInfo {
   // Inter-relay latency in nanoseconds (local relay → remote relay via gossip SWIM probes).
   // Zero for local providers (same relay as the querying client).
   int64 inter_relay_latency_ns = 10;
+
+  // Typed subscription labels (superset of string labels).
+  // Includes non-string values like capacity, max_obj_size.
+  map<string, LabelValue> typed_labels = 11;
+
+  // Dynamic state (metrics, load, etc.). Gossips on timer, not on change.
+  map<string, LabelValue> state = 12;
 }
 
 // =============================================================================

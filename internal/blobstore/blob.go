@@ -1,36 +1,47 @@
 package blobstore
 
 import (
+	"context"
 	"errors"
-	"fmt"
 	"io"
 )
 
 // BlobStore is the interface for content-addressed blob storage.
 type BlobStore interface {
 	// Put stores a blob and returns its CID (SHA-256 hash).
-	Put(data []byte) ([32]byte, error)
+	Put(ctx context.Context, data []byte) ([32]byte, error)
 
 	// PutStream stores a blob from a reader and returns its CID and size.
-	PutStream(r io.Reader) (cid [32]byte, size int64, err error)
+	PutStream(ctx context.Context, r io.Reader) (cid [32]byte, size int64, err error)
 
 	// Get retrieves a blob by CID.
-	Get(cid []byte) ([]byte, error)
+	Get(ctx context.Context, cid []byte) ([]byte, error)
 
 	// GetReader returns a reader for a blob and its size.
-	GetReader(cid []byte) (io.ReadCloser, int64, error)
+	GetReader(ctx context.Context, cid []byte) (io.ReadCloser, int64, error)
 
 	// Has checks if a blob exists.
-	Has(cid []byte) bool
+	Has(ctx context.Context, cid []byte) (bool, error)
 
-	// Size returns the size of a blob, or -1 if not found.
-	Size(cid []byte) int64
+	// Size returns the size of a blob.
+	Size(ctx context.Context, cid []byte) (int64, error)
 
 	// Delete removes a blob.
-	Delete(cid []byte) error
+	Delete(ctx context.Context, cid []byte) error
 
 	// Close releases any resources.
 	Close() error
+}
+
+// StoreStats contains storage usage metrics.
+type StoreStats struct {
+	BytesUsed int64 // total bytes stored
+	BlobCount int64 // number of blobs
+}
+
+// Stater is optionally implemented by stores that can report usage stats.
+type Stater interface {
+	Stats(ctx context.Context) (StoreStats, error)
 }
 
 // Common errors.
@@ -38,28 +49,13 @@ var (
 	ErrNotFound     = errors.New("blob not found")
 	ErrInvalidCID   = errors.New("invalid content ID")
 	ErrHashMismatch = errors.New("content hash mismatch")
+	ErrClosed       = errors.New("store is closed")
 )
 
 // Backend names.
 const (
 	BackendFile   = "file"
-	BackendMemory = "memory" // for testing
+	BackendMemory = "memory"
+	BackendS3     = "s3"
+	BackendBadger = "badger"
 )
-
-// New creates a BlobStore based on the backend config.
-func New(backend string, cfg map[string]string) (BlobStore, error) {
-	switch backend {
-	case BackendFile, "": // default to file
-		dir := cfg["dir"]
-		if dir == "" {
-			return nil, fmt.Errorf("file backend requires 'dir' config")
-		}
-		return NewFileStore(dir)
-
-	case BackendMemory:
-		return NewMemoryStore(), nil
-
-	default:
-		return nil, fmt.Errorf("unknown blob backend: %s", backend)
-	}
-}

@@ -35,7 +35,7 @@ func NewClient(rt *runtime.Runtime) (*Client, error) {
 	// Subscribe to receive responses addressed to us
 	pk := rt.PublicKey()
 	subID := uuid.New().String()
-	if err := tr.Subscribe(subID, map[string]string{
+	if err := tr.Subscribe(subID, map[string]any{
 		"to": identity.EncodePublicKey(pk),
 	}); err != nil {
 		return nil, fmt.Errorf("subscribe for responses: %w", err)
@@ -228,7 +228,14 @@ type DiscoverConfig struct {
 
 	// Labels are additional filter labels beyond capability.
 	// All specified labels must be present in the target's subscription.
+	// Only string-valued entries are used for exact-match filtering.
 	Labels map[string]string
+
+	// Expression is a CEL expression for discovery filtering.
+	// If set, Labels is ignored and this expression is evaluated against
+	// merged labels ∪ state for each subscription.
+	// Example: 'capability == "blob" && capacity > 1000000000'
+	Expression string
 
 	// Limit is the maximum number of results (0 = server default).
 	Limit int
@@ -241,15 +248,21 @@ func (c *Client) Discover(ctx context.Context, cfg DiscoverConfig) (*TargetSet, 
 		return nil, fmt.Errorf("capability name required")
 	}
 
-	// Build filter: capability + any additional labels
-	filter := make(map[string]string)
-	filter["capability"] = cfg.Capability
-	for k, v := range cfg.Labels {
-		filter[k] = v
-	}
+	var result *transport.ProviderSet
+	var err error
 
-	// Query relay
-	result, err := c.tr.Discover(ctx, filter, cfg.Limit)
+	if cfg.Expression != "" {
+		// CEL expression-based discovery
+		result, err = c.tr.DiscoverExpr(ctx, cfg.Expression, cfg.Limit)
+	} else {
+		// Build filter: capability + any additional labels
+		filter := make(map[string]string)
+		filter["capability"] = cfg.Capability
+		for k, v := range cfg.Labels {
+			filter[k] = v
+		}
+		result, err = c.tr.Discover(ctx, filter, cfg.Limit)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("discover: %w", err)
 	}
@@ -257,15 +270,24 @@ func (c *Client) Discover(ctx context.Context, cfg DiscoverConfig) (*TargetSet, 
 	// Convert transport.Provider to Target
 	targets := make([]Target, 0, len(result.Providers))
 	for _, p := range result.Providers {
+		// Extract direct address via type assertion
+		var addr string
+		if d, ok := p.Labels["direct"].(string); ok {
+			addr = d
+		}
+
 		targets = append(targets, Target{
-			PublicKey: p.Pubkey,
-			Name:      p.Name,
-			Petname:   p.Petname,
-			Labels:    p.Labels,
-			Address:   p.Labels["direct"], // direct address from labels
-			Latency:   p.Latency,
-			LastSeen:  p.LastSeen,
-			Connected: p.Connected,
+			PublicKey:         p.Pubkey,
+			Name:              p.Name,
+			Petname:           p.Petname,
+			Labels:            p.Labels,
+			State:             p.State,
+			Address:           addr,
+			RelayPubkey:       p.RelayPubkey,
+			Latency:           p.Latency,
+			InterRelayLatency: p.InterRelayLatency,
+			LastSeen:          p.LastSeen,
+			Connected:         p.Connected,
 		})
 	}
 

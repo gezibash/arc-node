@@ -281,6 +281,123 @@ func (x *Receipt) GetRelayPubkey() []byte {
 	return nil
 }
 
+// LabelValue carries a typed label value for discovery and state reporting.
+// Envelope routing labels stay map<string, string> — these typed values are
+// only used in subscriptions, discovery, and state.
+type LabelValue struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Value:
+	//
+	//	*LabelValue_StringValue
+	//	*LabelValue_IntValue
+	//	*LabelValue_DoubleValue
+	//	*LabelValue_BoolValue
+	Value         isLabelValue_Value `protobuf_oneof:"value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LabelValue) Reset() {
+	*x = LabelValue{}
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LabelValue) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LabelValue) ProtoMessage() {}
+
+func (x *LabelValue) ProtoReflect() protoreflect.Message {
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LabelValue.ProtoReflect.Descriptor instead.
+func (*LabelValue) Descriptor() ([]byte, []int) {
+	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *LabelValue) GetValue() isLabelValue_Value {
+	if x != nil {
+		return x.Value
+	}
+	return nil
+}
+
+func (x *LabelValue) GetStringValue() string {
+	if x != nil {
+		if x, ok := x.Value.(*LabelValue_StringValue); ok {
+			return x.StringValue
+		}
+	}
+	return ""
+}
+
+func (x *LabelValue) GetIntValue() int64 {
+	if x != nil {
+		if x, ok := x.Value.(*LabelValue_IntValue); ok {
+			return x.IntValue
+		}
+	}
+	return 0
+}
+
+func (x *LabelValue) GetDoubleValue() float64 {
+	if x != nil {
+		if x, ok := x.Value.(*LabelValue_DoubleValue); ok {
+			return x.DoubleValue
+		}
+	}
+	return 0
+}
+
+func (x *LabelValue) GetBoolValue() bool {
+	if x != nil {
+		if x, ok := x.Value.(*LabelValue_BoolValue); ok {
+			return x.BoolValue
+		}
+	}
+	return false
+}
+
+type isLabelValue_Value interface {
+	isLabelValue_Value()
+}
+
+type LabelValue_StringValue struct {
+	StringValue string `protobuf:"bytes,1,opt,name=string_value,json=stringValue,proto3,oneof"`
+}
+
+type LabelValue_IntValue struct {
+	IntValue int64 `protobuf:"varint,2,opt,name=int_value,json=intValue,proto3,oneof"`
+}
+
+type LabelValue_DoubleValue struct {
+	DoubleValue float64 `protobuf:"fixed64,3,opt,name=double_value,json=doubleValue,proto3,oneof"`
+}
+
+type LabelValue_BoolValue struct {
+	BoolValue bool `protobuf:"varint,4,opt,name=bool_value,json=boolValue,proto3,oneof"`
+}
+
+func (*LabelValue_StringValue) isLabelValue_Value() {}
+
+func (*LabelValue_IntValue) isLabelValue_Value() {}
+
+func (*LabelValue_DoubleValue) isLabelValue_Value() {}
+
+func (*LabelValue_BoolValue) isLabelValue_Value() {}
+
 type ClientFrame struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Frame:
@@ -292,6 +409,7 @@ type ClientFrame struct {
 	//	*ClientFrame_Ping
 	//	*ClientFrame_Discover
 	//	*ClientFrame_UpdateLabels
+	//	*ClientFrame_UpdateState
 	Frame         isClientFrame_Frame `protobuf_oneof:"frame"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -299,7 +417,7 @@ type ClientFrame struct {
 
 func (x *ClientFrame) Reset() {
 	*x = ClientFrame{}
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[2]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -311,7 +429,7 @@ func (x *ClientFrame) String() string {
 func (*ClientFrame) ProtoMessage() {}
 
 func (x *ClientFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[2]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -324,7 +442,7 @@ func (x *ClientFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientFrame.ProtoReflect.Descriptor instead.
 func (*ClientFrame) Descriptor() ([]byte, []int) {
-	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{2}
+	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *ClientFrame) GetFrame() isClientFrame_Frame {
@@ -397,6 +515,15 @@ func (x *ClientFrame) GetUpdateLabels() *UpdateLabelsFrame {
 	return nil
 }
 
+func (x *ClientFrame) GetUpdateState() *UpdateStateFrame {
+	if x != nil {
+		if x, ok := x.Frame.(*ClientFrame_UpdateState); ok {
+			return x.UpdateState
+		}
+	}
+	return nil
+}
+
 type isClientFrame_Frame interface {
 	isClientFrame_Frame()
 }
@@ -429,6 +556,10 @@ type ClientFrame_UpdateLabels struct {
 	UpdateLabels *UpdateLabelsFrame `protobuf:"bytes,7,opt,name=update_labels,json=updateLabels,proto3,oneof"`
 }
 
+type ClientFrame_UpdateState struct {
+	UpdateState *UpdateStateFrame `protobuf:"bytes,8,opt,name=update_state,json=updateState,proto3,oneof"`
+}
+
 func (*ClientFrame_Send) isClientFrame_Frame() {}
 
 func (*ClientFrame_Subscribe) isClientFrame_Frame() {}
@@ -443,6 +574,8 @@ func (*ClientFrame_Discover) isClientFrame_Frame() {}
 
 func (*ClientFrame_UpdateLabels) isClientFrame_Frame() {}
 
+func (*ClientFrame_UpdateState) isClientFrame_Frame() {}
+
 // SendFrame publishes an envelope through the relay.
 type SendFrame struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
@@ -455,7 +588,7 @@ type SendFrame struct {
 
 func (x *SendFrame) Reset() {
 	*x = SendFrame{}
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[3]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -467,7 +600,7 @@ func (x *SendFrame) String() string {
 func (*SendFrame) ProtoMessage() {}
 
 func (x *SendFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[3]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -480,7 +613,7 @@ func (x *SendFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SendFrame.ProtoReflect.Descriptor instead.
 func (*SendFrame) Descriptor() ([]byte, []int) {
-	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{3}
+	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *SendFrame) GetEnvelope() *Envelope {
@@ -503,16 +636,21 @@ type SubscribeFrame struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Subscription ID (client-generated, for unsubscribe).
 	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	// Labels to match. All specified labels must match exactly.
+	// Labels to match (string-only, for backward compatibility).
+	// All specified labels must match exactly.
 	// Empty map means "match all" (not recommended).
-	Labels        map[string]string `protobuf:"bytes,2,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Labels map[string]string `protobuf:"bytes,2,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// Typed labels (string, int64, double, bool). Server reads these first,
+	// falling back to `labels` for keys not present here.
+	// Non-string values participate in discovery/CEL only, not envelope routing.
+	TypedLabels   map[string]*LabelValue `protobuf:"bytes,3,rep,name=typed_labels,json=typedLabels,proto3" json:"typed_labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SubscribeFrame) Reset() {
 	*x = SubscribeFrame{}
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[4]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -524,7 +662,7 @@ func (x *SubscribeFrame) String() string {
 func (*SubscribeFrame) ProtoMessage() {}
 
 func (x *SubscribeFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[4]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -537,7 +675,7 @@ func (x *SubscribeFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubscribeFrame.ProtoReflect.Descriptor instead.
 func (*SubscribeFrame) Descriptor() ([]byte, []int) {
-	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{4}
+	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *SubscribeFrame) GetId() string {
@@ -554,6 +692,13 @@ func (x *SubscribeFrame) GetLabels() map[string]string {
 	return nil
 }
 
+func (x *SubscribeFrame) GetTypedLabels() map[string]*LabelValue {
+	if x != nil {
+		return x.TypedLabels
+	}
+	return nil
+}
+
 // UnsubscribeFrame removes a subscription.
 type UnsubscribeFrame struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -565,7 +710,7 @@ type UnsubscribeFrame struct {
 
 func (x *UnsubscribeFrame) Reset() {
 	*x = UnsubscribeFrame{}
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[5]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -577,7 +722,7 @@ func (x *UnsubscribeFrame) String() string {
 func (*UnsubscribeFrame) ProtoMessage() {}
 
 func (x *UnsubscribeFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[5]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -590,7 +735,7 @@ func (x *UnsubscribeFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnsubscribeFrame.ProtoReflect.Descriptor instead.
 func (*UnsubscribeFrame) Descriptor() ([]byte, []int) {
-	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{5}
+	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *UnsubscribeFrame) GetId() string {
@@ -612,7 +757,7 @@ type RegisterNameFrame struct {
 
 func (x *RegisterNameFrame) Reset() {
 	*x = RegisterNameFrame{}
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[6]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -624,7 +769,7 @@ func (x *RegisterNameFrame) String() string {
 func (*RegisterNameFrame) ProtoMessage() {}
 
 func (x *RegisterNameFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[6]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -637,7 +782,7 @@ func (x *RegisterNameFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterNameFrame.ProtoReflect.Descriptor instead.
 func (*RegisterNameFrame) Descriptor() ([]byte, []int) {
-	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{6}
+	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *RegisterNameFrame) GetName() string {
@@ -661,7 +806,7 @@ type PingFrame struct {
 
 func (x *PingFrame) Reset() {
 	*x = PingFrame{}
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[7]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -673,7 +818,7 @@ func (x *PingFrame) String() string {
 func (*PingFrame) ProtoMessage() {}
 
 func (x *PingFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[7]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -686,7 +831,7 @@ func (x *PingFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PingFrame.ProtoReflect.Descriptor instead.
 func (*PingFrame) Descriptor() ([]byte, []int) {
-	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{7}
+	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *PingFrame) GetNonce() []byte {
@@ -704,23 +849,25 @@ func (x *PingFrame) GetMeasuredLatencyNs() int64 {
 }
 
 // UpdateLabelsFrame updates subscription labels without re-subscribing.
-// Used for dynamic state updates (e.g., free space, load, availability).
+// Used for dynamic label updates (e.g., region, tier changes).
 type UpdateLabelsFrame struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Subscription ID to update.
 	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	// Labels to merge into existing subscription labels.
+	// Labels to merge into existing subscription labels (string-only, backward compat).
 	// Existing keys are overwritten, new keys are added.
 	Labels map[string]string `protobuf:"bytes,2,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	// Label keys to remove. Applied after merge.
-	Remove        []string `protobuf:"bytes,3,rep,name=remove,proto3" json:"remove,omitempty"`
+	Remove []string `protobuf:"bytes,3,rep,name=remove,proto3" json:"remove,omitempty"`
+	// Typed labels to merge. Overrides string-only labels for same key.
+	TypedLabels   map[string]*LabelValue `protobuf:"bytes,4,rep,name=typed_labels,json=typedLabels,proto3" json:"typed_labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *UpdateLabelsFrame) Reset() {
 	*x = UpdateLabelsFrame{}
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[8]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -732,7 +879,7 @@ func (x *UpdateLabelsFrame) String() string {
 func (*UpdateLabelsFrame) ProtoMessage() {}
 
 func (x *UpdateLabelsFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[8]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -745,7 +892,7 @@ func (x *UpdateLabelsFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateLabelsFrame.ProtoReflect.Descriptor instead.
 func (*UpdateLabelsFrame) Descriptor() ([]byte, []int) {
-	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{8}
+	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *UpdateLabelsFrame) GetId() string {
@@ -769,6 +916,79 @@ func (x *UpdateLabelsFrame) GetRemove() []string {
 	return nil
 }
 
+func (x *UpdateLabelsFrame) GetTypedLabels() map[string]*LabelValue {
+	if x != nil {
+		return x.TypedLabels
+	}
+	return nil
+}
+
+// UpdateStateFrame updates dynamic state (metrics, load, capacity) without
+// affecting subscription labels. State is visible in discovery but gossips
+// on a timer (30s) rather than immediately.
+type UpdateStateFrame struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Subscription ID to update.
+	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// State entries to set or overwrite.
+	State map[string]*LabelValue `protobuf:"bytes,2,rep,name=state,proto3" json:"state,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// State keys to remove.
+	Remove        []string `protobuf:"bytes,3,rep,name=remove,proto3" json:"remove,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateStateFrame) Reset() {
+	*x = UpdateStateFrame{}
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateStateFrame) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateStateFrame) ProtoMessage() {}
+
+func (x *UpdateStateFrame) ProtoReflect() protoreflect.Message {
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateStateFrame.ProtoReflect.Descriptor instead.
+func (*UpdateStateFrame) Descriptor() ([]byte, []int) {
+	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *UpdateStateFrame) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *UpdateStateFrame) GetState() map[string]*LabelValue {
+	if x != nil {
+		return x.State
+	}
+	return nil
+}
+
+func (x *UpdateStateFrame) GetRemove() []string {
+	if x != nil {
+		return x.Remove
+	}
+	return nil
+}
+
 type ServerFrame struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Frame:
@@ -785,7 +1005,7 @@ type ServerFrame struct {
 
 func (x *ServerFrame) Reset() {
 	*x = ServerFrame{}
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[9]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -797,7 +1017,7 @@ func (x *ServerFrame) String() string {
 func (*ServerFrame) ProtoMessage() {}
 
 func (x *ServerFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[9]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -810,7 +1030,7 @@ func (x *ServerFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServerFrame.ProtoReflect.Descriptor instead.
 func (*ServerFrame) Descriptor() ([]byte, []int) {
-	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{9}
+	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ServerFrame) GetFrame() isServerFrame_Frame {
@@ -911,7 +1131,7 @@ type DeliverFrame struct {
 
 func (x *DeliverFrame) Reset() {
 	*x = DeliverFrame{}
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[10]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -923,7 +1143,7 @@ func (x *DeliverFrame) String() string {
 func (*DeliverFrame) ProtoMessage() {}
 
 func (x *DeliverFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[10]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -936,7 +1156,7 @@ func (x *DeliverFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeliverFrame.ProtoReflect.Descriptor instead.
 func (*DeliverFrame) Descriptor() ([]byte, []int) {
-	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{10}
+	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *DeliverFrame) GetEnvelope() *Envelope {
@@ -963,7 +1183,7 @@ type ReceiptFrame struct {
 
 func (x *ReceiptFrame) Reset() {
 	*x = ReceiptFrame{}
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[11]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -975,7 +1195,7 @@ func (x *ReceiptFrame) String() string {
 func (*ReceiptFrame) ProtoMessage() {}
 
 func (x *ReceiptFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[11]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -988,7 +1208,7 @@ func (x *ReceiptFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReceiptFrame.ProtoReflect.Descriptor instead.
 func (*ReceiptFrame) Descriptor() ([]byte, []int) {
-	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{11}
+	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ReceiptFrame) GetReceipt() *Receipt {
@@ -1017,7 +1237,7 @@ type ErrorFrame struct {
 
 func (x *ErrorFrame) Reset() {
 	*x = ErrorFrame{}
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[12]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1029,7 +1249,7 @@ func (x *ErrorFrame) String() string {
 func (*ErrorFrame) ProtoMessage() {}
 
 func (x *ErrorFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[12]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1042,7 +1262,7 @@ func (x *ErrorFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ErrorFrame.ProtoReflect.Descriptor instead.
 func (*ErrorFrame) Descriptor() ([]byte, []int) {
-	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{12}
+	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ErrorFrame) GetCode() int32 {
@@ -1092,7 +1312,7 @@ type PongFrame struct {
 
 func (x *PongFrame) Reset() {
 	*x = PongFrame{}
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[13]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1104,7 +1324,7 @@ func (x *PongFrame) String() string {
 func (*PongFrame) ProtoMessage() {}
 
 func (x *PongFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[13]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1117,7 +1337,7 @@ func (x *PongFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PongFrame.ProtoReflect.Descriptor instead.
 func (*PongFrame) Descriptor() ([]byte, []int) {
-	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{13}
+	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *PongFrame) GetNonce() []byte {
@@ -1144,14 +1364,18 @@ type DiscoverFrame struct {
 	// Optional correlation ID for matching response.
 	Correlation string `protobuf:"bytes,2,opt,name=correlation,proto3" json:"correlation,omitempty"`
 	// Maximum results to return. 0 = server default (100).
-	Limit         int32 `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"`
+	Limit int32 `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"`
+	// CEL expression for discovery filtering. If set, filter is ignored and this
+	// expression is evaluated against merged labels ∪ state for each subscription.
+	// Example: 'capability == "blob" && capacity > 1000000000'
+	Expression    string `protobuf:"bytes,4,opt,name=expression,proto3" json:"expression,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *DiscoverFrame) Reset() {
 	*x = DiscoverFrame{}
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[14]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1163,7 +1387,7 @@ func (x *DiscoverFrame) String() string {
 func (*DiscoverFrame) ProtoMessage() {}
 
 func (x *DiscoverFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[14]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1176,7 +1400,7 @@ func (x *DiscoverFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DiscoverFrame.ProtoReflect.Descriptor instead.
 func (*DiscoverFrame) Descriptor() ([]byte, []int) {
-	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{14}
+	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *DiscoverFrame) GetFilter() map[string]string {
@@ -1200,6 +1424,13 @@ func (x *DiscoverFrame) GetLimit() int32 {
 	return 0
 }
 
+func (x *DiscoverFrame) GetExpression() string {
+	if x != nil {
+		return x.Expression
+	}
+	return ""
+}
+
 // DiscoverResultFrame contains discovery results.
 type DiscoverResultFrame struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -1217,7 +1448,7 @@ type DiscoverResultFrame struct {
 
 func (x *DiscoverResultFrame) Reset() {
 	*x = DiscoverResultFrame{}
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[15]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1229,7 +1460,7 @@ func (x *DiscoverResultFrame) String() string {
 func (*DiscoverResultFrame) ProtoMessage() {}
 
 func (x *DiscoverResultFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[15]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1242,7 +1473,7 @@ func (x *DiscoverResultFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DiscoverResultFrame.ProtoReflect.Descriptor instead.
 func (*DiscoverResultFrame) Descriptor() ([]byte, []int) {
-	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{15}
+	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *DiscoverResultFrame) GetCorrelation() string {
@@ -1300,13 +1531,18 @@ type ProviderInfo struct {
 	// Inter-relay latency in nanoseconds (local relay → remote relay via gossip SWIM probes).
 	// Zero for local providers (same relay as the querying client).
 	InterRelayLatencyNs int64 `protobuf:"varint,10,opt,name=inter_relay_latency_ns,json=interRelayLatencyNs,proto3" json:"inter_relay_latency_ns,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// Typed subscription labels (superset of string labels).
+	// Includes non-string values like capacity, max_obj_size.
+	TypedLabels map[string]*LabelValue `protobuf:"bytes,11,rep,name=typed_labels,json=typedLabels,proto3" json:"typed_labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// Dynamic state (metrics, load, etc.). Gossips on timer, not on change.
+	State         map[string]*LabelValue `protobuf:"bytes,12,rep,name=state,proto3" json:"state,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ProviderInfo) Reset() {
 	*x = ProviderInfo{}
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[16]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1318,7 +1554,7 @@ func (x *ProviderInfo) String() string {
 func (*ProviderInfo) ProtoMessage() {}
 
 func (x *ProviderInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[16]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1331,7 +1567,7 @@ func (x *ProviderInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProviderInfo.ProtoReflect.Descriptor instead.
 func (*ProviderInfo) Descriptor() ([]byte, []int) {
-	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{16}
+	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *ProviderInfo) GetPubkey() []byte {
@@ -1404,6 +1640,20 @@ func (x *ProviderInfo) GetInterRelayLatencyNs() int64 {
 	return 0
 }
 
+func (x *ProviderInfo) GetTypedLabels() map[string]*LabelValue {
+	if x != nil {
+		return x.TypedLabels
+	}
+	return nil
+}
+
+func (x *ProviderInfo) GetState() map[string]*LabelValue {
+	if x != nil {
+		return x.State
+	}
+	return nil
+}
+
 type ForwardEnvelopeRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The envelope to route locally on the receiving relay.
@@ -1416,7 +1666,7 @@ type ForwardEnvelopeRequest struct {
 
 func (x *ForwardEnvelopeRequest) Reset() {
 	*x = ForwardEnvelopeRequest{}
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[17]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1428,7 +1678,7 @@ func (x *ForwardEnvelopeRequest) String() string {
 func (*ForwardEnvelopeRequest) ProtoMessage() {}
 
 func (x *ForwardEnvelopeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[17]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1441,7 +1691,7 @@ func (x *ForwardEnvelopeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForwardEnvelopeRequest.ProtoReflect.Descriptor instead.
 func (*ForwardEnvelopeRequest) Descriptor() ([]byte, []int) {
-	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{17}
+	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *ForwardEnvelopeRequest) GetEnvelope() *Envelope {
@@ -1470,7 +1720,7 @@ type ForwardEnvelopeResponse struct {
 
 func (x *ForwardEnvelopeResponse) Reset() {
 	*x = ForwardEnvelopeResponse{}
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[18]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1482,7 +1732,7 @@ func (x *ForwardEnvelopeResponse) String() string {
 func (*ForwardEnvelopeResponse) ProtoMessage() {}
 
 func (x *ForwardEnvelopeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[18]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1495,7 +1745,7 @@ func (x *ForwardEnvelopeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForwardEnvelopeResponse.ProtoReflect.Descriptor instead.
 func (*ForwardEnvelopeResponse) Descriptor() ([]byte, []int) {
-	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{18}
+	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *ForwardEnvelopeResponse) GetDelivered() int32 {
@@ -1522,7 +1772,7 @@ type GossipJoinRequest struct {
 
 func (x *GossipJoinRequest) Reset() {
 	*x = GossipJoinRequest{}
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[19]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1534,7 +1784,7 @@ func (x *GossipJoinRequest) String() string {
 func (*GossipJoinRequest) ProtoMessage() {}
 
 func (x *GossipJoinRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[19]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1547,7 +1797,7 @@ func (x *GossipJoinRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GossipJoinRequest.ProtoReflect.Descriptor instead.
 func (*GossipJoinRequest) Descriptor() ([]byte, []int) {
-	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{19}
+	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *GossipJoinRequest) GetPeers() []string {
@@ -1567,7 +1817,7 @@ type GossipJoinResponse struct {
 
 func (x *GossipJoinResponse) Reset() {
 	*x = GossipJoinResponse{}
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[20]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1579,7 +1829,7 @@ func (x *GossipJoinResponse) String() string {
 func (*GossipJoinResponse) ProtoMessage() {}
 
 func (x *GossipJoinResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[20]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1592,7 +1842,7 @@ func (x *GossipJoinResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GossipJoinResponse.ProtoReflect.Descriptor instead.
 func (*GossipJoinResponse) Descriptor() ([]byte, []int) {
-	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{20}
+	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *GossipJoinResponse) GetJoined() int32 {
@@ -1610,7 +1860,7 @@ type GossipMembersRequest struct {
 
 func (x *GossipMembersRequest) Reset() {
 	*x = GossipMembersRequest{}
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[21]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1622,7 +1872,7 @@ func (x *GossipMembersRequest) String() string {
 func (*GossipMembersRequest) ProtoMessage() {}
 
 func (x *GossipMembersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[21]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1635,7 +1885,7 @@ func (x *GossipMembersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GossipMembersRequest.ProtoReflect.Descriptor instead.
 func (*GossipMembersRequest) Descriptor() ([]byte, []int) {
-	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{21}
+	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{23}
 }
 
 type GossipMembersResponse struct {
@@ -1647,7 +1897,7 @@ type GossipMembersResponse struct {
 
 func (x *GossipMembersResponse) Reset() {
 	*x = GossipMembersResponse{}
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[22]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1659,7 +1909,7 @@ func (x *GossipMembersResponse) String() string {
 func (*GossipMembersResponse) ProtoMessage() {}
 
 func (x *GossipMembersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[22]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1672,7 +1922,7 @@ func (x *GossipMembersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GossipMembersResponse.ProtoReflect.Descriptor instead.
 func (*GossipMembersResponse) Descriptor() ([]byte, []int) {
-	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{22}
+	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *GossipMembersResponse) GetMembers() []*GossipMember {
@@ -1709,7 +1959,7 @@ type GossipMember struct {
 
 func (x *GossipMember) Reset() {
 	*x = GossipMember{}
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[23]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1721,7 +1971,7 @@ func (x *GossipMember) String() string {
 func (*GossipMember) ProtoMessage() {}
 
 func (x *GossipMember) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[23]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1734,7 +1984,7 @@ func (x *GossipMember) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GossipMember.ProtoReflect.Descriptor instead.
 func (*GossipMember) Descriptor() ([]byte, []int) {
-	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{23}
+	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *GossipMember) GetName() string {
@@ -1808,7 +2058,7 @@ type GossipLeaveRequest struct {
 
 func (x *GossipLeaveRequest) Reset() {
 	*x = GossipLeaveRequest{}
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[24]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1820,7 +2070,7 @@ func (x *GossipLeaveRequest) String() string {
 func (*GossipLeaveRequest) ProtoMessage() {}
 
 func (x *GossipLeaveRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[24]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1833,7 +2083,7 @@ func (x *GossipLeaveRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GossipLeaveRequest.ProtoReflect.Descriptor instead.
 func (*GossipLeaveRequest) Descriptor() ([]byte, []int) {
-	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{24}
+	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{26}
 }
 
 type GossipLeaveResponse struct {
@@ -1844,7 +2094,7 @@ type GossipLeaveResponse struct {
 
 func (x *GossipLeaveResponse) Reset() {
 	*x = GossipLeaveResponse{}
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[25]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1856,7 +2106,7 @@ func (x *GossipLeaveResponse) String() string {
 func (*GossipLeaveResponse) ProtoMessage() {}
 
 func (x *GossipLeaveResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_arc_relay_v1_relay_proto_msgTypes[25]
+	mi := &file_arc_relay_v1_relay_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1869,7 +2119,7 @@ func (x *GossipLeaveResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GossipLeaveResponse.ProtoReflect.Descriptor instead.
 func (*GossipLeaveResponse) Descriptor() ([]byte, []int) {
-	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{25}
+	return file_arc_relay_v1_relay_proto_rawDescGZIP(), []int{27}
 }
 
 var File_arc_relay_v1_relay_proto protoreflect.FileDescriptor
@@ -1894,7 +2144,15 @@ const file_arc_relay_v1_relay_proto_rawDesc = "" +
 	"\tdelivered\x18\x04 \x01(\x05R\tdelivered\x12\x16\n" +
 	"\x06reason\x18\x05 \x01(\tR\x06reason\x12'\n" +
 	"\x0frelay_signature\x18\x06 \x01(\fR\x0erelaySignature\x12!\n" +
-	"\frelay_pubkey\x18\a \x01(\fR\vrelayPubkey\"\xc1\x03\n" +
+	"\frelay_pubkey\x18\a \x01(\fR\vrelayPubkey\"\x9f\x01\n" +
+	"\n" +
+	"LabelValue\x12#\n" +
+	"\fstring_value\x18\x01 \x01(\tH\x00R\vstringValue\x12\x1d\n" +
+	"\tint_value\x18\x02 \x01(\x03H\x00R\bintValue\x12#\n" +
+	"\fdouble_value\x18\x03 \x01(\x01H\x00R\vdoubleValue\x12\x1f\n" +
+	"\n" +
+	"bool_value\x18\x04 \x01(\bH\x00R\tboolValueB\a\n" +
+	"\x05value\"\x86\x04\n" +
 	"\vClientFrame\x12-\n" +
 	"\x04send\x18\x01 \x01(\v2\x17.arc.relay.v1.SendFrameH\x00R\x04send\x12<\n" +
 	"\tsubscribe\x18\x02 \x01(\v2\x1c.arc.relay.v1.SubscribeFrameH\x00R\tsubscribe\x12B\n" +
@@ -1902,31 +2160,48 @@ const file_arc_relay_v1_relay_proto_rawDesc = "" +
 	"\rregister_name\x18\x04 \x01(\v2\x1f.arc.relay.v1.RegisterNameFrameH\x00R\fregisterName\x12-\n" +
 	"\x04ping\x18\x05 \x01(\v2\x17.arc.relay.v1.PingFrameH\x00R\x04ping\x129\n" +
 	"\bdiscover\x18\x06 \x01(\v2\x1b.arc.relay.v1.DiscoverFrameH\x00R\bdiscover\x12F\n" +
-	"\rupdate_labels\x18\a \x01(\v2\x1f.arc.relay.v1.UpdateLabelsFrameH\x00R\fupdateLabelsB\a\n" +
+	"\rupdate_labels\x18\a \x01(\v2\x1f.arc.relay.v1.UpdateLabelsFrameH\x00R\fupdateLabels\x12C\n" +
+	"\fupdate_state\x18\b \x01(\v2\x1e.arc.relay.v1.UpdateStateFrameH\x00R\vupdateStateB\a\n" +
 	"\x05frame\"a\n" +
 	"\tSendFrame\x122\n" +
 	"\benvelope\x18\x01 \x01(\v2\x16.arc.relay.v1.EnvelopeR\benvelope\x12 \n" +
-	"\vcorrelation\x18\x02 \x01(\tR\vcorrelation\"\x9d\x01\n" +
+	"\vcorrelation\x18\x02 \x01(\tR\vcorrelation\"\xc9\x02\n" +
 	"\x0eSubscribeFrame\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12@\n" +
-	"\x06labels\x18\x02 \x03(\v2(.arc.relay.v1.SubscribeFrame.LabelsEntryR\x06labels\x1a9\n" +
+	"\x06labels\x18\x02 \x03(\v2(.arc.relay.v1.SubscribeFrame.LabelsEntryR\x06labels\x12P\n" +
+	"\ftyped_labels\x18\x03 \x03(\v2-.arc.relay.v1.SubscribeFrame.TypedLabelsEntryR\vtypedLabels\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\"\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1aX\n" +
+	"\x10TypedLabelsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12.\n" +
+	"\x05value\x18\x02 \x01(\v2\x18.arc.relay.v1.LabelValueR\x05value:\x028\x01\"\"\n" +
 	"\x10UnsubscribeFrame\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"'\n" +
 	"\x11RegisterNameFrame\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\"Q\n" +
 	"\tPingFrame\x12\x14\n" +
 	"\x05nonce\x18\x01 \x01(\fR\x05nonce\x12.\n" +
-	"\x13measured_latency_ns\x18\x02 \x01(\x03R\x11measuredLatencyNs\"\xbb\x01\n" +
+	"\x13measured_latency_ns\x18\x02 \x01(\x03R\x11measuredLatencyNs\"\xea\x02\n" +
 	"\x11UpdateLabelsFrame\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12C\n" +
 	"\x06labels\x18\x02 \x03(\v2+.arc.relay.v1.UpdateLabelsFrame.LabelsEntryR\x06labels\x12\x16\n" +
-	"\x06remove\x18\x03 \x03(\tR\x06remove\x1a9\n" +
+	"\x06remove\x18\x03 \x03(\tR\x06remove\x12S\n" +
+	"\ftyped_labels\x18\x04 \x03(\v20.arc.relay.v1.UpdateLabelsFrame.TypedLabelsEntryR\vtypedLabels\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xb5\x02\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1aX\n" +
+	"\x10TypedLabelsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12.\n" +
+	"\x05value\x18\x02 \x01(\v2\x18.arc.relay.v1.LabelValueR\x05value:\x028\x01\"\xcf\x01\n" +
+	"\x10UpdateStateFrame\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12?\n" +
+	"\x05state\x18\x02 \x03(\v2).arc.relay.v1.UpdateStateFrame.StateEntryR\x05state\x12\x16\n" +
+	"\x06remove\x18\x03 \x03(\tR\x06remove\x1aR\n" +
+	"\n" +
+	"StateEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12.\n" +
+	"\x05value\x18\x02 \x01(\v2\x18.arc.relay.v1.LabelValueR\x05value:\x028\x01\"\xb5\x02\n" +
 	"\vServerFrame\x126\n" +
 	"\adeliver\x18\x01 \x01(\v2\x1a.arc.relay.v1.DeliverFrameH\x00R\adeliver\x126\n" +
 	"\areceipt\x18\x02 \x01(\v2\x1a.arc.relay.v1.ReceiptFrameH\x00R\areceipt\x120\n" +
@@ -1949,11 +2224,14 @@ const file_arc_relay_v1_relay_proto_rawDesc = "" +
 	"\tPongFrame\x12\x14\n" +
 	"\x05nonce\x18\x01 \x01(\fR\x05nonce\x12\x1f\n" +
 	"\vserver_time\x18\x02 \x01(\x03R\n" +
-	"serverTime\"\xc3\x01\n" +
+	"serverTime\"\xe3\x01\n" +
 	"\rDiscoverFrame\x12?\n" +
 	"\x06filter\x18\x01 \x03(\v2'.arc.relay.v1.DiscoverFrame.FilterEntryR\x06filter\x12 \n" +
 	"\vcorrelation\x18\x02 \x01(\tR\vcorrelation\x12\x14\n" +
-	"\x05limit\x18\x03 \x01(\x05R\x05limit\x1a9\n" +
+	"\x05limit\x18\x03 \x01(\x05R\x05limit\x12\x1e\n" +
+	"\n" +
+	"expression\x18\x04 \x01(\tR\n" +
+	"expression\x1a9\n" +
 	"\vFilterEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xa2\x01\n" +
@@ -1961,7 +2239,7 @@ const file_arc_relay_v1_relay_proto_rawDesc = "" +
 	"\vcorrelation\x18\x01 \x01(\tR\vcorrelation\x128\n" +
 	"\tproviders\x18\x02 \x03(\v2\x1a.arc.relay.v1.ProviderInfoR\tproviders\x12\x14\n" +
 	"\x05total\x18\x03 \x01(\x05R\x05total\x12\x19\n" +
-	"\bhas_more\x18\x04 \x01(\bR\ahasMore\"\xb4\x03\n" +
+	"\bhas_more\x18\x04 \x01(\bR\ahasMore\"\xef\x05\n" +
 	"\fProviderInfo\x12\x16\n" +
 	"\x06pubkey\x18\x01 \x01(\fR\x06pubkey\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12>\n" +
@@ -1975,10 +2253,19 @@ const file_arc_relay_v1_relay_proto_rawDesc = "" +
 	"lastSeenNs\x12!\n" +
 	"\fconnected_ns\x18\t \x01(\x03R\vconnectedNs\x123\n" +
 	"\x16inter_relay_latency_ns\x18\n" +
-	" \x01(\x03R\x13interRelayLatencyNs\x1a9\n" +
+	" \x01(\x03R\x13interRelayLatencyNs\x12N\n" +
+	"\ftyped_labels\x18\v \x03(\v2+.arc.relay.v1.ProviderInfo.TypedLabelsEntryR\vtypedLabels\x12;\n" +
+	"\x05state\x18\f \x03(\v2%.arc.relay.v1.ProviderInfo.StateEntryR\x05state\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"o\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1aX\n" +
+	"\x10TypedLabelsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12.\n" +
+	"\x05value\x18\x02 \x01(\v2\x18.arc.relay.v1.LabelValueR\x05value:\x028\x01\x1aR\n" +
+	"\n" +
+	"StateEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12.\n" +
+	"\x05value\x18\x02 \x01(\v2\x18.arc.relay.v1.LabelValueR\x05value:\x028\x01\"o\n" +
 	"\x16ForwardEnvelopeRequest\x122\n" +
 	"\benvelope\x18\x01 \x01(\v2\x16.arc.relay.v1.EnvelopeR\benvelope\x12!\n" +
 	"\fsource_relay\x18\x02 \x01(\tR\vsourceRelay\"O\n" +
@@ -2030,81 +2317,99 @@ func file_arc_relay_v1_relay_proto_rawDescGZIP() []byte {
 }
 
 var file_arc_relay_v1_relay_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_arc_relay_v1_relay_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
+var file_arc_relay_v1_relay_proto_msgTypes = make([]protoimpl.MessageInfo, 38)
 var file_arc_relay_v1_relay_proto_goTypes = []any{
 	(ReceiptStatus)(0),              // 0: arc.relay.v1.ReceiptStatus
 	(*Envelope)(nil),                // 1: arc.relay.v1.Envelope
 	(*Receipt)(nil),                 // 2: arc.relay.v1.Receipt
-	(*ClientFrame)(nil),             // 3: arc.relay.v1.ClientFrame
-	(*SendFrame)(nil),               // 4: arc.relay.v1.SendFrame
-	(*SubscribeFrame)(nil),          // 5: arc.relay.v1.SubscribeFrame
-	(*UnsubscribeFrame)(nil),        // 6: arc.relay.v1.UnsubscribeFrame
-	(*RegisterNameFrame)(nil),       // 7: arc.relay.v1.RegisterNameFrame
-	(*PingFrame)(nil),               // 8: arc.relay.v1.PingFrame
-	(*UpdateLabelsFrame)(nil),       // 9: arc.relay.v1.UpdateLabelsFrame
-	(*ServerFrame)(nil),             // 10: arc.relay.v1.ServerFrame
-	(*DeliverFrame)(nil),            // 11: arc.relay.v1.DeliverFrame
-	(*ReceiptFrame)(nil),            // 12: arc.relay.v1.ReceiptFrame
-	(*ErrorFrame)(nil),              // 13: arc.relay.v1.ErrorFrame
-	(*PongFrame)(nil),               // 14: arc.relay.v1.PongFrame
-	(*DiscoverFrame)(nil),           // 15: arc.relay.v1.DiscoverFrame
-	(*DiscoverResultFrame)(nil),     // 16: arc.relay.v1.DiscoverResultFrame
-	(*ProviderInfo)(nil),            // 17: arc.relay.v1.ProviderInfo
-	(*ForwardEnvelopeRequest)(nil),  // 18: arc.relay.v1.ForwardEnvelopeRequest
-	(*ForwardEnvelopeResponse)(nil), // 19: arc.relay.v1.ForwardEnvelopeResponse
-	(*GossipJoinRequest)(nil),       // 20: arc.relay.v1.GossipJoinRequest
-	(*GossipJoinResponse)(nil),      // 21: arc.relay.v1.GossipJoinResponse
-	(*GossipMembersRequest)(nil),    // 22: arc.relay.v1.GossipMembersRequest
-	(*GossipMembersResponse)(nil),   // 23: arc.relay.v1.GossipMembersResponse
-	(*GossipMember)(nil),            // 24: arc.relay.v1.GossipMember
-	(*GossipLeaveRequest)(nil),      // 25: arc.relay.v1.GossipLeaveRequest
-	(*GossipLeaveResponse)(nil),     // 26: arc.relay.v1.GossipLeaveResponse
-	nil,                             // 27: arc.relay.v1.Envelope.LabelsEntry
-	nil,                             // 28: arc.relay.v1.SubscribeFrame.LabelsEntry
-	nil,                             // 29: arc.relay.v1.UpdateLabelsFrame.LabelsEntry
-	nil,                             // 30: arc.relay.v1.DiscoverFrame.FilterEntry
-	nil,                             // 31: arc.relay.v1.ProviderInfo.LabelsEntry
+	(*LabelValue)(nil),              // 3: arc.relay.v1.LabelValue
+	(*ClientFrame)(nil),             // 4: arc.relay.v1.ClientFrame
+	(*SendFrame)(nil),               // 5: arc.relay.v1.SendFrame
+	(*SubscribeFrame)(nil),          // 6: arc.relay.v1.SubscribeFrame
+	(*UnsubscribeFrame)(nil),        // 7: arc.relay.v1.UnsubscribeFrame
+	(*RegisterNameFrame)(nil),       // 8: arc.relay.v1.RegisterNameFrame
+	(*PingFrame)(nil),               // 9: arc.relay.v1.PingFrame
+	(*UpdateLabelsFrame)(nil),       // 10: arc.relay.v1.UpdateLabelsFrame
+	(*UpdateStateFrame)(nil),        // 11: arc.relay.v1.UpdateStateFrame
+	(*ServerFrame)(nil),             // 12: arc.relay.v1.ServerFrame
+	(*DeliverFrame)(nil),            // 13: arc.relay.v1.DeliverFrame
+	(*ReceiptFrame)(nil),            // 14: arc.relay.v1.ReceiptFrame
+	(*ErrorFrame)(nil),              // 15: arc.relay.v1.ErrorFrame
+	(*PongFrame)(nil),               // 16: arc.relay.v1.PongFrame
+	(*DiscoverFrame)(nil),           // 17: arc.relay.v1.DiscoverFrame
+	(*DiscoverResultFrame)(nil),     // 18: arc.relay.v1.DiscoverResultFrame
+	(*ProviderInfo)(nil),            // 19: arc.relay.v1.ProviderInfo
+	(*ForwardEnvelopeRequest)(nil),  // 20: arc.relay.v1.ForwardEnvelopeRequest
+	(*ForwardEnvelopeResponse)(nil), // 21: arc.relay.v1.ForwardEnvelopeResponse
+	(*GossipJoinRequest)(nil),       // 22: arc.relay.v1.GossipJoinRequest
+	(*GossipJoinResponse)(nil),      // 23: arc.relay.v1.GossipJoinResponse
+	(*GossipMembersRequest)(nil),    // 24: arc.relay.v1.GossipMembersRequest
+	(*GossipMembersResponse)(nil),   // 25: arc.relay.v1.GossipMembersResponse
+	(*GossipMember)(nil),            // 26: arc.relay.v1.GossipMember
+	(*GossipLeaveRequest)(nil),      // 27: arc.relay.v1.GossipLeaveRequest
+	(*GossipLeaveResponse)(nil),     // 28: arc.relay.v1.GossipLeaveResponse
+	nil,                             // 29: arc.relay.v1.Envelope.LabelsEntry
+	nil,                             // 30: arc.relay.v1.SubscribeFrame.LabelsEntry
+	nil,                             // 31: arc.relay.v1.SubscribeFrame.TypedLabelsEntry
+	nil,                             // 32: arc.relay.v1.UpdateLabelsFrame.LabelsEntry
+	nil,                             // 33: arc.relay.v1.UpdateLabelsFrame.TypedLabelsEntry
+	nil,                             // 34: arc.relay.v1.UpdateStateFrame.StateEntry
+	nil,                             // 35: arc.relay.v1.DiscoverFrame.FilterEntry
+	nil,                             // 36: arc.relay.v1.ProviderInfo.LabelsEntry
+	nil,                             // 37: arc.relay.v1.ProviderInfo.TypedLabelsEntry
+	nil,                             // 38: arc.relay.v1.ProviderInfo.StateEntry
 }
 var file_arc_relay_v1_relay_proto_depIdxs = []int32{
-	27, // 0: arc.relay.v1.Envelope.labels:type_name -> arc.relay.v1.Envelope.LabelsEntry
+	29, // 0: arc.relay.v1.Envelope.labels:type_name -> arc.relay.v1.Envelope.LabelsEntry
 	0,  // 1: arc.relay.v1.Receipt.status:type_name -> arc.relay.v1.ReceiptStatus
-	4,  // 2: arc.relay.v1.ClientFrame.send:type_name -> arc.relay.v1.SendFrame
-	5,  // 3: arc.relay.v1.ClientFrame.subscribe:type_name -> arc.relay.v1.SubscribeFrame
-	6,  // 4: arc.relay.v1.ClientFrame.unsubscribe:type_name -> arc.relay.v1.UnsubscribeFrame
-	7,  // 5: arc.relay.v1.ClientFrame.register_name:type_name -> arc.relay.v1.RegisterNameFrame
-	8,  // 6: arc.relay.v1.ClientFrame.ping:type_name -> arc.relay.v1.PingFrame
-	15, // 7: arc.relay.v1.ClientFrame.discover:type_name -> arc.relay.v1.DiscoverFrame
-	9,  // 8: arc.relay.v1.ClientFrame.update_labels:type_name -> arc.relay.v1.UpdateLabelsFrame
-	1,  // 9: arc.relay.v1.SendFrame.envelope:type_name -> arc.relay.v1.Envelope
-	28, // 10: arc.relay.v1.SubscribeFrame.labels:type_name -> arc.relay.v1.SubscribeFrame.LabelsEntry
-	29, // 11: arc.relay.v1.UpdateLabelsFrame.labels:type_name -> arc.relay.v1.UpdateLabelsFrame.LabelsEntry
-	11, // 12: arc.relay.v1.ServerFrame.deliver:type_name -> arc.relay.v1.DeliverFrame
-	12, // 13: arc.relay.v1.ServerFrame.receipt:type_name -> arc.relay.v1.ReceiptFrame
-	13, // 14: arc.relay.v1.ServerFrame.error:type_name -> arc.relay.v1.ErrorFrame
-	14, // 15: arc.relay.v1.ServerFrame.pong:type_name -> arc.relay.v1.PongFrame
-	16, // 16: arc.relay.v1.ServerFrame.discover_result:type_name -> arc.relay.v1.DiscoverResultFrame
-	1,  // 17: arc.relay.v1.DeliverFrame.envelope:type_name -> arc.relay.v1.Envelope
-	2,  // 18: arc.relay.v1.ReceiptFrame.receipt:type_name -> arc.relay.v1.Receipt
-	30, // 19: arc.relay.v1.DiscoverFrame.filter:type_name -> arc.relay.v1.DiscoverFrame.FilterEntry
-	17, // 20: arc.relay.v1.DiscoverResultFrame.providers:type_name -> arc.relay.v1.ProviderInfo
-	31, // 21: arc.relay.v1.ProviderInfo.labels:type_name -> arc.relay.v1.ProviderInfo.LabelsEntry
-	1,  // 22: arc.relay.v1.ForwardEnvelopeRequest.envelope:type_name -> arc.relay.v1.Envelope
-	24, // 23: arc.relay.v1.GossipMembersResponse.members:type_name -> arc.relay.v1.GossipMember
-	3,  // 24: arc.relay.v1.RelayService.Connect:input_type -> arc.relay.v1.ClientFrame
-	18, // 25: arc.relay.v1.RelayService.ForwardEnvelope:input_type -> arc.relay.v1.ForwardEnvelopeRequest
-	20, // 26: arc.relay.v1.RelayService.GossipJoin:input_type -> arc.relay.v1.GossipJoinRequest
-	22, // 27: arc.relay.v1.RelayService.GossipMembers:input_type -> arc.relay.v1.GossipMembersRequest
-	25, // 28: arc.relay.v1.RelayService.GossipLeave:input_type -> arc.relay.v1.GossipLeaveRequest
-	10, // 29: arc.relay.v1.RelayService.Connect:output_type -> arc.relay.v1.ServerFrame
-	19, // 30: arc.relay.v1.RelayService.ForwardEnvelope:output_type -> arc.relay.v1.ForwardEnvelopeResponse
-	21, // 31: arc.relay.v1.RelayService.GossipJoin:output_type -> arc.relay.v1.GossipJoinResponse
-	23, // 32: arc.relay.v1.RelayService.GossipMembers:output_type -> arc.relay.v1.GossipMembersResponse
-	26, // 33: arc.relay.v1.RelayService.GossipLeave:output_type -> arc.relay.v1.GossipLeaveResponse
-	29, // [29:34] is the sub-list for method output_type
-	24, // [24:29] is the sub-list for method input_type
-	24, // [24:24] is the sub-list for extension type_name
-	24, // [24:24] is the sub-list for extension extendee
-	0,  // [0:24] is the sub-list for field type_name
+	5,  // 2: arc.relay.v1.ClientFrame.send:type_name -> arc.relay.v1.SendFrame
+	6,  // 3: arc.relay.v1.ClientFrame.subscribe:type_name -> arc.relay.v1.SubscribeFrame
+	7,  // 4: arc.relay.v1.ClientFrame.unsubscribe:type_name -> arc.relay.v1.UnsubscribeFrame
+	8,  // 5: arc.relay.v1.ClientFrame.register_name:type_name -> arc.relay.v1.RegisterNameFrame
+	9,  // 6: arc.relay.v1.ClientFrame.ping:type_name -> arc.relay.v1.PingFrame
+	17, // 7: arc.relay.v1.ClientFrame.discover:type_name -> arc.relay.v1.DiscoverFrame
+	10, // 8: arc.relay.v1.ClientFrame.update_labels:type_name -> arc.relay.v1.UpdateLabelsFrame
+	11, // 9: arc.relay.v1.ClientFrame.update_state:type_name -> arc.relay.v1.UpdateStateFrame
+	1,  // 10: arc.relay.v1.SendFrame.envelope:type_name -> arc.relay.v1.Envelope
+	30, // 11: arc.relay.v1.SubscribeFrame.labels:type_name -> arc.relay.v1.SubscribeFrame.LabelsEntry
+	31, // 12: arc.relay.v1.SubscribeFrame.typed_labels:type_name -> arc.relay.v1.SubscribeFrame.TypedLabelsEntry
+	32, // 13: arc.relay.v1.UpdateLabelsFrame.labels:type_name -> arc.relay.v1.UpdateLabelsFrame.LabelsEntry
+	33, // 14: arc.relay.v1.UpdateLabelsFrame.typed_labels:type_name -> arc.relay.v1.UpdateLabelsFrame.TypedLabelsEntry
+	34, // 15: arc.relay.v1.UpdateStateFrame.state:type_name -> arc.relay.v1.UpdateStateFrame.StateEntry
+	13, // 16: arc.relay.v1.ServerFrame.deliver:type_name -> arc.relay.v1.DeliverFrame
+	14, // 17: arc.relay.v1.ServerFrame.receipt:type_name -> arc.relay.v1.ReceiptFrame
+	15, // 18: arc.relay.v1.ServerFrame.error:type_name -> arc.relay.v1.ErrorFrame
+	16, // 19: arc.relay.v1.ServerFrame.pong:type_name -> arc.relay.v1.PongFrame
+	18, // 20: arc.relay.v1.ServerFrame.discover_result:type_name -> arc.relay.v1.DiscoverResultFrame
+	1,  // 21: arc.relay.v1.DeliverFrame.envelope:type_name -> arc.relay.v1.Envelope
+	2,  // 22: arc.relay.v1.ReceiptFrame.receipt:type_name -> arc.relay.v1.Receipt
+	35, // 23: arc.relay.v1.DiscoverFrame.filter:type_name -> arc.relay.v1.DiscoverFrame.FilterEntry
+	19, // 24: arc.relay.v1.DiscoverResultFrame.providers:type_name -> arc.relay.v1.ProviderInfo
+	36, // 25: arc.relay.v1.ProviderInfo.labels:type_name -> arc.relay.v1.ProviderInfo.LabelsEntry
+	37, // 26: arc.relay.v1.ProviderInfo.typed_labels:type_name -> arc.relay.v1.ProviderInfo.TypedLabelsEntry
+	38, // 27: arc.relay.v1.ProviderInfo.state:type_name -> arc.relay.v1.ProviderInfo.StateEntry
+	1,  // 28: arc.relay.v1.ForwardEnvelopeRequest.envelope:type_name -> arc.relay.v1.Envelope
+	26, // 29: arc.relay.v1.GossipMembersResponse.members:type_name -> arc.relay.v1.GossipMember
+	3,  // 30: arc.relay.v1.SubscribeFrame.TypedLabelsEntry.value:type_name -> arc.relay.v1.LabelValue
+	3,  // 31: arc.relay.v1.UpdateLabelsFrame.TypedLabelsEntry.value:type_name -> arc.relay.v1.LabelValue
+	3,  // 32: arc.relay.v1.UpdateStateFrame.StateEntry.value:type_name -> arc.relay.v1.LabelValue
+	3,  // 33: arc.relay.v1.ProviderInfo.TypedLabelsEntry.value:type_name -> arc.relay.v1.LabelValue
+	3,  // 34: arc.relay.v1.ProviderInfo.StateEntry.value:type_name -> arc.relay.v1.LabelValue
+	4,  // 35: arc.relay.v1.RelayService.Connect:input_type -> arc.relay.v1.ClientFrame
+	20, // 36: arc.relay.v1.RelayService.ForwardEnvelope:input_type -> arc.relay.v1.ForwardEnvelopeRequest
+	22, // 37: arc.relay.v1.RelayService.GossipJoin:input_type -> arc.relay.v1.GossipJoinRequest
+	24, // 38: arc.relay.v1.RelayService.GossipMembers:input_type -> arc.relay.v1.GossipMembersRequest
+	27, // 39: arc.relay.v1.RelayService.GossipLeave:input_type -> arc.relay.v1.GossipLeaveRequest
+	12, // 40: arc.relay.v1.RelayService.Connect:output_type -> arc.relay.v1.ServerFrame
+	21, // 41: arc.relay.v1.RelayService.ForwardEnvelope:output_type -> arc.relay.v1.ForwardEnvelopeResponse
+	23, // 42: arc.relay.v1.RelayService.GossipJoin:output_type -> arc.relay.v1.GossipJoinResponse
+	25, // 43: arc.relay.v1.RelayService.GossipMembers:output_type -> arc.relay.v1.GossipMembersResponse
+	28, // 44: arc.relay.v1.RelayService.GossipLeave:output_type -> arc.relay.v1.GossipLeaveResponse
+	40, // [40:45] is the sub-list for method output_type
+	35, // [35:40] is the sub-list for method input_type
+	35, // [35:35] is the sub-list for extension type_name
+	35, // [35:35] is the sub-list for extension extendee
+	0,  // [0:35] is the sub-list for field type_name
 }
 
 func init() { file_arc_relay_v1_relay_proto_init() }
@@ -2113,6 +2418,12 @@ func file_arc_relay_v1_relay_proto_init() {
 		return
 	}
 	file_arc_relay_v1_relay_proto_msgTypes[2].OneofWrappers = []any{
+		(*LabelValue_StringValue)(nil),
+		(*LabelValue_IntValue)(nil),
+		(*LabelValue_DoubleValue)(nil),
+		(*LabelValue_BoolValue)(nil),
+	}
+	file_arc_relay_v1_relay_proto_msgTypes[3].OneofWrappers = []any{
 		(*ClientFrame_Send)(nil),
 		(*ClientFrame_Subscribe)(nil),
 		(*ClientFrame_Unsubscribe)(nil),
@@ -2120,8 +2431,9 @@ func file_arc_relay_v1_relay_proto_init() {
 		(*ClientFrame_Ping)(nil),
 		(*ClientFrame_Discover)(nil),
 		(*ClientFrame_UpdateLabels)(nil),
+		(*ClientFrame_UpdateState)(nil),
 	}
-	file_arc_relay_v1_relay_proto_msgTypes[9].OneofWrappers = []any{
+	file_arc_relay_v1_relay_proto_msgTypes[11].OneofWrappers = []any{
 		(*ServerFrame_Deliver)(nil),
 		(*ServerFrame_Receipt)(nil),
 		(*ServerFrame_Error)(nil),
@@ -2134,7 +2446,7 @@ func file_arc_relay_v1_relay_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_arc_relay_v1_relay_proto_rawDesc), len(file_arc_relay_v1_relay_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   31,
+			NumMessages:   38,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

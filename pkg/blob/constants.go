@@ -7,4 +7,10 @@ const (
 
 	// DefaultChunkSize is the recommended chunk size for streaming.
 	DefaultChunkSize = 256 * 1024 // 256KB
+
+	// DefaultCapacity is the default total storage capacity (1GB).
+	DefaultCapacity = 1 << 30 // 1GB
+
+	// DefaultMaxBlobSize is the default maximum size for a single blob (64MB).
+	DefaultMaxBlobSize = 64 * 1024 * 1024 // 64MB
 )

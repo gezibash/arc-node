@@ -30,7 +30,8 @@ Server commands:
 Client commands:
   arc-blob put <file>      Store a blob
   arc-blob get <cid>       Retrieve a blob
-  arc-blob want <cid>      Discover who has a blob`,
+  arc-blob want <cid>      Discover who has a blob
+  arc-blob discover        Discover blob providers`,
 	}
 
 	// Global flags for client commands
@@ -50,6 +51,7 @@ Client commands:
 	rootCmd.AddCommand(newPutCmd(v))
 	rootCmd.AddCommand(newGetCmd(v))
 	rootCmd.AddCommand(newWantCmd(v))
+	rootCmd.AddCommand(newDiscoverCmd(v))
 
 	return rootCmd.ExecuteContext(context.Background())
 }

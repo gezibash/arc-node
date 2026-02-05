@@ -15,7 +15,7 @@ func TestTable(t *testing.T) {
 	// Create a mock subscriber
 	sub := &Subscriber{
 		id:            "sub1",
-		subscriptions: make(map[string]map[string]string),
+		subscriptions: make(map[string]*SubscriptionData),
 	}
 
 	table.Add(sub)
@@ -36,7 +36,7 @@ func TestTable(t *testing.T) {
 	// Duplicate name should fail for different subscriber
 	sub2 := &Subscriber{
 		id:            "sub2",
-		subscriptions: make(map[string]map[string]string),
+		subscriptions: make(map[string]*SubscriptionData),
 	}
 	table.Add(sub2)
 
@@ -63,19 +63,19 @@ func TestRouter(t *testing.T) {
 	alice := &Subscriber{
 		id:            "alice-id",
 		name:          "alice",
-		subscriptions: make(map[string]map[string]string),
+		subscriptions: make(map[string]*SubscriptionData),
 	}
 	storage := &Subscriber{
 		id:            "storage-id",
-		subscriptions: make(map[string]map[string]string),
+		subscriptions: make(map[string]*SubscriptionData),
 	}
-	storage.Subscribe("cap-sub", map[string]string{"capability": "storage"})
+	storage.Subscribe("cap-sub", map[string]any{"capability": "storage"})
 
 	topicSub := &Subscriber{
 		id:            "topic-id",
-		subscriptions: make(map[string]map[string]string),
+		subscriptions: make(map[string]*SubscriptionData),
 	}
-	topicSub.Subscribe("s1", map[string]string{"topic": "news"})
+	topicSub.Subscribe("s1", map[string]any{"topic": "news"})
 
 	table.Add(alice)
 	table.Add(storage)
@@ -215,18 +215,18 @@ func TestTableDiscover(t *testing.T) {
 	blobProvider := &Subscriber{
 		id:            "blob-id",
 		name:          "blob-1",
-		subscriptions: make(map[string]map[string]string),
+		subscriptions: make(map[string]*SubscriptionData),
 	}
-	blobProvider.Subscribe("cap-blob", map[string]string{
+	blobProvider.Subscribe("cap-blob", map[string]any{
 		"capability": "blob",
 		"transport":  "relay",
 	})
 
 	directBlobProvider := &Subscriber{
 		id:            "direct-blob-id",
-		subscriptions: make(map[string]map[string]string),
+		subscriptions: make(map[string]*SubscriptionData),
 	}
-	directBlobProvider.Subscribe("cap-blob-direct", map[string]string{
+	directBlobProvider.Subscribe("cap-blob-direct", map[string]any{
 		"capability":  "blob",
 		"transport":   "direct",
 		"direct_addr": "10.0.0.5:8080",
@@ -234,19 +234,19 @@ func TestTableDiscover(t *testing.T) {
 
 	indexProvider := &Subscriber{
 		id:            "index-id",
-		subscriptions: make(map[string]map[string]string),
+		subscriptions: make(map[string]*SubscriptionData),
 	}
-	indexProvider.Subscribe("cap-index", map[string]string{
+	indexProvider.Subscribe("cap-index", map[string]any{
 		"capability": "index",
 	})
 
 	// Add a subscriber with multiple subscriptions
 	multiSub := &Subscriber{
 		id:            "multi-id",
-		subscriptions: make(map[string]map[string]string),
+		subscriptions: make(map[string]*SubscriptionData),
 	}
-	multiSub.Subscribe("topic-news", map[string]string{"topic": "news"})
-	multiSub.Subscribe("topic-sports", map[string]string{"topic": "sports"})
+	multiSub.Subscribe("topic-news", map[string]any{"topic": "news"})
+	multiSub.Subscribe("topic-sports", map[string]any{"topic": "sports"})
 
 	table.Add(blobProvider)
 	table.Add(directBlobProvider)
@@ -332,43 +332,49 @@ func TestMatchesFilter(t *testing.T) {
 	tests := []struct {
 		name      string
 		filter    map[string]string
-		subLabels map[string]string
+		subLabels map[string]any
 		want      bool
 	}{
 		{
 			name:      "empty filter matches all",
 			filter:    map[string]string{},
-			subLabels: map[string]string{"capability": "blob"},
+			subLabels: map[string]any{"capability": "blob"},
 			want:      true,
 		},
 		{
 			name:      "filter subset of subscription",
 			filter:    map[string]string{"capability": "blob"},
-			subLabels: map[string]string{"capability": "blob", "transport": "relay"},
+			subLabels: map[string]any{"capability": "blob", "transport": "relay"},
 			want:      true,
 		},
 		{
 			name:      "exact match",
 			filter:    map[string]string{"capability": "blob"},
-			subLabels: map[string]string{"capability": "blob"},
+			subLabels: map[string]any{"capability": "blob"},
 			want:      true,
 		},
 		{
 			name:      "filter not subset - extra key",
 			filter:    map[string]string{"capability": "blob", "transport": "relay"},
-			subLabels: map[string]string{"capability": "blob"},
+			subLabels: map[string]any{"capability": "blob"},
 			want:      false,
 		},
 		{
 			name:      "filter not subset - different value",
 			filter:    map[string]string{"capability": "blob"},
-			subLabels: map[string]string{"capability": "index"},
+			subLabels: map[string]any{"capability": "index"},
 			want:      false,
 		},
 		{
 			name:      "empty subscription matches empty filter",
 			filter:    map[string]string{},
-			subLabels: map[string]string{},
+			subLabels: map[string]any{},
+			want:      true,
+		},
+		{
+			name:      "non-string labels skipped in filter match",
+			filter:    map[string]string{"capability": "blob"},
+			subLabels: map[string]any{"capability": "blob", "capacity": int64(1000)},
 			want:      true,
 		},
 	}

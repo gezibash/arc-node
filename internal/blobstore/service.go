@@ -47,7 +47,7 @@ func (s *Service) Put(stream blobv1.BlobService_PutServer) error {
 	}
 
 	// Store the blob
-	cid, err := s.store.Put(buf.Bytes())
+	cid, err := s.store.Put(stream.Context(), buf.Bytes())
 	if err != nil {
 		return status.Errorf(codes.Internal, "store blob: %v", err)
 	}
@@ -64,7 +64,7 @@ func (s *Service) Get(req *blobv1.GetRequest, stream blobv1.BlobService_GetServe
 		return status.Error(codes.InvalidArgument, "invalid CID length")
 	}
 
-	r, size, err := s.store.GetReader(req.Cid)
+	r, size, err := s.store.GetReader(stream.Context(), req.Cid)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			return status.Error(codes.NotFound, "blob not found")

@@ -35,9 +35,11 @@ type Receipt struct {
 type Transport interface {
 	Send(ctx context.Context, env *Envelope) (*Receipt, error)
 	Receive(ctx context.Context) (*Delivery, error)
-	Subscribe(id string, labels map[string]string) error
+	Subscribe(id string, labels map[string]any) error
 	Unsubscribe(id string) error
 	RegisterName(name string) error
 	Discover(ctx context.Context, filter map[string]string, limit int) (*ProviderSet, error)
+	DiscoverExpr(ctx context.Context, expr string, limit int) (*ProviderSet, error)
+	UpdateState(id string, state map[string]any) error
 	Close() error
 }

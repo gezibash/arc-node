@@ -12,7 +12,8 @@ import (
 // Subscribe registers a subscription with the relay.
 // The id is a client-generated identifier for unsubscribing.
 // Labels specify exact-match filters; empty means match all.
-func (c *Client) Subscribe(id string, labels map[string]string) error {
+// Sends both string labels (backward compat) and typed labels.
+func (c *Client) Subscribe(id string, labels map[string]any) error {
 	if c.closed.Load() {
 		return ErrClosed
 	}
@@ -20,8 +21,9 @@ func (c *Client) Subscribe(id string, labels map[string]string) error {
 	frame := &relayv1.ClientFrame{
 		Frame: &relayv1.ClientFrame_Subscribe{
 			Subscribe: &relayv1.SubscribeFrame{
-				Id:     id,
-				Labels: labels,
+				Id:          id,
+				Labels:      anyToStringMap(labels),
+				TypedLabels: anyToProtoMap(labels),
 			},
 		},
 	}

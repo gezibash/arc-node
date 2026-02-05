@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"time"
 
 	blobv1 "github.com/gezibash/arc/v2/api/arc/blob/v1"
 	"github.com/gezibash/arc/v2/internal/blobstore"
@@ -13,10 +14,16 @@ import (
 	"github.com/gezibash/arc/v2/internal/keyring"
 	"github.com/gezibash/arc/v2/pkg/blob"
 	"github.com/gezibash/arc/v2/pkg/capability"
+	"github.com/gezibash/arc/v2/pkg/logging"
 	"github.com/gezibash/arc/v2/pkg/runtime"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
+
+	// Register storage backends.
+	_ "github.com/gezibash/arc/v2/internal/blobstore/badger"
+	_ "github.com/gezibash/arc/v2/internal/blobstore/fs"
+	_ "github.com/gezibash/arc/v2/internal/blobstore/s3"
 )
 
 func newStartCmd() *cobra.Command {
@@ -73,16 +80,22 @@ Examples:
 			}
 			defer func() { _ = rt.Close() }()
 
-			// Create store
+			// Determine backend
+			backend := cfg.Storage.Backend
+			if backend == "" {
+				backend = blobstore.BackendFile
+			}
+
+			// Create store config
 			storeCfg := cfg.Storage.Config
 			if storeCfg == nil {
 				storeCfg = make(map[string]string)
 			}
-			if storeCfg["dir"] == "" && cfg.Storage.Backend == blobstore.BackendFile {
-				storeCfg["dir"] = filepath.Join(rt.DataDir(), "blobs")
+			if storeCfg["path"] == "" && (backend == blobstore.BackendFile || backend == blobstore.BackendBadger) {
+				storeCfg["path"] = filepath.Join(rt.DataDir(), "blobs")
 			}
 
-			store, err := blobstore.New(cfg.Storage.Backend, storeCfg)
+			store, err := blobstore.New(rt.Context(), backend, storeCfg)
 			if err != nil {
 				return fmt.Errorf("create store: %w", err)
 			}
@@ -123,10 +136,12 @@ Examples:
 			// Create handler using capability framework
 			handler := blobstore.NewBlobHandler(store, externalAddr, rt.Log())
 
-			// Build typed labels for subscription
+			// Build typed labels for subscription — advertise limits early
 			labels := blob.Labels{
-				Backend: blob.Backend(cfg.Storage.Backend),
-				Direct:  externalAddr,
+				Backend:     blob.Backend(backend),
+				Direct:      externalAddr,
+				Capacity:    cfg.Capacity,
+				MaxBlobSize: cfg.MaxBlobSize,
 			}
 
 			// Create capability server
@@ -148,6 +163,11 @@ Examples:
 				}()
 			}
 
+			// Report store stats as dynamic state
+			if stater, ok := store.(blobstore.Stater); ok {
+				go reportState(rt.Context(), capServer, stater, rt.Log())
+			}
+
 			// Run capability server (blocks until context cancelled)
 			return capServer.Run(rt.Context())
 		},
@@ -159,11 +179,38 @@ Examples:
 	// Blob-specific flags
 	f := cmd.Flags()
 	f.String("listen", "", "direct gRPC address (empty = relay-only)")
-	f.String("storage-backend", "", "storage backend: file, memory")
+	f.String("storage-backend", "", "storage backend: file, s3, badger, memory")
+	f.Int64("capacity", 0, "total storage capacity in bytes (default 1GB)")
+	f.Int64("max-blob-size", 0, "max single blob size in bytes (default 64MB)")
 	f.StringVar(&configFile, "config", "", "config file path")
 
 	_ = v.BindPFlag("listen_addr", f.Lookup("listen"))
 	_ = v.BindPFlag("storage.backend", f.Lookup("storage-backend"))
+	_ = v.BindPFlag("capacity", f.Lookup("capacity"))
+	_ = v.BindPFlag("max_blob_size", f.Lookup("max-blob-size"))
 
 	return cmd
+}
+
+func reportState(ctx context.Context, server *capability.Server, stater blobstore.Stater, log *logging.Logger) {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			stats, err := stater.Stats(ctx)
+			if err != nil {
+				log.WithError(err).Warn("stats collection failed")
+				continue
+			}
+			if err := server.ReportState(map[string]any{
+				blob.StateUsedBytes: stats.BytesUsed,
+				blob.StateBlobCount: stats.BlobCount,
+			}); err != nil {
+				log.WithError(err).Warn("state report failed")
+			}
+		}
+	}
 }

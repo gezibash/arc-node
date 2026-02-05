@@ -107,6 +107,64 @@ pkg/capability  → pkg/relay                (ONLY bridge to relay)
 future apps     → pkg/blob, pkg/index      (NO pkg/capability, NO pkg/relay)
 ```
 
+### Composition Principle
+
+**Every higher-level function MUST compose from lower-level primitives.**
+
+```
+pkg/blob        → composes pkg/capability primitives
+pkg/capability  → composes pkg/relay primitives
+pkg/relay       → composes transport/gRPC primitives
+```
+
+This means:
+- `blob.Client.Discover()` MUST call `capability.Client.Discover()` — never bypass
+- `blob.Client.Put()` MUST call `capability.Client.Request()` — never call relay directly
+- CLI commands (`arc-blob`) MUST use `pkg/blob` — never call capability or relay directly
+
+**Why:** Stronger guarantees. If capability discovery works, blob discovery works.
+If we find a bug, we fix it once at the right layer. No duplicate code paths
+that can diverge. Tests at lower layers give confidence to higher layers.
+
+**Discovery Composition Chain (concrete example):**
+
+```
+arc blob discover (CLI)
+  │
+  ├─ cmd/arc-blob/discover.go:69
+  │    c.Discover(ctx, blob.DiscoverFilter{...})
+  │    where c is *blob.Client
+  │
+  ▼
+blob.Client.Discover()
+  │
+  ├─ pkg/blob/client.go:36
+  │    c.cap.Discover(ctx, cfg)
+  │    where c.cap is *capability.Client
+  │
+  ▼
+capability.Client.Discover()
+  │
+  ├─ pkg/capability/client.go:264
+  │    c.tr.Discover(ctx, filter, cfg.Limit)
+  │    where c.tr is transport.Transport
+  │
+  ▼
+transport.Transport.Discover() [interface]
+  │
+  ├─ pkg/relay/discover.go:17
+  │    relay.Client.Discover() [implements interface]
+  │
+  ▼
+gRPC DiscoverFrame to relay server
+```
+
+**Violations to watch for:**
+- CLI importing `pkg/relay` directly (should only use `pkg/blob`)
+- `pkg/blob` importing `pkg/relay` (should only use `pkg/capability`)
+- Duplicate discovery logic that doesn't flow through this chain
+- Direct gRPC calls from capability code (should use transport interface)
+
 ### Discover-First Pattern
 
 Every operation requires a target. Either discover one or specify explicitly:

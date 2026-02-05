@@ -32,6 +32,7 @@ type Gossip struct {
 	names        *NamesSection
 
 	connections atomic.Int32
+	stateDirty  atomic.Bool
 
 	closed     atomic.Bool
 	wg         sync.WaitGroup
@@ -171,10 +172,14 @@ func (g *Gossip) Start(ctx context.Context) error {
 	}
 
 	// Start health updater
-	g.wg.Add(1)
+	g.wg.Add(2)
 	go func() {
 		defer g.wg.Done()
 		g.healthUpdater(ctx)
+	}()
+	go func() {
+		defer g.wg.Done()
+		g.stateUpdater(ctx)
 	}()
 
 	slog.Info("gossip started",
@@ -204,6 +209,23 @@ func (g *Gossip) healthUpdater(ctx context.Context) {
 					"component", "gossip",
 					"error", err,
 				)
+			}
+		}
+	}
+}
+
+// stateUpdater periodically broadcasts capability state if dirty.
+func (g *Gossip) stateUpdater(ctx context.Context) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if g.stateDirty.Swap(false) {
+				g.Broadcast(g.capabilities)
 			}
 		}
 	}
@@ -307,7 +329,7 @@ func (g *Gossip) OnConnected(_ identity.PublicKey) {
 
 // OnSubscribe is called when a client subscribes on the local relay.
 // Implements relay.Observer.
-func (g *Gossip) OnSubscribe(pubkey identity.PublicKey, subID string, labels map[string]string, name string) {
+func (g *Gossip) OnSubscribe(pubkey identity.PublicKey, subID string, labels map[string]any, name string) {
 	g.capabilities.Add(&CapabilityEntry{
 		RelayName:      g.localName,
 		ProviderPubkey: identity.EncodePublicKey(pubkey),
@@ -316,6 +338,14 @@ func (g *Gossip) OnSubscribe(pubkey identity.PublicKey, subID string, labels map
 		ProviderName:   name,
 	})
 	g.Broadcast(g.capabilities)
+}
+
+// OnStateUpdated is called when a client updates dynamic state on the local relay.
+// Sets the dirty flag; actual broadcast happens on the 30s state timer.
+// Implements relay.Observer.
+func (g *Gossip) OnStateUpdated(pubkey identity.PublicKey, subID string, state map[string]any) {
+	g.capabilities.UpdateState(g.localName, identity.EncodePublicKey(pubkey), subID, state)
+	g.stateDirty.Store(true)
 }
 
 // OnUnsubscribe is called when a client unsubscribes from the local relay.

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"sync"
 
+	arccel "github.com/gezibash/arc/v2/internal/cel"
 	"github.com/gezibash/arc/v2/pkg/identity"
 )
 
@@ -111,7 +112,8 @@ func (t *Table) LookupPubkey(pubkeyHex string) (*Subscriber, bool) {
 }
 
 // LookupLabels returns subscribers with subscriptions matching the given labels.
-// Uses exact-match semantics: all subscription labels must be present in the envelope.
+// Uses exact-match semantics: all string-valued subscription labels must be present in the envelope.
+// Non-string subscription labels are skipped during routing (they participate in discovery only).
 func (t *Table) LookupLabels(labels map[string]string) []*Subscriber {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
@@ -121,8 +123,8 @@ func (t *Table) LookupLabels(labels map[string]string) []*Subscriber {
 
 	for _, s := range t.subscribers {
 		subs := s.Subscriptions()
-		for _, subLabels := range subs {
-			if matchesLabels(subLabels, labels) && !seen[s.id] {
+		for _, data := range subs {
+			if matchesLabels(data.Labels, labels) && !seen[s.id] {
 				matches = append(matches, s)
 				seen[s.id] = true
 			}
@@ -131,13 +133,18 @@ func (t *Table) LookupLabels(labels map[string]string) []*Subscriber {
 	return matches
 }
 
-// matchesLabels returns true if all subscription labels match the envelope labels.
-func matchesLabels(subLabels, envLabels map[string]string) bool {
+// matchesLabels returns true if all string-valued subscription labels match the envelope labels.
+// Non-string subscription labels are skipped (they participate in discovery, not routing).
+func matchesLabels(subLabels map[string]any, envLabels map[string]string) bool {
 	if len(subLabels) == 0 {
-		return true // empty subscription matches all
+		return true
 	}
 	for k, v := range subLabels {
-		if envLabels[k] != v {
+		sv, ok := v.(string)
+		if !ok {
+			continue // non-string labels don't participate in routing
+		}
+		if envLabels[k] != sv {
 			return false
 		}
 	}
@@ -167,7 +174,8 @@ func (t *Table) Count() int {
 type DiscoveryResult struct {
 	Subscriber     *Subscriber
 	SubscriptionID string
-	Labels         map[string]string
+	Labels         map[string]any
+	State          map[string]any
 }
 
 // Discover finds subscriptions where all filter labels are present in the subscription labels.
@@ -186,14 +194,15 @@ func (t *Table) Discover(filter map[string]string, limit int) ([]DiscoveryResult
 
 	for _, s := range t.subscribers {
 		subs := s.Subscriptions()
-		for subID, subLabels := range subs {
-			if matchesFilter(filter, subLabels) {
+		for subID, data := range subs {
+			if matchesFilter(filter, data.Labels) {
 				total++
 				if len(results) < limit {
 					results = append(results, DiscoveryResult{
 						Subscriber:     s,
 						SubscriptionID: subID,
-						Labels:         subLabels,
+						Labels:         data.Labels,
+						State:          data.State,
 					})
 				}
 			}
@@ -202,10 +211,78 @@ func (t *Table) Discover(filter map[string]string, limit int) ([]DiscoveryResult
 	return results, total
 }
 
+// DiscoverCEL finds subscriptions matching a CEL expression against merged labels ∪ state.
+// Returns results up to limit (0 = 100 default) and total count of matches.
+func (t *Table) DiscoverCEL(expr string, limit int) ([]DiscoveryResult, int, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	// Collect all unique keys across subscriptions for CEL environment.
+	keys := make(map[string]bool)
+	type subEntry struct {
+		sub    *Subscriber
+		subID  string
+		labels map[string]any
+		state  map[string]any
+		merged map[string]any
+	}
+	var entries []subEntry
+
+	for _, s := range t.subscribers {
+		subs := s.Subscriptions()
+		for subID, data := range subs {
+			merged := make(map[string]any, len(data.Labels)+len(data.State))
+			for k, v := range data.State {
+				merged[k] = v
+			}
+			for k, v := range data.Labels {
+				merged[k] = v // labels win on conflict
+				keys[k] = true
+			}
+			for k := range data.State {
+				keys[k] = true
+			}
+			entries = append(entries, subEntry{s, subID, data.Labels, data.State, merged})
+		}
+	}
+
+	filter, err := arccel.Compile(expr, keys)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var results []DiscoveryResult
+	total := 0
+	for _, e := range entries {
+		if filter.Match(e.merged) {
+			total++
+			if len(results) < limit {
+				results = append(results, DiscoveryResult{
+					Subscriber:     e.sub,
+					SubscriptionID: e.subID,
+					Labels:         e.labels,
+					State:          e.state,
+				})
+			}
+		}
+	}
+	return results, total, nil
+}
+
 // matchesFilter returns true if all filter labels are present in subLabels (filter ⊆ subLabels).
-func matchesFilter(filter, subLabels map[string]string) bool {
+// Compares string filter values against string-valued entries in the typed sub labels.
+func matchesFilter(filter map[string]string, subLabels map[string]any) bool {
 	for k, v := range filter {
-		if subLabels[k] != v {
+		sv, ok := subLabels[k]
+		if !ok {
+			return false
+		}
+		s, ok := sv.(string)
+		if !ok || s != v {
 			return false
 		}
 	}

@@ -15,13 +15,16 @@ type Target struct {
 	Petname   string // docker-style name (e.g., "clever-penguin")
 
 	// Capability metadata
-	Labels map[string]string // advertised labels (capabilities, constraints, state)
+	Labels map[string]any // advertised labels (typed: string, int64, float64, bool)
+	State  map[string]any // dynamic metrics (typed)
 
 	// Infrastructure metadata (measured by relay)
-	Address   string        // direct connection address, from labels["direct"]
-	Latency   time.Duration // RTT to this target
-	LastSeen  time.Time     // last activity
-	Connected time.Duration // how long connected to relay
+	Address           string             // direct connection address, from labels["direct"]
+	RelayPubkey       identity.PublicKey // relay this target is connected to
+	Latency           time.Duration      // relay → target RTT
+	InterRelayLatency time.Duration      // local relay → remote relay RTT (0 for local)
+	LastSeen          time.Time          // last activity
+	Connected         time.Duration      // how long connected to relay
 }
 
 // DisplayName returns the best human-readable name for the target.
@@ -132,22 +135,51 @@ func (ts *TargetSet) WithDirect() *TargetSet {
 	})
 }
 
-// SortByLatency returns a new TargetSet sorted by latency (lowest first).
-func (ts *TargetSet) SortByLatency() *TargetSet {
+// Sort returns a new TargetSet sorted by the given less function.
+// The sort is stable (insertion sort — usually small lists).
+func (ts *TargetSet) Sort(less func(a, b Target) bool) *TargetSet {
 	if ts == nil || len(ts.targets) <= 1 {
 		return ts
 	}
-
-	// Copy and sort
 	sorted := make([]Target, len(ts.targets))
 	copy(sorted, ts.targets)
-
-	// Simple insertion sort (usually small lists)
 	for i := 1; i < len(sorted); i++ {
-		for j := i; j > 0 && sorted[j].Latency < sorted[j-1].Latency; j-- {
+		for j := i; j > 0 && less(sorted[j], sorted[j-1]); j-- {
 			sorted[j], sorted[j-1] = sorted[j-1], sorted[j]
 		}
 	}
-
 	return &TargetSet{targets: sorted}
+}
+
+// Take returns a new TargetSet with at most n targets.
+func (ts *TargetSet) Take(n int) *TargetSet {
+	if ts == nil || len(ts.targets) <= n {
+		return ts
+	}
+	taken := make([]Target, n)
+	copy(taken, ts.targets[:n])
+	return &TargetSet{targets: taken}
+}
+
+// SortByLatency returns a new TargetSet sorted by latency (lowest first).
+func (ts *TargetSet) SortByLatency() *TargetSet {
+	return ts.Sort(func(a, b Target) bool {
+		return a.Latency < b.Latency
+	})
+}
+
+// Int64Label returns a label value as int64, or 0 if missing/wrong type.
+func (t *Target) Int64Label(key string) int64 {
+	if v, ok := t.Labels[key].(int64); ok {
+		return v
+	}
+	return 0
+}
+
+// Int64State returns a state value as int64, or 0 if missing/wrong type.
+func (t *Target) Int64State(key string) int64 {
+	if v, ok := t.State[key].(int64); ok {
+		return v
+	}
+	return 0
 }

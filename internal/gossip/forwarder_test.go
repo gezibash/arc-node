@@ -47,7 +47,7 @@ func TestForwarderResolveTargetByPubkey(t *testing.T) {
 		RelayName:      "relay-b",
 		ProviderPubkey: "ed25519:abc123",
 		SubID:          "sub-1",
-		Labels:         map[string]string{"capability": "blob"},
+		Labels:         map[string]any{"capability": "blob"},
 	})
 	f.gossip.relays.Add(&RelayEntry{
 		Name:     "relay-b",
@@ -78,7 +78,7 @@ func TestForwarderResolveTargetByLabelMatch(t *testing.T) {
 		RelayName:      "relay-b",
 		ProviderPubkey: "pub-1",
 		SubID:          "sub-1",
-		Labels:         map[string]string{"capability": "storage", "backend": "s3"},
+		Labels:         map[string]any{"capability": "storage", "backend": "s3"},
 	})
 	f.gossip.relays.Add(&RelayEntry{
 		Name:     "relay-b",
@@ -109,7 +109,7 @@ func TestForwarderResolveTargetSkipsLocalRelay(t *testing.T) {
 		RelayName:      "relay-a",
 		ProviderPubkey: "pub-local",
 		SubID:          "sub-1",
-		Labels:         map[string]string{"capability": "blob"},
+		Labels:         map[string]any{"capability": "blob"},
 	})
 
 	env := &relayv1.Envelope{

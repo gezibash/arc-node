@@ -91,6 +91,55 @@ func (f *Forwarder) Forward(ctx context.Context, env *relayv1.Envelope) (int, er
 	return int(resp.GetDelivered()), nil
 }
 
+// ForwardToRelay forwards an envelope to a specific relay by name.
+// Used for response routing when we know the target relay from the return path cache.
+func (f *Forwarder) ForwardToRelay(ctx context.Context, env *relayv1.Envelope, relayName string) (int, error) {
+	// Skip forwarding to ourselves
+	if relayName == f.gossip.LocalName() {
+		return 0, fmt.Errorf("cannot forward to local relay")
+	}
+
+	grpcAddr, ok := f.gossip.ResolveRelay(relayName)
+	if !ok {
+		return 0, fmt.Errorf("relay %s not found in gossip", relayName)
+	}
+
+	conn, err := f.getOrDial(ctx, grpcAddr)
+	if err != nil {
+		return 0, fmt.Errorf("dial %s: %w", grpcAddr, err)
+	}
+
+	client := relayv1.NewRelayServiceClient(conn)
+
+	// Add auth metadata
+	ctx = f.authContext(ctx)
+
+	// Apply timeout
+	ctx, cancel := context.WithTimeout(ctx, f.timeout)
+	defer cancel()
+
+	resp, err := client.ForwardEnvelope(ctx, &relayv1.ForwardEnvelopeRequest{
+		Envelope:    env,
+		SourceRelay: f.gossip.LocalName(),
+	})
+	if err != nil {
+		return 0, fmt.Errorf("forward to %s: %w", relayName, err)
+	}
+
+	if resp.GetDelivered() == 0 {
+		return 0, fmt.Errorf("relay %s: %s", relayName, resp.GetReason())
+	}
+
+	slog.Debug("envelope forwarded to specific relay",
+		"component", "forwarder",
+		"target_relay", relayName,
+		"target_addr", grpcAddr,
+		"delivered", resp.GetDelivered(),
+	)
+
+	return int(resp.GetDelivered()), nil
+}
+
 // Close closes all cached connections.
 func (f *Forwarder) Close() error {
 	f.mu.Lock()

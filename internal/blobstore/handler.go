@@ -41,13 +41,13 @@ func (h *BlobHandler) Handle(ctx context.Context, env *capability.Envelope) (*ca
 	switch op {
 	case blob.OpPut:
 		log.Debug("handling put request")
-		return h.handlePut(env)
+		return h.handlePut(ctx, env)
 	case blob.OpWant:
 		log.Debug("handling want request", "cid", cidHex)
-		return h.handleWant(cidHex)
+		return h.handleWant(ctx, cidHex)
 	case blob.OpGet:
 		log.Debug("handling get request", "cid", cidHex)
-		return h.handleGet(cidHex)
+		return h.handleGet(ctx, cidHex)
 	default:
 		log.Warn("unknown op", "op", op)
 		return capability.NoReply(), nil
@@ -55,7 +55,7 @@ func (h *BlobHandler) Handle(ctx context.Context, env *capability.Envelope) (*ca
 }
 
 // handlePut stores a blob (inline or prepares for redirect).
-func (h *BlobHandler) handlePut(env *capability.Envelope) (*capability.Response, error) {
+func (h *BlobHandler) handlePut(ctx context.Context, env *capability.Envelope) (*capability.Response, error) {
 	var req blobv1.BlobRequest
 	if err := proto.Unmarshal(env.Payload, &req); err != nil {
 		return h.errorResponse(400, "invalid request payload"), nil
@@ -68,7 +68,7 @@ func (h *BlobHandler) handlePut(env *capability.Envelope) (*capability.Response,
 
 	// Small blob: store inline
 	if len(put.Data) > 0 && len(put.Data) <= blob.InlineThreshold {
-		cid, err := h.store.Put(put.Data)
+		cid, err := h.store.Put(ctx, put.Data)
 		if err != nil {
 			return h.errorResponse(500, fmt.Sprintf("store failed: %v", err)), nil
 		}
@@ -95,17 +95,21 @@ func (h *BlobHandler) handlePut(env *capability.Envelope) (*capability.Response,
 }
 
 // handleWant checks if we have a blob and responds if we do.
-func (h *BlobHandler) handleWant(cidHex string) (*capability.Response, error) {
+func (h *BlobHandler) handleWant(ctx context.Context, cidHex string) (*capability.Response, error) {
 	cid, err := cidFromHex(cidHex)
 	if err != nil {
 		return capability.NoReply(), nil // Invalid CID, ignore
 	}
 
-	if !h.store.Has(cid) {
-		return capability.NoReply(), nil // We don't have it, stay silent
+	exists, err := h.store.Has(ctx, cid)
+	if err != nil || !exists {
+		return capability.NoReply(), nil // We don't have it or error, stay silent
 	}
 
-	size := h.store.Size(cid)
+	size, err := h.store.Size(ctx, cid)
+	if err != nil {
+		return capability.NoReply(), nil
+	}
 
 	resp := &blobv1.BlobResponse{
 		Response: &blobv1.BlobResponse_Have{
@@ -121,21 +125,28 @@ func (h *BlobHandler) handleWant(cidHex string) (*capability.Response, error) {
 }
 
 // handleGet retrieves a blob (inline for small, redirect for large).
-func (h *BlobHandler) handleGet(cidHex string) (*capability.Response, error) {
+func (h *BlobHandler) handleGet(ctx context.Context, cidHex string) (*capability.Response, error) {
 	cid, err := cidFromHex(cidHex)
 	if err != nil {
 		return h.errorResponse(400, "invalid CID"), nil
 	}
 
-	if !h.store.Has(cid) {
+	exists, err := h.store.Has(ctx, cid)
+	if err != nil {
+		return h.errorResponse(500, fmt.Sprintf("check failed: %v", err)), nil
+	}
+	if !exists {
 		return h.errorResponse(404, "blob not found"), nil
 	}
 
-	size := h.store.Size(cid)
+	size, err := h.store.Size(ctx, cid)
+	if err != nil {
+		return h.errorResponse(500, fmt.Sprintf("size failed: %v", err)), nil
+	}
 
 	// Small blob: return inline
 	if size <= blob.InlineThreshold {
-		data, err := h.store.Get(cid)
+		data, err := h.store.Get(ctx, cid)
 		if err != nil {
 			return h.errorResponse(500, fmt.Sprintf("read failed: %v", err)), nil
 		}

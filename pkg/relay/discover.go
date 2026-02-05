@@ -56,6 +56,57 @@ func (c *Client) DiscoverAll(ctx context.Context, filter map[string]string) (*tr
 	return c.Discover(ctx, filter, 0)
 }
 
+// DiscoverExpr finds subscriptions matching a CEL expression.
+func (c *Client) DiscoverExpr(ctx context.Context, expr string, limit int) (*transport.ProviderSet, error) {
+	if c.closed.Load() {
+		return nil, ErrClosed
+	}
+
+	correlation := fmt.Sprintf("discover-%d", c.nextCorrelation())
+	ch := c.registerPending(correlation)
+	defer c.deregisterPending(correlation)
+
+	frame := &relayv1.ClientFrame{
+		Frame: &relayv1.ClientFrame_Discover{
+			Discover: &relayv1.DiscoverFrame{
+				Expression:  expr,
+				Correlation: correlation,
+				Limit:       int32(limit),
+			},
+		},
+	}
+
+	c.mu.Lock()
+	err := c.stream.Send(frame)
+	c.mu.Unlock()
+	if err != nil {
+		return nil, fmt.Errorf("send discover expr: %w", err)
+	}
+
+	return c.waitDiscoverResult(ctx, ch)
+}
+
+// UpdateState sends a state update for a subscription.
+func (c *Client) UpdateState(id string, state map[string]any) error {
+	if c.closed.Load() {
+		return ErrClosed
+	}
+
+	frame := &relayv1.ClientFrame{
+		Frame: &relayv1.ClientFrame_UpdateState{
+			UpdateState: &relayv1.UpdateStateFrame{
+				Id:    id,
+				State: anyToProtoMap(state),
+			},
+		},
+	}
+
+	c.mu.Lock()
+	err := c.stream.Send(frame)
+	c.mu.Unlock()
+	return err
+}
+
 // waitDiscoverResult waits for a discover result on the dedicated pending channel.
 func (c *Client) waitDiscoverResult(ctx context.Context, ch chan *relayv1.ServerFrame) (*transport.ProviderSet, error) {
 	select {
@@ -79,11 +130,18 @@ func (c *Client) waitDiscoverResult(ctx context.Context, ch chan *relayv1.Server
 					return nil, fmt.Errorf("invalid relay pubkey: %w", err)
 				}
 
+				// Read typed labels first, fall back to string labels
+				labels := protoToAnyMap(p.GetTypedLabels())
+				if labels == nil {
+					labels = stringToAnyMap(p.GetLabels())
+				}
+
 				providers = append(providers, transport.Provider{
 					Pubkey:            pubkey,
 					Name:              p.GetName(),
 					Petname:           p.GetPetname(),
-					Labels:            p.GetLabels(),
+					Labels:            labels,
+					State:             protoToAnyMap(p.GetState()),
 					SubscriptionID:    p.GetSubscriptionId(),
 					RelayPubkey:       relayPubkey,
 					Latency:           time.Duration(p.GetLatencyNs()),
@@ -105,6 +163,18 @@ func (c *Client) waitDiscoverResult(ctx context.Context, ch chan *relayv1.Server
 	case <-c.done:
 		return nil, c.streamError()
 	}
+}
+
+// stringToAnyMap wraps a string map as typed map.
+func stringToAnyMap(m map[string]string) map[string]any {
+	if len(m) == 0 {
+		return nil
+	}
+	result := make(map[string]any, len(m))
+	for k, v := range m {
+		result[k] = v
+	}
+	return result
 }
 
 // UpdateLabels updates labels on an existing subscription.

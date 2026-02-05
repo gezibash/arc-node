@@ -64,7 +64,7 @@ func TestCapabilitiesSectionEncodeDecode(t *testing.T) {
 		RelayName:      "relay-a",
 		ProviderPubkey: "pub1",
 		SubID:          "sub-1",
-		Labels:         map[string]string{"capability": "blob", "backend": "s3"},
+		Labels:         map[string]any{"capability": "blob", "backend": "s3"},
 		ProviderName:   "blob-1",
 	})
 
@@ -198,9 +198,9 @@ func TestNamesMergeLatestWins(t *testing.T) {
 
 func TestCapabilitiesPurgeRelay(t *testing.T) {
 	s := NewCapabilitiesSection()
-	s.Add(&CapabilityEntry{RelayName: "relay-a", ProviderPubkey: "p1", SubID: "s1", Labels: map[string]string{"cap": "blob"}})
-	s.Add(&CapabilityEntry{RelayName: "relay-a", ProviderPubkey: "p2", SubID: "s2", Labels: map[string]string{"cap": "index"}})
-	s.Add(&CapabilityEntry{RelayName: "relay-b", ProviderPubkey: "p3", SubID: "s3", Labels: map[string]string{"cap": "blob"}})
+	s.Add(&CapabilityEntry{RelayName: "relay-a", ProviderPubkey: "p1", SubID: "s1", Labels: map[string]any{"cap": "blob"}})
+	s.Add(&CapabilityEntry{RelayName: "relay-a", ProviderPubkey: "p2", SubID: "s2", Labels: map[string]any{"cap": "index"}})
+	s.Add(&CapabilityEntry{RelayName: "relay-b", ProviderPubkey: "p3", SubID: "s3", Labels: map[string]any{"cap": "blob"}})
 
 	s.PurgeRelay("relay-a")
 
@@ -215,9 +215,9 @@ func TestCapabilitiesPurgeRelay(t *testing.T) {
 
 func TestCapabilitiesPurgeProvider(t *testing.T) {
 	s := NewCapabilitiesSection()
-	s.Add(&CapabilityEntry{RelayName: "relay-a", ProviderPubkey: "p1", SubID: "s1", Labels: map[string]string{"cap": "blob"}})
-	s.Add(&CapabilityEntry{RelayName: "relay-a", ProviderPubkey: "p1", SubID: "s2", Labels: map[string]string{"cap": "index"}})
-	s.Add(&CapabilityEntry{RelayName: "relay-a", ProviderPubkey: "p2", SubID: "s3", Labels: map[string]string{"cap": "blob"}})
+	s.Add(&CapabilityEntry{RelayName: "relay-a", ProviderPubkey: "p1", SubID: "s1", Labels: map[string]any{"cap": "blob"}})
+	s.Add(&CapabilityEntry{RelayName: "relay-a", ProviderPubkey: "p1", SubID: "s2", Labels: map[string]any{"cap": "index"}})
+	s.Add(&CapabilityEntry{RelayName: "relay-a", ProviderPubkey: "p2", SubID: "s3", Labels: map[string]any{"cap": "blob"}})
 
 	s.PurgeProvider("relay-a", "p1")
 
@@ -328,7 +328,7 @@ func TestGossipStateEncodeDecodeAll(t *testing.T) {
 	relays.Add(&RelayEntry{Name: "r1", GRPCAddr: ":50051", JoinedAt: 100})
 	caps.Add(&CapabilityEntry{
 		RelayName: "r1", ProviderPubkey: "p1", SubID: "s1",
-		Labels: map[string]string{"capability": "blob"},
+		Labels: map[string]any{"capability": "blob"},
 	})
 	names.Add(&NameEntry{Name: "alice", RelayName: "r1", Pubkey: "p1", UpdatedAt: 200})
 
@@ -393,15 +393,15 @@ func TestCapabilitiesMatch(t *testing.T) {
 	s := NewCapabilitiesSection()
 	s.Add(&CapabilityEntry{
 		RelayName: "r1", ProviderPubkey: "p1", SubID: "s1",
-		Labels: map[string]string{"capability": "blob", "backend": "s3", "region": "us-east-1"},
+		Labels: map[string]any{"capability": "blob", "backend": "s3", "region": "us-east-1"},
 	})
 	s.Add(&CapabilityEntry{
 		RelayName: "r1", ProviderPubkey: "p2", SubID: "s2",
-		Labels: map[string]string{"capability": "blob", "backend": "local"},
+		Labels: map[string]any{"capability": "blob", "backend": "local"},
 	})
 	s.Add(&CapabilityEntry{
 		RelayName: "r1", ProviderPubkey: "p3", SubID: "s3",
-		Labels: map[string]string{"capability": "index"},
+		Labels: map[string]any{"capability": "index"},
 	})
 
 	tests := []struct {
@@ -431,7 +431,7 @@ func TestCapabilitiesMatchLimit(t *testing.T) {
 	for i := range 10 {
 		s.Add(&CapabilityEntry{
 			RelayName: "r1", ProviderPubkey: fmt.Sprintf("p%d", i), SubID: fmt.Sprintf("s%d", i),
-			Labels: map[string]string{"capability": "blob"},
+			Labels: map[string]any{"capability": "blob"},
 		})
 	}
 
@@ -449,11 +449,11 @@ func TestCapabilitiesFindByPubkey(t *testing.T) {
 	s := NewCapabilitiesSection()
 	s.Add(&CapabilityEntry{
 		RelayName: "r1", ProviderPubkey: "pub-alice", SubID: "s1",
-		Labels: map[string]string{"capability": "blob"},
+		Labels: map[string]any{"capability": "blob"},
 	})
 	s.Add(&CapabilityEntry{
 		RelayName: "r2", ProviderPubkey: "pub-bob", SubID: "s2",
-		Labels: map[string]string{"capability": "index"},
+		Labels: map[string]any{"capability": "index"},
 	})
 
 	entry, ok := s.FindByPubkey("pub-bob")
@@ -578,7 +578,7 @@ func TestGossipIntegration(t *testing.T) {
 	gA.OnSubscribe(
 		fakePublicKey("cap-provider"),
 		"blob-sub-1",
-		map[string]string{"capability": "blob", "backend": "s3"},
+		map[string]any{"capability": "blob", "backend": "s3"},
 		"blob-1",
 	)
 
